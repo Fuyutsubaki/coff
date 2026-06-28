@@ -14,9 +14,9 @@ description: Refine an issue under `issue/` into a self-contained spec that can 
    - To run it in a separate process, delegate to the codex-delegate skill and only collect the result.
    - In all cases, don't leave trial-implementation artifacts in the commit tree beyond edits to the issue file.
 6. Do a few rounds of multi-perspective self-review: will an implementer get stuck? are the acceptance criteria verifiable? is the test plan sufficient? any gaps? are the risks covered?
-7. Overwrite the issue file and report the changes applied and the remaining work.
+7. Overwrite the issue file. Write Japanese prose following the japanese-tech-writing skill, and check the logic of the argument with the argument-gap-edit skill. Report the changes applied and the remaining work.
 
 ## Done bar
 
 - An implementer can start from the issue alone.
-<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"32eb22dcaa2c7877782145052abdf53f"} -->
+<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"95aa4fcc4bed02f0f06c1434304cada4"} -->
