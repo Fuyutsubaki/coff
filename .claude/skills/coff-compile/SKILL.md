@@ -135,4 +135,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"8128dda07bae6cb834b676f1f0042b5e"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"e2f68c5b1542c1d8c6515565a6ff2db5"} -->
