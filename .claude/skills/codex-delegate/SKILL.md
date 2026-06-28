@@ -21,4 +21,4 @@ description: Delegate self-contained implementation, investigation, or bug-fix t
 ## Notes
 
 - On first use only, run `/codex:setup` to verify codex authentication.
-<!--{"src":".coff/src/codex-delegate.skill.md","md5":"0a1701bdd34f780208bb1c91b6c9bcaa"} -->
+<!--{"src":".coff/src/codex-delegate.skill.md","md5":"31add1f0a6c93b47c47d81ffefd0fa52"} -->

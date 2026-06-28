@@ -7,12 +7,12 @@ keep-coding-instructions: true
 # Development guidelines for the coff repo
 
 ## Sources and artifacts
-- Don't hand-edit the artifacts under `.claude/` (skills / output-styles / agents). To make changes, edit the sources under `.coff/src/` and use the `/coff-compile` skill.
-- Exception: vendored skills (external skills imported via `gh skill install`, e.g. `japanese-tech-writing` / `argument-gap-edit`, Unlicense) live directly under `.claude/skills/`. They have no source in `.coff/src/` and are not subject to `/coff-compile`. Re-fetch / update them with `gh skill update`.
+- Don't hand-edit the artifacts under `.claude/` (skills / output-styles / agents). To change an artifact, edit the source under `.coff/src/` and build it with the `/coff-compile` skill.
+- Exception: vendored skills (external skills imported via `gh skill install`, e.g. `japanese-tech-writing` or `argument-gap-edit`, Unlicense) live directly under `.claude/skills/`. They have no corresponding source in `.coff/src/` and are not subject to `/coff-compile`. Re-fetch or update them with `gh skill update`.
 
 ## Delegation
 - For self-contained, heavy tasks, consider delegating to codex (codex-delegate skill).
 
 ## Japanese
-- When writing Japanese, follow the japanese-tech-writing skill. When checking or editing the logic of an argument, also use the argument-gap-edit skill.
-<!--{"src":".coff/src/care-giver.outputstyle.md","md5":"20cd7153dbecc0c39d6b30fb7a1fa93d"} -->
+- When writing Japanese, follow the japanese-tech-writing skill. When checking and fixing the logic of an argument, also use the argument-gap-edit skill.
+<!--{"src":".coff/src/care-giver.outputstyle.md","md5":"2ae685a33a421c804be5c6b9901eea69"} -->
