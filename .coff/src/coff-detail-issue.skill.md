@@ -1,19 +1,19 @@
 ---
 name: coff-detail-issue
-description: issue 管理の共通事項（保存先・命名規則・テンプレート・品質基準）を提示する。
+description: issue 管理の共通事項（保存先、命名規則、テンプレート、品質基準）を提示する。
 ---
 
 <!--
-issue 関連の共通事項の単一ソース。coff には skill 間の include がないため、ここを真実の源とし、coff-issue-create / coff-issue-polish は実行時に `.claude/skills/coff-detail-issue/SKILL.md` を読み込んでこれを参照する。重複は各 skill に書かない。
+issue 関連の共通事項の唯一の参照元。coff には skill 間の include がないため、共通事項はここに集約し、coff-issue-create / coff-issue-polish は実行時に `.claude/skills/coff-detail-issue/SKILL.md` を読み込んでこれを参照する。重複は各 skill に書かない。
 -->
 
 ## 直接呼び出し時の動作
 
-`/coff-detail-issue` が直接呼ばれたときは、以下の保存先・命名規則・テンプレート・品質基準を提示するだけにとどめる。issue の生成・編集はしない（生成は coff-issue-create、磨き込みは coff-issue-polish の役目）。
+`/coff-detail-issue` が直接呼ばれたときは、以下の保存先、命名規則、テンプレート、品質基準を提示するだけにとどめる。issue の生成も編集もしない（生成は coff-issue-create、磨き込みは coff-issue-polish の役目）。
 
 ## 保存先と命名
 
-- issue はリポジトリ内の `issue/` ディレクトリに 1 issue = 1 markdown ファイルで置く（GitHub Issues は使わない）。
+- issue はリポジトリ内の `issue/` ディレクトリに置く。1 件の issue につき 1 つの Markdown ファイルとする（GitHub Issues は使わない）。
 - ファイル名は `yymmddHHMM-<rnd2>.md`。`<rnd2>` は英小文字 2 字のランダム。<!-- 連番は複数人の同期が要り、`fix-hoge` のような名前は重複しやすいため、タイムスタンプ + ランダム 2 字で衝突を避ける。 -->
 - ファイル名の採番例:
 
@@ -24,7 +24,7 @@ issue 関連の共通事項の単一ソース。coff には skill 間の include
 
 ## 言語
 
-issue 本文は日本語で書く。日本語は japanese-tech-writing skill の規範に従う。
+issue 本文は日本語で書く。日本語は japanese-tech-writing skill の規範に従って書く。
 
 ## テンプレート
 
@@ -64,4 +64,4 @@ issue 本文は日本語で書く。日本語は japanese-tech-writing skill の
 ## 良い issue の基準
 
 - 判定軸は「この issue 単体で実装に着手できるか」。
-- 曖昧語・未確定事項を本文に残さない。残すものは「リスク・未解決」に明示する。
+- 曖昧語や未確定事項を本文に残さない。残すものは「リスク・未解決」に明示する。
