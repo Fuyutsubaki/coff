@@ -14,12 +14,13 @@ issue 関連の共通事項の唯一の参照元。coff には skill 間の incl
 ## 保存先と命名
 
 - issue はリポジトリ内の `issue/` ディレクトリに置く。1 件の issue につき 1 つの Markdown ファイルとする（GitHub Issues は使わない）。
-- ファイル名は `yymmddHHMM-<rnd2>.md`。`<rnd2>` は英小文字 2 字のランダム。<!-- 連番は複数人の同期が要り、`fix-hoge` のような名前は重複しやすいため、タイムスタンプ + ランダム 2 字で衝突を避ける。 -->
-- ファイル名の採番例:
+- ファイル名は `yymmddHH-<slug>.md`。`<slug>` は内容を表す短いケバブケース（例 `fix-hoge`、`add-login`）。
+- ファイル名の例:
 
   ```bash
-  name="$(date +%y%m%d%H%M)-$(LC_ALL=C tr -dc 'a-z' </dev/urandom | head -c2)"
-  # 例: 2606281430-xk  ->  issue/2606281430-xk.md
+  ts="$(date +%y%m%d%H)"   # 例: 26062814
+  # <slug> は内容を表す短いケバブケース。例: fix-hoge
+  # -> issue/26062814-fix-hoge.md
   ```
 
 ## 言語

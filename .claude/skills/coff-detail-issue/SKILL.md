@@ -10,12 +10,13 @@ When `/coff-detail-issue` is invoked directly, just present the location / namin
 ## Location and naming
 
 - Issues live in the repo's `issue/` directory. One issue is one Markdown file (do not use GitHub Issues).
-- Filename is `yymmddHHMM-<rnd2>.md`. `<rnd2>` is 2 random lowercase letters.
+- Filename is `yymmddHH-<slug>.md`. `<slug>` is a short kebab-case description of the content (e.g. `fix-hoge`, `add-login`).
 - Filename example:
 
   ```bash
-  name="$(date +%y%m%d%H%M)-$(LC_ALL=C tr -dc 'a-z' </dev/urandom | head -c2)"
-  # 例: 2606281430-xk  ->  issue/2606281430-xk.md
+  ts="$(date +%y%m%d%H)"   # 例: 26062814
+  # <slug> は内容を表す短いケバブケース。例: fix-hoge
+  # -> issue/26062814-fix-hoge.md
   ```
 
 ## Language
@@ -61,4 +62,4 @@ New issues follow this structure. The goal is that the issue alone is enough to 
 
 - The test is "can you start implementation from this issue alone?".
 - Don't leave vague wording or open questions in the body. Put anything unresolved under "リスク・未解決".
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"634ef2428286997ce78050c198aa81de"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"fae5b24c86a8f75a8a427fde9a5c7dd3"} -->
