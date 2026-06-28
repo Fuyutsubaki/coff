@@ -45,15 +45,6 @@ gh skill install f4ah6o/tech-write-ja argument-gap-edit    --agent claude-code
 
 更新は `gh skill update`、確認は `gh skill list`。
 
-ゼロ依存の fallback（gh を上げられない場合は `gh api` で直接コピー）:
-
-```bash
-for n in japanese-tech-writing argument-gap-edit; do
-  mkdir -p ".claude/skills/$n"
-  gh api "repos/f4ah6o/tech-write-ja/contents/skills/$n/SKILL.md" --jq '.content' | base64 -d > ".claude/skills/$n/SKILL.md"
-done
-```
-
 - vendored ファイルには coff の md5 footer（`<!--{"src":...,"md5":...} -->`）を付けない。由来は `gh skill` が付ける frontmatter の `metadata.github-repo` と、本文先頭の k16shikano gist 出典表記で残る。
 - `.coff/src/care-giver.outputstyle.md` と `.coff/src/coff-detail-issue.skill.md` はソースを編集し、`/coff-compile care-giver coff-detail-issue` で再生成する。
 - `argument-gap-edit` の相対参照 `../japanese-tech-writing/SKILL.md` は、両者が `.claude/skills/` 直下の兄弟になるので解決する。
@@ -79,7 +70,7 @@ done
 - 取り込み方式の代替案。vendoring の代わりに、coff-compile に「英訳しない passthrough」モード（frontmatter フラグや `.raw.skill.md` 拡張子など）を追加し、`.coff/src/` で管理する案もある。今回は変更が大きいので vendoring を推奨する。将来 vendored が増えるなら再検討する。
 - 適用範囲の判断。「日本語を使えるようにする」の対象を issue 本文だけにするか、coff の日本語出力全体（ドキュメント、PR 説明など）に広げるか。推奨は care-giver で全体に薄く促し、coff-detail-issue で issue を明示する形。広げ方はユーザー判断。
 - vendored の更新運用。上流が更新されたときは `gh skill update` で取り込み直す。自動化（定期実行など）は当面しない。
-- gh のバージョン依存。`gh skill` は v2.90.0+ が必要。取り込み・更新の時だけ要るランタイム依存で、コピー後の利用時には不要。古い環境では `gh api` fallback を使う。
+- gh のバージョン依存。`gh skill` は v2.90.0+ が必要（取り込み・更新の時だけ）。古い gh で取り込むことはしない。必要なら gh を更新する。
 
 ## 参考・関連 issue
 - https://github.com/f4ah6o/tech-write-ja
