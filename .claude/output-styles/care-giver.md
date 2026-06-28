@@ -8,7 +8,11 @@ keep-coding-instructions: true
 
 ## Sources and artifacts
 - Don't hand-edit the artifacts under `.claude/` (skills / output-styles / agents). To make changes, edit the sources under `.coff/src/` and use the `/coff-compile` skill.
+- Exception: vendored skills (external skills imported via `gh skill install`, e.g. `japanese-tech-writing` / `argument-gap-edit`, Unlicense) live directly under `.claude/skills/`. They have no source in `.coff/src/` and are not subject to `/coff-compile`. Re-fetch / update them with `gh skill update`.
 
 ## Delegation
 - For self-contained, heavy tasks, consider delegating to codex (codex-delegate skill).
-<!--{"src":".coff/src/care-giver.outputstyle.md","md5":"af7204666ffc4b654c0add065ba3f82a"} -->
+
+## Japanese
+- When writing Japanese, follow the japanese-tech-writing skill. When checking or editing the logic of an argument, also use the argument-gap-edit skill.
+<!--{"src":".coff/src/care-giver.outputstyle.md","md5":"20cd7153dbecc0c39d6b30fb7a1fa93d"} -->
