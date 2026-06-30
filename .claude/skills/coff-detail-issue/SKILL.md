@@ -82,7 +82,7 @@ Write new issues with the structure below. The 〔 〕 on each heading marks own
 
 create fills only the problem space and leaves the solution space as placeholders. polish works out the solution space.
 
-For 実装詳細, don't over-write soon-to-rot detail (broad file-path enumerations or code fragments). But representative entry-point files needed to understand the existing design, key types / state transitions / protocols, and constraints found via a spike are fine to include.
+For 実装詳細, don't over-write detail that goes stale quickly (broad file-path enumerations or code fragments). But representative entry-point files needed to understand the existing design, key types / state transitions / protocols, and constraints found via a trial implementation are fine to include.
 
 ## Quality bar
 
@@ -92,4 +92,4 @@ The bar splits in two:
 - polish's exit: the issue alone is enough to start implementation.
 
 Don't leave vague wording or open questions in the body. Put judgment calls under "リスク・未解決", and decisions the human has settled under "人間が決めた判断".
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"779cec76dc022b93e8acf1bc76a574ed"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"90b7acc601a658fde6d9ddff9e6331de"} -->

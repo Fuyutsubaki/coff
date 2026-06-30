@@ -9,16 +9,16 @@ description: Refine an issue under `issue/` into a self-contained spec that can 
 2. Read the target issue and first check the problem space. Confirm it meets the four problem-validity angles and the problem is correctly framed; if it's broken, re-frame 背景・目的 / 現状 (hand back to the problem space).
 3. Code investigation: actually read the relevant files, existing implementation, dependencies, related skills, docs, and related issues, and fill in 現状 / 対象範囲 / 実装詳細 based on facts.
 4. Verify premises with a checklist: do the stated premises not contradict the current code / do the referenced file paths exist / are the acceptance criteria verifiable. Fix contradictions; move judgment calls to "リスク・未解決".
-5. Sort judgment calls. Split the points that come up into "answerable from code" and "needs the user's decision". Resolve the former yourself via steps 3-4; don't ask the human. Only for the latter, ask before deciding, using the grilling skill's discipline (one question at a time, each with a recommended answer). Set the grilling loop's exit to "the issue becomes implementable on its own", not "generic agreement". Record decisions the human makes under the "人間が決めた判断" section. Don't lock in guesses as spec.
+5. Sort the open points. Split the points that come up into "answerable from code" and "needs the user's decision". Resolve the former yourself via steps 3-4; don't ask the human. Only for the latter, ask before deciding, using the grilling skill's discipline (one question at a time, each with a recommended answer). Set the grilling exit to "the issue becomes implementable on its own", not "generic agreement". Record decisions the human makes under the "人間が決めた判断" section. Don't lock in guesses as spec.
 6. Work out the solution space. In 変更方針, keep the chosen approach plus the alternatives considered and why they were rejected. Fill in 受け入れ条件 and テスト方針 too.
 7. (If needed) trial implementation. Try small experiments where feasibility is uncertain. Safety steps:
    - Before starting, stash the working tree with `git stash`; after checking, restore with `git stash pop` or discard it.
    - To run it in a separate process, delegate to the codex-delegate skill and only collect the result.
    - In all cases, don't include trial-implementation artifacts in the commit beyond edits to the issue file.
-8. Self-review with a checklist: is each template section filled / are the acceptance criteria verifiable / is the test plan sufficient / do the premises match the code / are the risks covered / have you silently locked in a judgment call you should have asked the user about / is there anywhere an implementer would get stuck.
+8. Self-review with a checklist: is each template section filled / are the acceptance criteria verifiable / is the test plan sufficient / do the premises match the code / are the risks covered / have you silently locked in a point you should have asked the user about / is there anywhere an implementer would get stuck.
 9. Overwrite the issue file. Write Japanese prose following the japanese-tech-writing skill, and check the logic of the argument with the argument-gap-edit skill. Report the changes applied and the remaining work.
 
 ## Done bar
 
 - An implementer can start from the issue alone.
-<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"6b89368183627dc661a4d7167108d51f"} -->
+<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"06bd0ee5212c1e11cf71a34ac47b485e"} -->

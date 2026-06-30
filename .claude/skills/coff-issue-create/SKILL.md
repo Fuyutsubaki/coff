@@ -16,4 +16,4 @@ description: Scaffold a new issue under `issue/`.
 ## Exit bar
 
 - The problem is correctly framed. The solution is left to polish.
-<!--{"src":".coff/src/coff-issue-create.skill.md","md5":"17e66c88a6b6ac0682276105eaa31f30"} -->
+<!--{"src":".coff/src/coff-issue-create.skill.md","md5":"93d5fb5fbb5ba394d6537044fe1850c5"} -->
