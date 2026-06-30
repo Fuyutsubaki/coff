@@ -23,43 +23,73 @@ When `/coff-detail-issue` is invoked directly, just present the location / namin
 
 Write issue bodies in Japanese, following the japanese-tech-writing skill.
 
+## Problem space and solution space
+
+An issue is built in two stages: framing the problem, then working out the solution. Roles split along this axis.
+
+- The problem space (背景・目的 / 現状) is framed by coff-issue-create.
+- The solution space (変更方針 / 対象範囲・対象ファイル / 実装詳細 / 受け入れ条件 / テスト方針) is worked out by coff-issue-polish.
+- The cross-cutting sections (人間が決めた判断 / リスク・未解決 / 参考・関連 issue) are added by both stages.
+
+### Problem validity
+
+Both when create frames the problem and when polish checks the problem at its entry, examine validity from these angles:
+
+- Is this actually a problem worth solving?
+- Is it already solved?
+- Is the question framed correctly?
+- Is there another way to frame it?
+
+Leave doubts and rejected framings under "リスク・未解決".
+
 ## Template
 
-New issues follow this structure. The goal is that the issue alone is enough to start implementation.
+Write new issues with the structure below. The 〔 〕 on each heading marks ownership.
 
 ```markdown
 # <タイトル: 命令形で簡潔に>
 
-## 背景・目的
+## 背景・目的  〔問題 / create〕
 <なぜ必要か / 解きたい問題>
 
-## 現状
-<今どうなっているか・関連する既存の挙動>
+## 現状  〔問題 / create〕
+<今どうなっているか・関連する既存の挙動（事実）>
 
-## 変更方針
-<どう変えるか・採用案とその理由>
+## 変更方針  〔解 / polish〕
+<どう変えるか・採用案とその理由。検討した代替案と却下理由も残す>
 
-## 対象範囲・対象ファイル
+## 対象範囲・対象ファイル  〔解 / polish〕
 <触る範囲。代表的なファイルパス>
 
-## 実装詳細
+## 実装詳細  〔解 / polish〕
 <手順・データ構造・インターフェース。単体で実装できる粒度で>
 
-## 受け入れ条件
+## 受け入れ条件  〔解 / polish〕
 - [ ] <完了の定義をチェックリストで>
 
-## テスト方針
+## テスト方針  〔解 / polish〕
 <どう検証するか>
 
-## リスク・未解決
+## 人間が決めた判断  〔横断〕
+<AI でなく人間が決めた点を残す。各項目に「決定内容 / 理由 /（未確定なら）要確認」>
+
+## リスク・未解決  〔横断〕
 <懸念・要判断点・代替案。未確定はここに明示する>
 
-## 参考・関連 issue
+## 参考・関連 issue  〔横断〕
 <リンク・関連する issue/ ファイル>
 ```
 
+create fills only the problem space and leaves the solution space as placeholders. polish works out the solution space.
+
+For 実装詳細, don't over-write soon-to-rot detail (broad file-path enumerations or code fragments). But representative entry-point files needed to understand the existing design, key types / state transitions / protocols, and constraints found via a spike are fine to include.
+
 ## Quality bar
 
-- The test is "can you start implementation from this issue alone?".
-- Don't leave vague wording or open questions in the body. Put anything unresolved under "リスク・未解決".
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"fae5b24c86a8f75a8a427fde9a5c7dd3"} -->
+The bar splits in two:
+
+- create's exit: the problem is correctly framed (meets the four problem-validity angles).
+- polish's exit: the issue alone is enough to start implementation.
+
+Don't leave vague wording or open questions in the body. Put judgment calls under "リスク・未解決", and decisions the human has settled under "人間が決めた判断".
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"779cec76dc022b93e8acf1bc76a574ed"} -->
