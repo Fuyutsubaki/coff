@@ -23,6 +23,17 @@ issue 関連の共通事項の唯一の参照元。coff には skill 間の incl
   # -> issue/26062814-fix-hoge.md
   ```
 
+## 状態（status）
+
+issue の完了状態は、ファイル先頭の YAML frontmatter に `status` として持つ。
+
+- 値域は `open`（未完了）と `done`（完了）の2値。
+- 新規 issue は coff-issue-create が `status: open` を付けて生成する。
+- 完了時は coff-issue-done が `status: done` へ更新する。
+- frontmatter が無い、または `status` が無い issue は `open` とみなす（既存 issue を触らずに済ませるための既定）。
+
+完了しても issue ファイルは元の場所に残す。<!-- ファイルパスを変えないので、issue 間の相互参照は壊れない。 -->
+
 ## 言語
 
 issue 本文は日本語で書く。日本語は japanese-tech-writing skill の規範に従って書く。
@@ -51,6 +62,9 @@ create が問題を立てるときも、polish が入口で問題を点検する
 新規 issue は次の構成で書く。各見出しの〔 〕は担当を表す。
 
 ```markdown
+---
+status: open   # open（未完了）| done（完了）
+---
 # <タイトル: 命令形で簡潔に>
 
 ## 背景・目的  〔問題 / create〕

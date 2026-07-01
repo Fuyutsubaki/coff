@@ -19,6 +19,17 @@ When `/coff-detail-issue` is invoked directly, just present the location / namin
   # -> issue/26062814-fix-hoge.md
   ```
 
+## Status
+
+An issue's completion state lives in a `status` key in YAML frontmatter at the top of the file.
+
+- The value range is `open` (not done) and `done` (done) — two values.
+- New issues are created by coff-issue-create with `status: open`.
+- On completion, coff-issue-done updates it to `status: done`.
+- An issue with no frontmatter, or no `status`, is treated as `open` (a default so existing issues need not be touched).
+
+Even when done, the issue file stays in place.
+
 ## Language
 
 Write issue bodies in Japanese, following the japanese-tech-writing skill.
@@ -47,6 +58,9 @@ Leave doubts and rejected framings under "リスク・未解決".
 Write new issues with the structure below. The 〔 〕 on each heading marks ownership.
 
 ```markdown
+---
+status: open   # open（未完了）| done（完了）
+---
 # <タイトル: 命令形で簡潔に>
 
 ## 背景・目的  〔問題 / create〕
@@ -92,4 +106,4 @@ The bar splits in two:
 - polish's exit: the issue alone is enough to start implementation.
 
 Don't leave vague wording or open questions in the body. Put judgment calls under "リスク・未解決", and decisions the human has settled under "人間が決めた判断".
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"90b7acc601a658fde6d9ddff9e6331de"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"1576c602ae8f0022cc7ed7813046f640"} -->
