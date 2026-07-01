@@ -96,7 +96,12 @@ status: open   # open（未完了）| done（完了）
 
 create fills only the problem space and leaves the solution space as placeholders. polish works out the solution space.
 
-For 実装詳細, don't over-write detail that goes stale quickly (broad file-path enumerations or code fragments). But representative entry-point files needed to understand the existing design, key types / state transitions / protocols, and constraints found via a trial implementation are fine to include.
+An issue is long-term memory of design decisions. Keep information valuable to a later reader, and don't accumulate scaffolding needed only at authoring time.
+
+- Keep: the chosen approach and its rationale, rejected alternatives and why, constraints that matter later (key types / state transitions / protocols, constraints found via a trial implementation), and representative entry-point files needed to understand the existing design.
+- Don't accumulate: verbatim copies of a skill's or code's procedure (the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, session narrative, and risk notes that duplicate other sections.
+
+But 受け入れ条件 and テスト方針 are needed to implement, so don't drop them for the sake of brevity.
 
 ## Quality bar
 
@@ -106,4 +111,4 @@ The bar splits in two:
 - polish's exit: the issue alone is enough to start implementation.
 
 Don't leave vague wording or open questions in the body. Put judgment calls under "リスク・未解決", and decisions the human has settled under "人間が決めた判断".
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"1576c602ae8f0022cc7ed7813046f640"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"0dd5fe8d93569a17e40b05d218a00a60"} -->

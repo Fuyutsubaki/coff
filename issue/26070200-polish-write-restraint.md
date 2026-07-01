@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 ---
 # polish の書きすぎを抑え、issue を長期記憶として保つ
 
