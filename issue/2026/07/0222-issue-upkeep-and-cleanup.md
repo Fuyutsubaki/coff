@@ -1,5 +1,5 @@
 ---
-status: open   # open（未完了）| done（完了）
+status: done   # open（未完了）| done（完了）
 ---
 # issue 完了時の検証とリポジトリ整備をまとめて行う
 
