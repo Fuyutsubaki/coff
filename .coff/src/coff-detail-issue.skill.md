@@ -13,14 +13,16 @@ issue 関連の共通事項の唯一の参照元。coff には skill 間の incl
 
 ## 保存先と命名
 
-- issue はリポジトリ内の `issue/` ディレクトリに置く。1 件の issue につき 1 つの Markdown ファイルとする（GitHub Issues は使わない）。
-- ファイル名は `yymmddHH-<slug>.md`。`<slug>` は内容を表す短いケバブケース（例 `fix-hoge`、`add-login`）。
-- ファイル名の例:
+- issue はリポジトリ内の `issue/<yyyy>/<mm>/` ディレクトリに置く（作成した年月で振り分ける）。1 件の issue につき 1 つの Markdown ファイルとする（GitHub Issues は使わない）。
+- ファイル名は `<ddHH>-<slug>.md`（`dd`=日、`HH`=時。年月はディレクトリが表すので接頭辞には含めない）。`<slug>` は内容を表す短いケバブケース（例 `fix-hoge`、`add-login`）。
+- 保存先とファイル名の例:
 
   ```bash
-  ts="$(date +%y%m%d%H)"   # 例: 26062814
+  dir="issue/$(date +%Y/%m)"   # 例: issue/2026/07
+  ts="$(date +%d%H)"           # 例: 0222
+  mkdir -p "$dir"
   # <slug> は内容を表す短いケバブケース。例: fix-hoge
-  # -> issue/26062814-fix-hoge.md
+  # -> issue/2026/07/0222-fix-hoge.md
   ```
 
 ## 状態（status）

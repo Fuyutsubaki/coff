@@ -9,14 +9,16 @@ When `/coff-detail-issue` is invoked directly, just present the location / namin
 
 ## Location and naming
 
-- Issues live in the repo's `issue/` directory. One issue is one Markdown file (do not use GitHub Issues).
-- Filename is `yymmddHH-<slug>.md`. `<slug>` is a short kebab-case description of the content (e.g. `fix-hoge`, `add-login`).
-- Filename example:
+- Issues live under the repo's `issue/<yyyy>/<mm>/` directory (bucketed by the year/month they were created). One issue is one Markdown file (do not use GitHub Issues).
+- Filename is `<ddHH>-<slug>.md` (`dd`=day, `HH`=hour; the year/month is carried by the directory, so it's not repeated in the prefix). `<slug>` is a short kebab-case description of the content (e.g. `fix-hoge`, `add-login`).
+- Location and filename example:
 
   ```bash
-  ts="$(date +%y%m%d%H)"   # 例: 26062814
+  dir="issue/$(date +%Y/%m)"   # 例: issue/2026/07
+  ts="$(date +%d%H)"           # 例: 0222
+  mkdir -p "$dir"
   # <slug> は内容を表す短いケバブケース。例: fix-hoge
-  # -> issue/26062814-fix-hoge.md
+  # -> issue/2026/07/0222-fix-hoge.md
   ```
 
 ## Status
@@ -111,4 +113,4 @@ The bar splits in two:
 - polish's exit: the issue alone is enough to start implementation.
 
 Don't leave vague wording or open questions in the body. Put judgment calls under "リスク・未解決", and decisions the human has settled under "人間が決めた判断".
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"0dd5fe8d93569a17e40b05d218a00a60"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"6e7dbbb8bd2d3eb7980a8b7d9f5e7d1c"} -->
