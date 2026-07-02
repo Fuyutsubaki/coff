@@ -13,7 +13,7 @@ coff の issue は実装の指示書であると同時に、設計判断の長�
 ファイルは元の場所に残し、パスは変えない。
 
 - ファイルが動かないので issue 間のパス相互参照が壊れず、「完了しても記録として残す」長期記憶の目的に整合する。
-- `grep 'status: done' issue/*.md` で機械的に一覧できる。
+- `grep -rl 'status: done' issue` で機械的に一覧できる。
 - frontmatter または `status` が無い issue は `open` とみなす。既存 issue を遡及で触らずに済ませるための既定。
 - 新規 issue は coff-issue-create が `status: open` を付け、完了時に専用スキル coff-issue-done が `done` へ更新する。polish は上書き時に frontmatter を保存する。
 
@@ -24,5 +24,6 @@ coff の issue は実装の指示書であると同時に、設計判断の長�
 - done 化を手編集の運用規約だけで済ませる。→ 完了マークの操作を手順として明示・再現したいので、専用スキルを新設した。
 
 ## 参考
-- `issue/26062822-improve-issue-workflow.md`（本 issue はここから切り出した）
+- `issue/2026/06/2822-improve-issue-workflow.md`（本 issue はここから切り出した）
 - 実装: `.coff/src/coff-detail-issue.skill.md`（status 仕様）/ `coff-issue-create` / `coff-issue-done` / `coff-issue-polish`
+- 補足: その後 issue を年月ディレクトリ（`issue/<yyyy>/<mm>/`）へ再編した。done 時にファイルを動かさない設計自体は維持している。→ `issue/2026/07/0222-issue-upkeep-and-cleanup.md`

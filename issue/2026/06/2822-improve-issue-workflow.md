@@ -28,7 +28,7 @@ coff の issue は実装の指示書であると同時に、設計判断の長�
 - GPT Pro が提案した周辺スキル（split-issue / issue-ready-check / to-issues / grill-with-docs 等）。→ create/polish/detail ＋ grilling のスコープを越えるため不採用。1 issue = 1 問題を守る。有用なものは将来別 issue とする。
 
 ## 参考
-- 完了表記は独立性が高いので別 issue に切り出した: `issue/26063023-issue-done-status.md`
-- vendoring の先例: `issue/26062803-import-tech-write-ja.md`（japanese-tech-writing の取り込み）
+- 完了表記は独立性が高いので別 issue に切り出した: `issue/2026/06/3023-issue-done-status.md`
+- vendoring の先例: `issue/2026/06/2803-import-tech-write-ja.md`（japanese-tech-writing の取り込み）
 - grilling skill: https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling （MIT, Matt Pocock）
 - 実装ソース: `.coff/src/coff-detail-issue.skill.md` / `coff-issue-create.skill.md` / `coff-issue-polish.skill.md`

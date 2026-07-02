@@ -73,5 +73,5 @@ coff の issue は設計判断の長期記憶である。
 - detail は既に「書きすぎない」注意書きを持つ。格上げで二重規範にならないよう、一箇所に集約する。
 
 ## 参考・関連 issue
-- 契機: `issue/26062822-improve-issue-workflow.md` と `issue/26063023-issue-done-status.md`（本セッションで作成し、完了後に手作業で圧縮した。圧縮の前後は PR #4 のコミット `23e1547` に残る）
+- 契機: `issue/2026/06/2822-improve-issue-workflow.md` と `issue/2026/06/3023-issue-done-status.md`（本セッションで作成し、完了後に手作業で圧縮した。圧縮の前後は PR #4 のコミット `23e1547` に残る）
 - 対象スキル: `.coff/src/coff-issue-polish.skill.md` / `coff-detail-issue.skill.md`
