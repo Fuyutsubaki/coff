@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. Skills declaring `coff-dist` in frontmatter are also mirrored to the distribution `skills/` directory. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` overrides the output destination, `--ref` writes reference stubs, and `--agent` follows per-agent defaults such as codex.
+description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` overrides the output destination, `--ref` writes reference stubs, and `--agent` follows per-agent defaults such as codex.
 license: MIT
 ---
 
@@ -13,8 +13,6 @@ Each source type determines its output path. `<name>` is the source filename wit
 | `.coff/src/*.skill.md` | `.claude/skills/<name>/SKILL.md` |
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
-
-Skill-type sources whose frontmatter has `coff-dist: true` are also written to `skills/<name>/SKILL.md` with identical content (footer included).
 
 The input glob set is all globs above. With no args, all of them are targeted.
 
@@ -66,8 +64,7 @@ Determine the type from the source extension and derive the output path set `dst
 
 ```bash
 case "$src" in
-  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md"
-                    sed -n '2,/^---$/p' "$src" | grep -q '^coff-dist:[[:space:]]*true' && dsts="$dsts skills/$name/SKILL.md" ;;
+  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md" ;;
   *.outputstyle.md) name=$(basename "$src" .outputstyle.md); dsts=".claude/output-styles/$name.md" ;;
   *.agent.md)       name=$(basename "$src" .agent.md);       dsts=".claude/agents/$name.md" ;;
   *) echo "unknown source type: $src"; continue ;;
@@ -151,7 +148,7 @@ a. **Translate Japanese to English.** Rewrite prose, headings, list items, and t
 
 b. **Strip HTML/markdown comments from the body.** Remove every `<!-- ... -->` block in the body. Do not strip comments inside fenced code blocks or inline code spans. Do not touch the frontmatter block.
 
-c. **Preserve frontmatter structure.** The leading `---` … `---` block must remain valid YAML frontmatter in the output. If the source has no frontmatter, abort with an error. Remove the `coff-translate` and `coff-dist` keys from the output frontmatter.
+c. **Preserve frontmatter structure.** The leading `---` … `---` block must remain valid YAML frontmatter in the output. If the source has no frontmatter, abort with an error. Remove every key starting with `coff-` from the output frontmatter.
 
 d. **Write the output and append the footer.** Footer goes on the last line, after the body, outside any code block. Output-style files also get the footer; it is a plain markdown file, so the trailing HTML comment is harmless and is also used for skip detection. For reference-mode outputs, write the stub from "Agent presets and reference output" instead of the body.
 
@@ -176,4 +173,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"873c63507680cd299938fa3df7d575e5"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"9b709abed7fa8af9366d74dcd9684cf3"} -->

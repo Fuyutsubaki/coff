@@ -45,6 +45,8 @@ coff-compile は他 repo にも配布する汎用ツールなので、「`coff-`
 導入先のユーザーが自作スキルを配布する用途にも、同じ宣言がそのまま使える。
 配置の代替案は次の理由で却下した。
 
+追加判断（2026-07-21）: 二重出力の解釈は compile 本体からも外し、repo ローカルのラッパー skill `compile`（`.coff/src/compile.skill.md`、非配布）に移す。coff-compile は「`coff-` で始まる frontmatter キーを出力から除去する」という名前空間規則だけを持ち、`coff-dist` の解釈と配布ミラーの同期はラッパーが行う。coff repo のビルド入口は `/compile` になる（引数はそのまま coff-compile へ渡る）。
+
 - `skills` と `.claude/skills` を symlink で繋ぐ案: GitHub 上の symlink の扱いと他 OS での checkout に不確実性がある。
 - ルート直下に `<name>/SKILL.md` を置く案: 発見規約には合うが、repo ルートにスキルディレクトリが並んで散らかる。
 - 正本を `skills/` に移し `.claude/skills` 側をリンクにする案: Claude Code がリンク先を解決するか未確認でリスクがある。
@@ -92,6 +94,8 @@ codex の配置先 `.agents/skills/*/SKILL.md` は `gh skill install --agent cod
   - 出力規則に「frontmatter に `coff-dist: true` を持つ skill 型は `skills/<name>/SKILL.md` にも同一内容（footer 含む）を書く」を追記する。スキップ判定は全出力先の footer md5 が一致するときだけ skip とする（`skills/` 側が欠けていれば再ビルド）。`coff-dist` キーは `coff-translate` と同様に出力の frontmatter から除去する。
   - 翻訳スキップを追加する。ソース frontmatter に `coff-translate: false` があるとき手順 5a の英訳を行わず、このキーは成果物の frontmatter から除去する。
   - 多 agent 対応（変更方針 4）を追記する。オプション `--out` / `--ref` / `--agent`、agent プリセット表、参照 stub の形式とビルド順（正本 → 参照）を本文に足す。coff repo 自身の `.agents/` ビルドは行わない（機構の提供まで）。
+  - coff 固有機能の分離（変更方針 1 の追加判断）: `coff-dist` の二重出力を本文・bash から除き、キー除去は「`coff-` で始まるキーすべて」の名前空間規則に一般化する。
+- `.coff/src/compile.skill.md`（新規・非配布）: coff repo のビルド入口となるラッパー。引数をそのまま `/coff-compile` に渡して実行し、`--lint-only` 以外のとき `coff-dist: true` のスキルの配布ミラー `skills/<name>/SKILL.md` を正本の複製として同期する。care-giver の規約記述もビルド入口を `/compile` に差し替える（coff-init が導入先に案内する `/coff-compile` はラッパーなし環境なのでそのまま）。
 - `.coff/src/coff-japanese-tech-writing.skill.md` / `.coff/src/coff-argument-gap-edit.skill.md`（新規）: 現在の vendored の SKILL.md 本文を移す。frontmatter は `name` を新名称に変え、上流の install メタデータ（`metadata.github-*`）を落とし、`license: MIT` と `coff-translate: false` を付ける。冒頭の出典表記は保持する。argument-gap-edit の本文にある相互参照 `../japanese-tech-writing/SKILL.md` は `../coff-japanese-tech-writing/SKILL.md` に書き換える。旧 vendored ディレクトリ `.claude/skills/japanese-tech-writing/` / `.claude/skills/argument-gap-edit/` はコンパイル後に削除する（同内容のスキルが新名で並ぶのを防ぐ）。
 - `.coff/src/coff-issue-create.skill.md` / `coff-issue-polish.skill.md`: grilling をパスで読む指示を削り、規律（一問ずつ・推奨案を添える・コードで分かることは調べる）を本文に書き込む。japanese-tech-writing への言及を新名称に置換する。polish は argument-gap-edit への言及も新名称に置換する。
 - `.coff/src/coff-detail-issue.skill.md` / `care-giver.outputstyle.md`: japanese-tech-writing / argument-gap-edit への言及を新名称に置換する。care-giver の vendored 例外の記述を「grilling のみ」に更新する。
@@ -116,6 +120,7 @@ codex の配置先 `.agents/skills/*/SKILL.md` は `gh skill install --agent cod
 - [x] README に coff-init 起点の導入手順が載っている — 確認: 目視
 - [x] `--agent codex` 相当の出力（`.agents/skills/<name>/SKILL.md` の参照 stub）が正しい相対パスで正本を指す — 確認: 一時 repo に stub を生成して確認
 - [x] codex が `.agents/skills/` の stub を発見し、参照先の正本の指示どおりに動く — 確認: 一時 repo で `codex exec` を実行し、stub → 正本の順に読んで正本の指示（固定文字列の応答）に従うことをログで確認
+- [x] coff-compile の本文・bash に `coff-dist` への言及が残らず、ミラー同期をラッパー `compile` が担ったうえで、`skills/` の発見が 8 件のまま・全ミラーが正本とバイト一致 — 確認: `grep` と `cmp`、`gh skill publish --dry-run`
 
 ## 人間が決めた判断
 
@@ -127,6 +132,7 @@ codex の配置先 `.agents/skills/*/SKILL.md` は `gh skill install --agent cod
 - coff-compile は汎用スキルとして保ち、coff 固有の配布ポリシー（`coff-` 名での判定）を埋め込まない。配布対象はソース側の `coff-dist: true` 宣言で指定する。（2026-07-20）
 - vendored 依存の解消は、当初の coff-init による上流からの導入自動化を改め、grilling は規律の本文吸収、日本語系 2 つは `coff-` prefix での第一級ソース化（fork。以後上流に追従しない）とする。（2026-07-20）
 - coff-compile の出力先固定をやめ、`--out`（出力先指定）・`--ref`（参照 stub 配置）・`--agent`（agent ごとの既定挙動）の 3 機構で多 agent 対応する。対象 agent は当面 claude-code と codex。（2026-07-21）
+- coff-compile からは coff のためだけの機能をなくし、ラッパー skill `compile`（repo ローカル・非配布）に coff の配布ポリシー（`coff-dist` の解釈とミラー同期）を持たせる。（2026-07-21）
 
 決定の実体は変更方針に記載。
 

@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。frontmatter で `coff-dist` を宣言した skill は配布用 `skills/` にも二重出力する。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` で出力先の置換、`--ref` で参照 stub の出力、`--agent` で codex など agent ごとの既定に従った出力ができる。
+description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` で出力先の置換、`--ref` で参照 stub の出力、`--agent` で codex など agent ごとの既定に従った出力ができる。
 license: MIT
 coff-dist: true
 ---
@@ -24,8 +24,6 @@ lint:
 | `.coff/src/*.skill.md` | `.claude/skills/<name>/SKILL.md` |
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
-
-skill 型のうち frontmatter に `coff-dist: true` を持つものは、`skills/<name>/SKILL.md` にも同一内容（フッタ含む）を出力する。 <!-- gh skill の発見規約（skills/*/SKILL.md）に合わせた配布用の二重出力。何を配布するかは repo 固有の判断なので、compile 本体でなくソース側の宣言に持たせる。issue/2026/07/1921-gh-skill-installable.md の判断 -->
 
 入力 glob の集合は上表の全 glob。引数がなければこれら全 glob を対象にする。
 
@@ -79,8 +77,7 @@ skill 型のうち frontmatter に `coff-dist: true` を持つものは、`skill
 
 ```bash
 case "$src" in
-  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md"
-                    sed -n '2,/^---$/p' "$src" | grep -q '^coff-dist:[[:space:]]*true' && dsts="$dsts skills/$name/SKILL.md" ;;
+  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md" ;;
   *.outputstyle.md) name=$(basename "$src" .outputstyle.md); dsts=".claude/output-styles/$name.md" ;;
   *.agent.md)       name=$(basename "$src" .agent.md);       dsts=".claude/agents/$name.md" ;;
   *) echo "unknown source type: $src"; continue ;;
@@ -164,7 +161,7 @@ a. **日本語を英語に訳す。** 散文・見出し・箇条書き、およ
 
 b. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!-- ... -->` をすべて除去する。フェンスコードブロックやインラインコードの中にあるコメントは触らない。フロントマターも触らない。
 
-c. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-translate` と `coff-dist` のキーは出力の frontmatter から取り除く。 <!-- ビルド指示であって実行時情報ではないため -->
+c. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-` で始まるキーは出力の frontmatter からすべて取り除く。 <!-- ビルド指示（ラッパー skill が拡張するものを含む）の名前空間であって、実行時情報ではないため -->
 
 d. **出力を書き、フッタを付ける。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。プレーンな markdown なので末尾の HTML コメントは無害で、スキップ判定にも使う。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。
 
