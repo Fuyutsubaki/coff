@@ -1,12 +1,15 @@
 ---
-description: 書籍原稿で、無理筋な議論、段落間に埋めがたいギャップ、理論や引用の見せびらかし、段落単位の割り込みを検出し、論理単位ごとに再配置・削除・橋渡しする編集を行う。第5章後半のように「前半で得た編集方針を別箇所へ適用する」「議論の筋を点検して直す」ときに使用する。
-metadata:
-    github-path: skills/argument-gap-edit
-    github-ref: refs/heads/main
-    github-repo: https://github.com/f4ah6o/tech-write-ja
-    github-tree-sha: 73cde90f5cca8bc8dc12c8642d42dfbe9dcabab6
-name: argument-gap-edit
+name: coff-argument-gap-edit
+description: 書籍原稿で、無理筋な議論、段落間に埋めがたいギャップ、理論や引用の見せびらかし、段落単位の割り込みを検出し、論理単位ごとに再配置・削除・橋渡しする編集を行う。「前半で得た編集方針を別箇所へ適用する」「議論の筋を点検して直す」ときに使用する。
+license: MIT
+coff-dist: true
+coff-translate: false
 ---
+
+<!--
+f4ah6o/tech-write-ja の argument-gap-edit（Unlicense）を coff-argument-gap-edit として取り込んだもの（issue/2026/07/1921-gh-skill-installable.md の判断）。以後は coff が正本として保守し、上流には追従しない。内容が日本語の論証点検そのものなので coff-translate: false で英訳せずに出力する。
+-->
+
 # Argument Gap Edit
 
 このスキルは、文章を「より自然」にするためではなく、論証の筋が本当に通っているかを点検して直すために使う。
@@ -14,7 +17,7 @@ name: argument-gap-edit
 
 ## 併用する規範
 
-作業前に `../japanese-tech-writing/SKILL.md` を読む。
+作業前に `../coff-japanese-tech-writing/SKILL.md` を読む。
 特に「段落と論証の構成」「論証の厳密さ」「冗長の排除」に従う。
 
 ## 検出する問題
