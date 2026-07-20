@@ -1,7 +1,8 @@
 ---
 name: coff-compile
-description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。
-disable-model-invocation: true
+description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。frontmatter で `coff-dist` を宣言した skill は配布用 `skills/` にも二重出力する。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。
+license: MIT
+coff-dist: true
 ---
 
 <!--
@@ -24,6 +25,8 @@ lint:
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
 
+skill 型のうち frontmatter に `coff-dist: true` を持つものは、`skills/<name>/SKILL.md` にも同一内容（フッタ含む）を出力する。 <!-- gh skill の発見規約（skills/*/SKILL.md）に合わせた配布用の二重出力。何を配布するかは repo 固有の判断なので、compile 本体でなくソース側の宣言に持たせる。issue/2026/07/1921-gh-skill-installable.md の判断 -->
+
 入力 glob の集合は上表の全 glob。引数がなければこれら全 glob を対象にする。
 
 ## オプション
@@ -42,19 +45,26 @@ lint:
 
 ## 1. 対象ファイルの選定
 
-ソースの拡張子から種別を判定し、出力先 `dst` を導出する。
+ソースの拡張子から種別を判定し、出力先の集合 `dsts` を導出する。
 
 ```bash
 case "$src" in
-  *.skill.md)       name=$(basename "$src" .skill.md);       dst=".claude/skills/$name/SKILL.md" ;;
-  *.outputstyle.md) name=$(basename "$src" .outputstyle.md); dst=".claude/output-styles/$name.md" ;;
-  *.agent.md)       name=$(basename "$src" .agent.md);       dst=".claude/agents/$name.md" ;;
+  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md"
+                    sed -n '2,/^---$/p' "$src" | grep -q '^coff-dist:[[:space:]]*true' && dsts="$dsts skills/$name/SKILL.md" ;;
+  *.outputstyle.md) name=$(basename "$src" .outputstyle.md); dsts=".claude/output-styles/$name.md" ;;
+  *.agent.md)       name=$(basename "$src" .agent.md);       dsts=".claude/agents/$name.md" ;;
   *) echo "unknown source type: $src"; continue ;;
 esac
 src_md5=$(md5sum "$src" | cut -d' ' -f1)
-dst_md5=$(tail -n 1 "$dst" 2>/dev/null | grep -oP '"md5":"\K[a-f0-9]{32}')
-[ "$src_md5" = "$dst_md5" ] && echo skip || echo build
+verdict=skip
+for dst in $dsts; do
+  dst_md5=$(tail -n 1 "$dst" 2>/dev/null | grep -oP '"md5":"\K[a-f0-9]{32}')
+  [ "$src_md5" = "$dst_md5" ] || verdict=build
+done
+echo $verdict
 ```
+
+スキップは全出力先の md5 が一致するときに限る。
 
 空のソースはエラーとして報告し、次のファイルへ進む。
 
@@ -108,7 +118,7 @@ lint で候補が 1 件でも提示されていれば（実際に適用したか
 
 lint がソースを書き換えた場合は、フッタを書く前に md5 を取り直す。 <!-- §1 で取った md5 は lint で書き換えると古くなる --> 各対象ファイルについて:
 
-a. **日本語を英語に訳す。** 散文・見出し・箇条書き、および frontmatter の `description` 値を簡潔な英語に書き直す。 <!-- 出力のトークン削減のため -->
+a. **日本語を英語に訳す。** 散文・見出し・箇条書き、および frontmatter の `description` 値を簡潔な英語に書き直す。 <!-- 出力のトークン削減のため --> ソースの frontmatter に `coff-translate: false` があれば、この工程は丸ごと行わない（本文も `description` も原文のまま出力する）。 <!-- 日本語の書き方そのものが内容のスキルは、英訳すると価値が壊れるため -->
 
    ただし以下は訳さない（バイト単位でそのまま残す）:
    - モデルが照合や逐語出力に使う引用符付きリテラル。例: `ファイル名が "注文" から始まるファイル` の `"注文"` は日本語のまま。周囲の文だけを訳す → `files whose name starts with "注文"`。
@@ -122,13 +132,15 @@ a. **日本語を英語に訳す。** 散文・見出し・箇条書き、およ
 
 b. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!-- ... -->` をすべて除去する。フェンスコードブロックやインラインコードの中にあるコメントは触らない。フロントマターも触らない。
 
-c. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。
+c. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-translate` と `coff-dist` のキーは出力の frontmatter から取り除く。 <!-- ビルド指示であって実行時情報ではないため -->
 
 d. **出力を書き、フッタを付ける。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。プレーンな markdown なので末尾の HTML コメントは無害で、スキップ判定にも使う。
 
    ```bash
-   mkdir -p "$(dirname "$dst")"
-   printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$body" "$src" "$src_md5" > "$dst"
+   for dst in $dsts; do
+     mkdir -p "$(dirname "$dst")"
+     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$body" "$src" "$src_md5" > "$dst"
+   done
    ```
 
 ## 6. レポート

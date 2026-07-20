@@ -1,12 +1,9 @@
 ---
+name: coff-japanese-tech-writing
 description: 日本語の技術文書・書籍原稿の文章規範。整形（一文一行、引用ブロック、脚注、コラム記法）、段落と論証の構成（パラグラフライティング）、論証の厳密さ（ツッコミどころの除去）、読み手の負荷の管理、視点と語り、演出の抑制、LLM っぽい空句の禁止、冗長の排除を定める。日本語で技術書の章、草稿、記事、解説文を書くとき、または推敲・リライトするときに使用する。
-metadata:
-    github-path: skills/japanese-tech-writing
-    github-ref: refs/heads/main
-    github-repo: https://github.com/f4ah6o/tech-write-ja
-    github-tree-sha: eda8ac3400cd91f7af98506eebe6ddf98ff57708
-name: japanese-tech-writing
+license: MIT
 ---
+
 > 出典：k16shikano「SKILL.md」（https://gist.github.com/k16shikano/fd287c3133457c4fd8f5601d34aa817d）
 
 # 日本語技術文書の文章規範
@@ -149,3 +146,4 @@ LLM が大量生成する、中身のない型に誘惑されない。書き上�
 - 例が作為的に見えうる場合、それを隠さない。読者の疑念を先回りして認め、現実に十分あり得ることの根拠を短く添える。
 - その根拠は、著者の断定（「十分あり得る状況だ」）ではなく、読者自身の経験に訴える一般的事実や通説に求める（「この症状は珍しくないだろう」「〜という言い方もよく耳にする」）。
 - 確認していないことを、確認したかのように滑らかに書かない。
+<!--{"src":".coff/src/coff-japanese-tech-writing.skill.md","md5":"8375285f5f90b474bbcc3370855d59b3"} -->

@@ -1,6 +1,8 @@
 ---
 name: coff-detail-issue
 description: issue 管理の共通事項（目的、保存先、命名規則、テンプレート、品質基準）を提示する。
+license: MIT
+coff-dist: true
 ---
 
 <!--
@@ -60,7 +62,7 @@ gh pr list --search <ハッシュ> --state merged      # そのコミットを�
 
 ## 言語
 
-issue 本文は日本語で書く。日本語は japanese-tech-writing skill の規範に従って書く。
+issue 本文は日本語で書く。日本語は coff-japanese-tech-writing skill の規範に従って書く。
 
 ## 問題空間と解決空間
 
