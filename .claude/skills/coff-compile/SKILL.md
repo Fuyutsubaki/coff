@@ -30,7 +30,7 @@ Examples:
 - `/coff-compile --lint-only` — lint only (md5-matched files skipped).
 - `/coff-compile --force` — rebuild all, ignoring md5.
 - `/coff-compile foo` — lint+compile only `foo`.
-- `/coff-compile care-giver` — build only the care-giver output style.
+- `/coff-compile my-style` — build only the my-style output style.
 
 ## 1. Identify build targets
 
@@ -146,4 +146,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"0bc1a538bbdfab4ab0368d8b1fd08e7c"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"1d7fd7f5bb12dfe45b330121cd9815eb"} -->

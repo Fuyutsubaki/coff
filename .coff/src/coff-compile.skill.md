@@ -41,7 +41,7 @@ skill 型のうち frontmatter に `coff-dist: true` を持つものは、`skill
 - `/coff-compile --lint-only` — 全件 lint のみ（md5 一致のものはスキップ）。
 - `/coff-compile --force` — md5 を無視して全件再ビルド。
 - `/coff-compile foo` — foo だけ lint+compile。
-- `/coff-compile care-giver` — care-giver の output style だけビルド。
+- `/coff-compile my-style` — my-style の output style だけビルド。
 
 ## 1. 対象ファイルの選定
 
