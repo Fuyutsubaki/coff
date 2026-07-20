@@ -8,6 +8,7 @@ status: done
 `/coff-compile` に二重出力の規則を足し、frontmatter で `coff-dist` を宣言したスキルを `gh skill` の発見規約に合う `skills/<name>/SKILL.md` にも書き出す。
 vendored 依存は grilling の規律を本文に吸収し、日本語系 2 つを `coff-` prefix で第一級ソースに取り込んで解消する。
 新スキル coff-init と MIT の LICENSE を加え、`gh skill install Fuyutsubaki/coff coff-init` → `/coff-init` の 2 手で他環境に導入できる状態にする。
+仕上げとして coff-compile に `--out` / `--ref` / `--agent` を足し、codex など claude-code 以外の agent へも参照 stub で出力できるようにする。
 
 ## 背景・目的
 
@@ -74,6 +75,15 @@ README.md に導入手順（coff-init 起点の 2 手）を追記する。
 
 `gh skill publish`（release 作成と `agent-skills` topic 付与）は人間の決定によりスコープ外とする。必要になったら別 issue を立てる。
 
+**4. 多 agent 対応: 出力先・参照・agent プリセット。**
+coff-compile の出力先が `.claude/` 固定のままでは、汎用ツールを掲げても claude-code 環境でしか使えない（人間の指摘）。修正方針として次の 3 機構を足す（人間が決めた設計）。
+
+- `--out <root>`: 出力ルート（既定 `.claude`）の置換。種別ごとのサブレイアウトはルート配下でそのまま使う。
+- `--ref`: `--out` と併用し、本文の複製ではなく正本への参照 stub を出力する。実体は repo に 1 箇所だけ置き、複製による drift を防ぐ。stub は正本と同じ frontmatter を持ち、本文は正本への相対パス 1 行、フッタは実体と同じ規則で skip 判定に使う。
+- `--agent <name>`: 上 2 つのプリセット。claude-code（既定）= `.claude/` に実体、codex = `.agents/` に参照・skill 型のみ。当面この 2 agent に対応する。
+
+codex の配置先 `.agents/skills/*/SKILL.md` は `gh skill install --agent codex` の実測で確認した。`.agents/` は agent 横断の標準ディレクトリなので、対応 agent の追加はプリセット表への行追加で足りる。
+
 ## 実装詳細
 
 触る範囲は次のとおり。ビルド規則とスキルの変更はソース（`.coff/src/`）のみを編集し、成果物の再生成は人間が `/coff-compile` を実行する（成果物の手編集は禁止）。
@@ -81,6 +91,7 @@ README.md に導入手順（coff-init 起点の 2 手）を追記する。
 - `.coff/src/coff-compile.skill.md`:
   - 出力規則に「frontmatter に `coff-dist: true` を持つ skill 型は `skills/<name>/SKILL.md` にも同一内容（footer 含む）を書く」を追記する。スキップ判定は全出力先の footer md5 が一致するときだけ skip とする（`skills/` 側が欠けていれば再ビルド）。`coff-dist` キーは `coff-translate` と同様に出力の frontmatter から除去する。
   - 翻訳スキップを追加する。ソース frontmatter に `coff-translate: false` があるとき手順 5a の英訳を行わず、このキーは成果物の frontmatter から除去する。
+  - 多 agent 対応（変更方針 4）を追記する。オプション `--out` / `--ref` / `--agent`、agent プリセット表、参照 stub の形式とビルド順（正本 → 参照）を本文に足す。coff repo 自身の `.agents/` ビルドは行わない（機構の提供まで）。
 - `.coff/src/coff-japanese-tech-writing.skill.md` / `.coff/src/coff-argument-gap-edit.skill.md`（新規）: 現在の vendored の SKILL.md 本文を移す。frontmatter は `name` を新名称に変え、上流の install メタデータ（`metadata.github-*`）を落とし、`license: MIT` と `coff-translate: false` を付ける。冒頭の出典表記は保持する。argument-gap-edit の本文にある相互参照 `../japanese-tech-writing/SKILL.md` は `../coff-japanese-tech-writing/SKILL.md` に書き換える。旧 vendored ディレクトリ `.claude/skills/japanese-tech-writing/` / `.claude/skills/argument-gap-edit/` はコンパイル後に削除する（同内容のスキルが新名で並ぶのを防ぐ）。
 - `.coff/src/coff-issue-create.skill.md` / `coff-issue-polish.skill.md`: grilling をパスで読む指示を削り、規律（一問ずつ・推奨案を添える・コードで分かることは調べる）を本文に書き込む。japanese-tech-writing への言及を新名称に置換する。polish は argument-gap-edit への言及も新名称に置換する。
 - `.coff/src/coff-detail-issue.skill.md` / `care-giver.outputstyle.md`: japanese-tech-writing / argument-gap-edit への言及を新名称に置換する。care-giver の vendored 例外の記述を「grilling のみ」に更新する。
@@ -103,6 +114,8 @@ README.md に導入手順（coff-init 起点の 2 手）を追記する。
 - [x] coff-init の手順 2〜3 のコマンド列が一時 git repo で成立する（マージ前はリモートに `skills/` がないため `--from-local` で代替確認する） — 確認: 一時 repo でコマンドを実行し `.claude/skills/` / `issue/` / CLAUDE.md の追記を確認（CLAUDE.md は再実行で重複しないことも見る）
 - [x] LICENSE がルートにあり MIT 全文である — 確認: 目視
 - [x] README に coff-init 起点の導入手順が載っている — 確認: 目視
+- [x] `--agent codex` 相当の出力（`.agents/skills/<name>/SKILL.md` の参照 stub）が正しい相対パスで正本を指す — 確認: 一時 repo に stub を生成して確認
+- [x] codex が `.agents/skills/` の stub を発見し、参照先の正本の指示どおりに動く — 確認: 一時 repo で `codex exec` を実行し、stub → 正本の順に読んで正本の指示（固定文字列の応答）に従うことをログで確認
 
 ## 人間が決めた判断
 
@@ -113,6 +126,7 @@ README.md に導入手順（coff-init 起点の 2 手）を追記する。
 - coff-init は導入先 CLAUDE.md への規約追記まで行う。更新・コミット運用の案内と導入後の自己検証は見送る。（2026-07-20）
 - coff-compile は汎用スキルとして保ち、coff 固有の配布ポリシー（`coff-` 名での判定）を埋め込まない。配布対象はソース側の `coff-dist: true` 宣言で指定する。（2026-07-20）
 - vendored 依存の解消は、当初の coff-init による上流からの導入自動化を改め、grilling は規律の本文吸収、日本語系 2 つは `coff-` prefix での第一級ソース化（fork。以後上流に追従しない）とする。（2026-07-20）
+- coff-compile の出力先固定をやめ、`--out`（出力先指定）・`--ref`（参照 stub 配置）・`--agent`（agent ごとの既定挙動）の 3 機構で多 agent 対応する。対象 agent は当面 claude-code と codex。（2026-07-21）
 
 決定の実体は変更方針に記載。
 
@@ -123,7 +137,8 @@ README.md に導入手順（coff-init 起点の 2 手）を追記する。
 - 翻訳スキップ `coff-translate: false` は compile の新機構であり、キー除去を含めて実装の実挙動で確認が要る。
 - coff-init は兄弟スキル名と repo 名（Fuyutsubaki/coff）をハードコードする。スキル追加で古くなるが、検出機構は持たない（init 実行時の install 失敗として顕在化する）。
 - dry-run の警告「`.claude/skills/` を `.gitignore` に入れるべき」は、成果物と vendored をコミットする coff の設計と衝突するため受容する。発見対象は `skills/` のみで、残る vendored（grilling）が配布物に混ざることはない。
-- スキル本文の相互参照は `.claude/skills/<name>/SKILL.md` のパス表記のままにする。claude-code エージェントとしてインストールすれば同じパスに入るが、`.agents/skills` を共有する他エージェントでは参照が切れる。今回は Claude Code 利用者を対象とし、他エージェント対応はしない。
+- スキル本文の相互参照は `.claude/skills/<name>/SKILL.md` のパス表記のままにする。repo 内で `--agent codex` を使う場合は stub が正本（`.claude/` 配下）へ誘導するので参照は切れない。一方 `gh skill install` で claude-code 以外の agent に配布した場合は `.claude/` が導入先にないため参照が切れる。今回の配布対象は Claude Code 利用者とする。
+- どの agent 向けにビルドするかは毎回の `--agent` 指定に委ね、repo 側での永続宣言（frontmatter や設定ファイル）は持たない。不便が確認できたら別 issue で扱う。
 - `gh skill` は preview 機能であり、発見規約や検証仕様は予告なく変わりうる。
 
 ## 参考・関連 issue
