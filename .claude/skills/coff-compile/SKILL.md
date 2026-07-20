@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` overrides the output destination, `--ref` writes reference stubs, and `--agent` follows per-agent defaults such as codex.
+description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` / `--ref` / `--agent` add destination override, reference stubs, and per-agent output.
 license: MIT
 ---
 
@@ -14,8 +14,6 @@ Each source type determines its output path. `<name>` is the source filename wit
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
 
-The input glob set is all globs above. With no args, all of them are targeted.
-
 ## Options
 
 Args (any order, combinable):
@@ -24,7 +22,7 @@ Args (any order, combinable):
 - `--force`: ignore md5-match skip and process all targets.
 - `--out <root>`: replace the default output root `.claude`. The per-type sublayout (`skills/<name>/SKILL.md` etc.) stays the same under the new root.
 - `--ref`: use together with `--out`; write a reference stub pointing at the canonical file instead of a copy of the compiled body. `--ref` without `--out` is an error; abort.
-- `--agent <name>`: preset that derives `--out` and `--ref` from the agent name (table below). Repeatable. Default is `claude-code`. Explicit `--out` / `--ref` take precedence over the preset.
+- `--agent <name>`: preset that derives `--out` and `--ref` from the agent name (table below). Multiple `--agent` flags aggregate each preset's outputs. Combining with explicit `--out` / `--ref` is an error; abort.
 - `<path|name> [<path|name> ...]`: process only the specified sources. Accepts full path `.coff/src/foo.skill.md` or `.coff/src/foo.outputstyle.md`, bare name `foo`, or filename `foo.skill.md`. No args = all globs. If a bare name `foo` matches more than one source type (e.g. both `foo.skill.md` and `foo.outputstyle.md` exist), report it as ambiguous and require a full path or filename.
 
 Examples:
@@ -36,7 +34,7 @@ Examples:
 
 ## Agent presets and reference output
 
-The real body (the canonical copy) lives in exactly one place in the repository; other agents get a reference stub.
+For agent placement, the real body (the canonical copy) lives in exactly one place in the repository; other agents get a reference stub.
 
 | agent | Output root | Placement mode | Source types |
 |---|---|---|---|
@@ -44,7 +42,7 @@ The real body (the canonical copy) lives in exactly one place in the repository;
 | `codex` | `.agents/` | reference | skill only |
 
 - Claude-code-specific types (outputstyle / agent) are out of scope when building for other agents; leave them out of the report as well.
-- A reference stub carries the same frontmatter as the canonical output (after `coff-*` key removal); its body is a single line with the relative path to the canonical file. It gets a footer under the same rule, used for skip detection.
+- A reference stub carries the same frontmatter as the canonical output (after `coff-*` key removal); its body is a single line with the relative path to the canonical file. It gets a footer under the same rule.
 
   ```markdown
   ---
@@ -150,12 +148,12 @@ b. **Strip HTML/markdown comments from the body.** Remove every `<!-- ... -->` b
 
 c. **Preserve frontmatter structure.** The leading `---` … `---` block must remain valid YAML frontmatter in the output. If the source has no frontmatter, abort with an error. Remove every key starting with `coff-` from the output frontmatter.
 
-d. **Write the output and append the footer.** Footer goes on the last line, after the body, outside any code block. Output-style files also get the footer; it is a plain markdown file, so the trailing HTML comment is harmless and is also used for skip detection. For reference-mode outputs, write the stub from "Agent presets and reference output" instead of the body.
+d. **Write the output and append the footer.** Footer goes on the last line, after the body, outside any code block. Output-style files also get the footer; it is a plain markdown file, so the trailing HTML comment is harmless and is also used for skip detection. For reference-mode outputs, write the stub from "Agent presets and reference output" instead of the body. `$content` in the snippet is the body for a body output, or the stub content for a reference output (both up to the footer).
 
    ```bash
    for dst in $dsts; do
      mkdir -p "$(dirname "$dst")"
-     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$body" "$src" "$src_md5" > "$dst"
+     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
    done
    ```
 
@@ -173,4 +171,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"9b709abed7fa8af9366d74dcd9684cf3"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"1497ce715eac28ee5775bb1e1368313c"} -->

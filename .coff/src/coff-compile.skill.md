@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` で出力先の置換、`--ref` で参照 stub の出力、`--agent` で codex など agent ごとの既定に従った出力ができる。
+description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
 license: MIT
 coff-dist: true
 ---
@@ -25,8 +25,6 @@ lint:
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
 
-入力 glob の集合は上表の全 glob。引数がなければこれら全 glob を対象にする。
-
 ## オプション
 
 引数で以下を受け付ける:
@@ -35,7 +33,7 @@ lint:
 - `--force`: md5 一致によるスキップを無視して、対象すべてを処理する。
 - `--out <root>`: 出力ルート（既定 `.claude`）を置き換える。種別ごとのサブレイアウト（`skills/<name>/SKILL.md` など）はルート配下でそのまま使う。
 - `--ref`: `--out` と併用して、コンパイル済み本文の複製ではなく正本への参照 stub を出力する。`--out` なしで指定されたらエラーとして中断する。
-- `--agent <name>`: agent 名から `--out` と `--ref` を決めるプリセット（後述の表）。複数指定できる。指定がなければ `claude-code` 相当。明示の `--out` / `--ref` はプリセットより優先する。
+- `--agent <name>`: agent 名から `--out` と `--ref` を決めるプリセット（後述の表）。複数指定は各プリセットの出力を合算する。明示の `--out` / `--ref` と同時に指定されたらエラーとして中断する。
 - `<path|name> [<path|name> ...]`: 指定したソースだけを処理する。フルパス `.coff/src/foo.skill.md` や `.coff/src/foo.outputstyle.md`、ベース名 `foo`、ファイル名 `foo.skill.md` のいずれでも受け付ける。指定がなければ全 glob を対象にする。ベース名 `foo` が複数の種別に一致する場合（`foo.skill.md` と `foo.outputstyle.md` が両方ある等）は曖昧として報告し、フルパスかファイル名での指定を求める。
 
 例:
@@ -47,7 +45,7 @@ lint:
 
 ## agent プリセットと参照出力
 
-実体（正本）はリポジトリにちょうど 1 箇所とし、他の agent 向けには参照 stub を置く。 <!-- 実体を複数箇所に置くと更新漏れで drift するため -->
+agent 向けの実体（正本）はリポジトリに 1 箇所とし、他の agent 向けには参照 stub を置く。 <!-- 実体を複数箇所に置くと更新漏れで drift するため -->
 
 | agent | 出力ルート | 配置モード | 対象種別 |
 |---|---|---|---|
@@ -57,7 +55,7 @@ lint:
 <!-- codex は project scope で `.agents/skills/*/SKILL.md` を発見する（`gh skill install --agent codex` の配置先と同じ）。`.agents/` は agent 横断の標準ディレクトリなので、対応 agent を増やすときはこの表に行を足す -->
 
 - claude-code 固有の種別（outputstyle / agent 型）は、他 agent のビルドでは対象外として扱い、レポートにも出さない。
-- 参照 stub は正本と同じ frontmatter（`coff-*` キー除去後）を持ち、本文は正本への相対パス 1 行とする。フッタも同じ規則で付け、skip 判定に使う。
+- 参照 stub は正本と同じ frontmatter（`coff-*` キー除去後）を持ち、本文は正本への相対パス 1 行とする。フッタも同じ規則で付ける。
 
   ```markdown
   ---
@@ -163,12 +161,12 @@ b. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!--
 
 c. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-` で始まるキーは出力の frontmatter からすべて取り除く。 <!-- ビルド指示（ラッパー skill が拡張するものを含む）の名前空間であって、実行時情報ではないため -->
 
-d. **出力を書き、フッタを付ける。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。プレーンな markdown なので末尾の HTML コメントは無害で、スキップ判定にも使う。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。
+d. **出力を書き、フッタを付ける。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。プレーンな markdown なので末尾の HTML コメントは無害で、スキップ判定にも使う。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。スニペットの `$content` は、出力先が実体なら本文、参照なら stub の本文（いずれもフッタ手前まで）。
 
    ```bash
    for dst in $dsts; do
      mkdir -p "$(dirname "$dst")"
-     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$body" "$src" "$src_md5" > "$dst"
+     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
    done
    ```
 

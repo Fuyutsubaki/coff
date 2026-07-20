@@ -5,7 +5,7 @@ status: done
 
 ## 要約
 
-`/coff-compile` に二重出力の規則を足し、frontmatter で `coff-dist` を宣言したスキルを `gh skill` の発見規約に合う `skills/<name>/SKILL.md` にも書き出す。
+frontmatter で `coff-dist` を宣言したスキルを、`gh skill` の発見規約に合う `skills/<name>/SKILL.md` にもミラーする（同期はラッパー skill `compile` が担い、coff-compile は汎用ツールに保つ）。
 vendored 依存は grilling の規律を本文に吸収し、日本語系 2 つを `coff-` prefix で第一級ソースに取り込んで解消する。
 新スキル coff-init と MIT の LICENSE を加え、`gh skill install Fuyutsubaki/coff coff-init` → `/coff-init` の 2 手で他環境に導入できる状態にする。
 仕上げとして coff-compile に `--out` / `--ref` / `--agent` を足し、codex など claude-code 以外の agent へも参照 stub で出力できるようにする。
@@ -34,7 +34,7 @@ coff は「skill as a code」を掲げ、スキルをソース（`.coff/src/`）
 
 ## 変更方針
 
-変更は 3 本柱で構成する。
+変更は 4 本柱で構成する。
 
 **1. 配布レイアウト: `/coff-compile` の二重出力。**
 skill 型のソースのうち配布を宣言したものは、`.claude/skills/<name>/SKILL.md` に加えて同一内容を `skills/<name>/SKILL.md` にも書き出し、両方を repo にコミットする。
@@ -81,17 +81,17 @@ README.md に導入手順（coff-init 起点の 2 手）を追記する。
 coff-compile の出力先が `.claude/` 固定のままでは、汎用ツールを掲げても claude-code 環境でしか使えない（人間の指摘）。修正方針として次の 3 機構を足す（人間が決めた設計）。
 
 - `--out <root>`: 出力ルート（既定 `.claude`）の置換。種別ごとのサブレイアウトはルート配下でそのまま使う。
-- `--ref`: `--out` と併用し、本文の複製ではなく正本への参照 stub を出力する。実体は repo に 1 箇所だけ置き、複製による drift を防ぐ。stub は正本と同じ frontmatter を持ち、本文は正本への相対パス 1 行、フッタは実体と同じ規則で skip 判定に使う。
+- `--ref`: `--out` と併用し、本文の複製ではなく正本への参照 stub を出力する。agent 向けの実体は repo に 1 箇所だけ置き、複製による drift を防ぐ（gh skill 用の配布ミラーは install がそのディレクトリだけをコピーする都合で実体の複製とし、この原則の対象外）。stub は正本と同じ frontmatter を持ち、本文は正本への相対パス 1 行、フッタは実体と同じ規則で skip 判定に使う。
 - `--agent <name>`: 上 2 つのプリセット。claude-code（既定）= `.claude/` に実体、codex = `.agents/` に参照・skill 型のみ。当面この 2 agent に対応する。
 
 codex の配置先 `.agents/skills/*/SKILL.md` は `gh skill install --agent codex` の実測で確認した。`.agents/` は agent 横断の標準ディレクトリなので、対応 agent の追加はプリセット表への行追加で足りる。
 
 ## 実装詳細
 
-触る範囲は次のとおり。ビルド規則とスキルの変更はソース（`.coff/src/`）のみを編集し、成果物の再生成は人間が `/coff-compile` を実行する（成果物の手編集は禁止）。
+触る範囲は次のとおり。ビルド規則とスキルの変更はソース（`.coff/src/`）のみを編集し、成果物の再生成は `/compile`（coff-compile のラッパー）で行う（成果物の手編集は禁止）。
 
 - `.coff/src/coff-compile.skill.md`:
-  - 出力規則に「frontmatter に `coff-dist: true` を持つ skill 型は `skills/<name>/SKILL.md` にも同一内容（footer 含む）を書く」を追記する。スキップ判定は全出力先の footer md5 が一致するときだけ skip とする（`skills/` 側が欠けていれば再ビルド）。`coff-dist` キーは `coff-translate` と同様に出力の frontmatter から除去する。
+  - スキップ判定は全出力先の footer md5 が一致するときだけ skip とする。
   - 翻訳スキップを追加する。ソース frontmatter に `coff-translate: false` があるとき手順 5a の英訳を行わず、このキーは成果物の frontmatter から除去する。
   - 多 agent 対応（変更方針 4）を追記する。オプション `--out` / `--ref` / `--agent`、agent プリセット表、参照 stub の形式とビルド順（正本 → 参照）を本文に足す。coff repo 自身の `.agents/` ビルドは行わない（機構の提供まで）。
   - coff 固有機能の分離（変更方針 1 の追加判断）: `coff-dist` の二重出力を本文・bash から除き、キー除去は「`coff-` で始まるキーすべて」の名前空間規則に一般化する。
@@ -133,6 +133,7 @@ codex の配置先 `.agents/skills/*/SKILL.md` は `gh skill install --agent cod
 - vendored 依存の解消は、当初の coff-init による上流からの導入自動化を改め、grilling は規律の本文吸収、日本語系 2 つは `coff-` prefix での第一級ソース化（fork。以後上流に追従しない）とする。（2026-07-20）
 - coff-compile の出力先固定をやめ、`--out`（出力先指定）・`--ref`（参照 stub 配置）・`--agent`（agent ごとの既定挙動）の 3 機構で多 agent 対応する。対象 agent は当面 claude-code と codex。（2026-07-21）
 - coff-compile からは coff のためだけの機能をなくし、ラッパー skill `compile`（repo ローカル・非配布）に coff の配布ポリシー（`coff-dist` の解釈とミラー同期）を持たせる。（2026-07-21）
+- `--agent` の複数指定は各プリセットの出力の合算とし、明示の `--out` / `--ref` との同時指定はエラーにする。（2026-07-21）
 
 決定の実体は変更方針に記載。
 
