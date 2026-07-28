@@ -12,6 +12,8 @@ When `/coff-detail-issue` is invoked directly, just present the purpose / locati
 
 An issue is a record of a unit of work shared between the AI and the human. While open, read it as an implementation contract (a spec an implementer can start from on its own); once done, read it as long-term memory of design decisions. The 「人間が決めた判断」 section and polish's sorting of open points are the mechanisms that keep the boundary between AI and human decisions in the body.
 
+The correctness of the record is judged by its content at the point it lands on master. On a branch, a committed issue may be rewritten — appending is not required.
+
 Admission bar:
 
 - Every change goes through an issue — as strictly as changes go through PRs in team development.
@@ -120,6 +122,8 @@ Ownership: create fills 背景・目的 and 現状; polish fills the rest of the
 
 Reference format: anywhere in the body, refer to issues and past records as "path + one phrase (what the record is)".
 
+Recording decisions: write the reasons behind the user's adoptions and rejections at the granularity and in the vocabulary of what they said. Condensing to the gist is fine, but do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side).
+
 Keep information valuable to a later reader, and don't accumulate scaffolding needed only at authoring time.
 
 - Keep: the chosen approach and its rationale, rejected alternatives and why, constraints that matter later (key types / state transitions / protocols, constraints found via a trial implementation), and representative entry-point files needed to understand the existing design.
@@ -135,4 +139,4 @@ The bar splits in two:
 - polish's exit: the issue alone is enough to start implementation.
 
 Don't leave vague wording or open questions in the body. Put judgment calls under 「リスク・未解決」, and decisions the human has settled under 「人間が決めた判断」.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"e48c7f8bb3c7c2118b52d7fdb83a9da6"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"173caf928114ee6666c056463d1bc320"} -->

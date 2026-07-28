@@ -12,6 +12,7 @@ license: MIT
    - Confirm every checkbox in the 「検証」 section (「受け入れ条件」 in the old template) is checked (filling the boxes is the implementer's responsibility, per detail's rules). If any is unchecked, hold and list those items.
    - Confirm the body (現状・変更方針・実装詳細) has no obvious mismatch with the actual repository. If it does, hold and point it out. Do not rewrite the body (a human decides whether to fix the body or move the point to risks).
    - An issue with neither a 「検証」 nor a 「受け入れ条件」 section, or an empty one, passes the check with a warning to that effect.
+   - If the issue involves implementation and a multi-lens review appears not to have been run, point to the coff-review-diff-code skill (the notice is not part of the gate's pass/fail).
 4. Once the check passes, branch on the presence of frontmatter and `status` to set `done`.
    - If frontmatter exists and has `status`, rewrite its value to `done`.
    - If frontmatter exists without `status`, add `status: done` to the frontmatter.
@@ -22,4 +23,4 @@ license: MIT
 ## Scope
 
 - Updates go in the `done` direction only. Reverting (`done` → `open`) is done by hand-editing.
-<!--{"src":".coff/src/coff-issue-done.skill.md","md5":"5f0a2f8e0531a0a1de083916edb13fbe"} -->
+<!--{"src":".coff/src/coff-issue-done.skill.md","md5":"61000edf17e67b8a88af0ef5a5a336a0"} -->

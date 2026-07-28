@@ -12,6 +12,7 @@ license: MIT
    ```bash
    # 対象: coff-detail-issue coff-issue-create coff-issue-polish coff-issue-done
    #       coff-compile coff-japanese-tech-writing coff-argument-gap-edit
+   #       coff-review-diff-code
    gh skill install Fuyutsubaki/coff <name> --agent claude-code
    ```
 
@@ -30,4 +31,4 @@ license: MIT
 ## Exit bar
 
 - The coff skill suite is present under `.claude/skills/`, and `issue/` and the CLAUDE.md coff section exist.
-<!--{"src":".coff/src/coff-init.skill.md","md5":"8984f1fec8a511fb14ec26828d3d4a3f"} -->
+<!--{"src":".coff/src/coff-init.skill.md","md5":"5ae5232922c08152b6bd47303319c591"} -->
