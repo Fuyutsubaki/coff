@@ -20,12 +20,12 @@ license: MIT
 
    Lenses:
 
-   1. General review (correctness, consistency with existing conventions, regressions)
-   2. YAGNI (unused extension points, re-checks already guaranteed upstream, safeguards against situations that cannot happen)
+   1. General review (correctness, consistency with conventions, regressions)
+   2. YAGNI (unused extension points, re-checks already guaranteed, excessive safeguards)
    3. Is the spec needlessly complex?
-   4. Is the issue overly complex (is the issue included in the diff commensurate with the substance of the change)?
-   5. Missed sweep of same-kind anti-patterns (does a problem of the same kind as what the diff fixed remain outside the diff? Searching outside the diff is limited to that same-kind pattern)
-   6. Existence and thinness of the entry artifact (was the requested entry built, and is it not bloated with a copy of the spec?)
+   4. Is the issue commensurate with the substance of the change?
+   5. Does a problem of the same kind as what the diff fixed remain outside the diff? (searching is limited to that same-kind pattern)
+   6. Is the user entry the issue calls for (skill / CLI / UI) actually built, and is that entry not bloated with a copy of the spec?
 
    Lenses 4 and 6 take their judgment material from issue files in the diff; with none, return "not applicable".
 
@@ -33,5 +33,5 @@ license: MIT
 
 ## Notes
 
-- If the codex-delegate skill is installed, you can delegate to it to run in a separate process.
-<!--{"src":".coff/src/coff-review-diff-code.skill.md","md5":"ca5daca1df02585c57d7af992ddae95e"} -->
+- To run in a separate process, delegate to the codex-delegate skill (only if it is installed).
+<!--{"src":".coff/src/coff-review-diff-code.skill.md","md5":"0c8dea3d593f31c0758440efcdbf9c84"} -->
