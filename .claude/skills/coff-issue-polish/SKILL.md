@@ -14,7 +14,7 @@ license: MIT
 6. Work out the solution space. In 変更方針, consolidate the chosen approach plus the alternatives considered and why they were rejected (don't put rejected alternatives or the substance of decisions in other sections). Fill 検証 in the form of each condition paired with how to check it. In 実装詳細, include the scope and representative file paths; don't copy a skill's or code's procedure verbatim — reference it instead — and don't enumerate file paths that go stale (follow detail's bar).
 7. (If needed) trial implementation. Try small experiments where feasibility is uncertain. Safety steps:
    - Before starting, stash the working tree with `git stash`; after checking, restore with `git stash pop` or discard it.
-   - To run it in a separate process, delegate to the codex-delegate skill and only collect the result.
+   - To run it in a separate process, delegate to the codex-delegate skill (only if it is installed) and only collect the result.
    - In all cases, don't include trial-implementation artifacts in the commit beyond edits to the issue file.
 8. Self-review with a checklist: is each template section filled / does each 検証 condition carry an executable check / do the premises match the code / are the risks covered / have you silently locked in a point you should have asked the user about / is there anywhere an implementer would get stuck / have you written anything useless to a later reader or that goes stale quickly / has any rejected alternative or decision substance strayed outside 変更方針 / is each rejection reason actually an objection to that alternative (rewrite or drop reasons that mistake the alternative's premise or are generalities unrelated to it) / does the prose follow the coff-japanese-tech-writing norms, with no sentences crammed with slashes or nested parentheses.
 9. Finish by writing the leading 「要約」 section (2-3 lines: what, why, and how it changes), then overwrite the issue file. Preserve the leading frontmatter (including `status`) and don't change the `status` value (marking done is coff-issue-done's job). Write Japanese prose following the coff-japanese-tech-writing skill, and check the logic of the argument with the coff-argument-gap-edit skill.
@@ -24,4 +24,4 @@ license: MIT
 ## Done bar
 
 - An implementer can start from the issue alone.
-<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"82ac39d8fc44e56ab7f5bf37baec2740"} -->
+<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"9a7ca3fc3798c098d620bf41c8fa67d1"} -->
