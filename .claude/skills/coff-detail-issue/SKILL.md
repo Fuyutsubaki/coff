@@ -6,22 +6,22 @@ license: MIT
 
 ## Direct invocation
 
-When `/coff-detail-issue` is invoked directly, just present the purpose / location / naming / template / quality bar below. Do not create or edit issues (creation is coff-issue-create's job; refinement is coff-issue-polish's).
+When `/coff-detail-issue` is invoked directly, just present the sections below (purpose, location and naming, status, language, problem and solution space, template, quality bar). Do not create or edit issues (creation is coff-issue-create's job; refinement is coff-issue-polish's).
 
 ## Purpose
 
 An issue is a record of a unit of work shared between the AI and the human. While open, read it as an implementation contract (a spec an implementer can start from on its own); once done, read it as long-term memory of design decisions.
 
-There are three readers. While open, the primary reader is the user, who reads everything above the fold (`## 実装メモ`) in a few minutes. The implementing AI also reads below the fold and starts work. After done, readers look for decisions and their reasons. The 「決めたこと」 section and polish's sorting of open points are the mechanisms that keep the boundary between AI and human decisions in the body.
+While open, the primary reader is the user, who reads everything above the fold in a few minutes. The implementing AI also reads below the fold and starts work. The 「決めたこと」 section and polish's sorting of open points are the mechanisms that keep the boundary between AI and human decisions in the body.
 
 The correctness of the record is judged by its content at the point it lands on master. On a branch, a committed issue may be rewritten — appending is not required.
-Before invoking done, the implementer rewrites 設計方針 and 実装メモ to match what was actually built. Deviations from the plan and leftovers are not recorded; leftovers go to a separate issue or are dropped.
 
 Admission bar:
 
 - Every change goes through an issue — as strictly as changes go through PRs in team development.
 - The unit of an issue is one intent, and it may be as coarse as a PR. Don't bundle problems whose adoption and completion can be judged independently. Example: fixing notation inconsistencies across many files is one intent; several mutually independent cleanups are not.
 - A minor fix subordinate to the intent of the issue being worked on may ride along with that issue.
+- If the user explicitly asks to bundle several problems, comply and record that decision under 「決めたこと」.
 - For a standalone minor change, filing a few-line problem-space-only issue and marking it done immediately is fine.
 
 Issues do not carry team issue management (priority, assignee, due date).
@@ -60,11 +60,11 @@ gh pr list --search <ハッシュ> --state merged      # そのコミットを�
 
 Premise: the change to done and the implementation go into the same PR.
 
-Listings are generated on demand by coff-issue-list. Do not keep a listing file (README or the like).
+Listings (status, path, title) are generated on demand by coff-issue-list. Do not keep a listing file (README or the like).
 
 ## Language
 
-Write issue bodies in Japanese, following the coff-japanese-tech-writing skill. An issue is a spec, though, so write the file names, function names, and identifiers it refers to concretely; that skill's rule against naming things not referenced later does not apply to issues.
+Write issue bodies in Japanese, following the coff-japanese-tech-writing skill. An issue is a spec, so write the file names, function names, and identifiers the implementation needs concretely.
 
 ## Problem space and solution space
 
@@ -83,7 +83,7 @@ Both when create frames the problem and when polish checks the problem at its en
 - Is the question framed correctly?
 - Is there another way to frame it?
 
-Leave rejected framings as a one-sentence "not covered" note under 目的. Doubts that need the user's decision go under 「未決」.
+Rejected framings and out-of-scope items are gathered in 設計方針. At the create stage, where 設計方針 does not exist yet, leave them as one sentence under 目的 and let polish move them. Doubts that need the user's decision go under 「未決」.
 
 ## Template
 
@@ -132,20 +132,20 @@ status: open   # open（未完了）| done（完了）
 
 Ownership and empty sections: create writes only 要約, 目的, and 現状 (plus 決めたこと / 未決 when there is something to record). Never leave polish-owned sections as placeholders. An issue without 「設計方針」 is read as not yet polished. 決めたこと, 未決, 調査記録, and 参考 are optional: omit the section when there is nothing to write. Do not write ownership into the issue's headings.
 
-The fold: everything below `## 実装メモ` is for the implementer; the user need not read it, and no preamble is needed under the heading. Keep everything above `## 実装メモ` within one screen (about 50 lines). If it overflows, raise the level of summary; if there are multiple intents, split. 実装メモ has no line limit but follows "Keep / Don't accumulate" below.
+The fold: `## 実装メモ` is the fold; everything below it is for the implementer, the user need not read it, and no preamble is needed under the heading. Keep everything above the fold within one screen (about 50 lines). If it overflows, raise the level of summary; if there are multiple intents, split.
 
-決めたこと: record only the points where the user chose differently from the AI's recommendation, and the points the AI could not decide and left to the user. An approved recommendation just goes into 設計方針. One decision per line, as `<decision>（<gist of the reason>）`, with no date (git has it). Do not record exchanges ("agreed", "replied OK"). Write the reason in the user's own vocabulary; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). 設計方針 must not contradict the decisions recorded here.
+決めたこと: record the conclusions the user explicitly chose, one decision per line as `<decision>（<gist of the reason>）`. Write only reasons the user actually gave, in the user's own vocabulary, and leave the reason out if the user gave none; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). Do not record exchanges ("agreed", "replied OK") or dates. 設計方針 elaborates the decisions recorded here: overlap is fine, contradiction is not.
 
-未決: only points awaiting the user's decision. A concern goes under 現状 if it is a fact, under 設計方針 as out-of-scope if it is a judgment, and nowhere otherwise. Empty it at polish's exit and at done's exit. When empty, omit the section.
+未決: only points awaiting the user's decision. Do not write other concerns (an immovable fact may go under 現状 as one sentence). When empty, omit the section.
 
-完了条件: write only the conditions. Put the way to check each one under 「完了条件の確認手段」 in 実装メモ with the same number; omit it when the check is obvious from the condition. The checkboxes are ticked by whoever implemented the issue, after running each check; have them all ticked before invoking done.
+完了条件: write only the conditions. Put the way to check each one under 「完了条件の確認手段」 in 実装メモ, numbered in the same order. Conditions and their checks are needed to implement, so don't drop them for the sake of brevity. The checkboxes are ticked by whoever implemented the issue, after running each check.
 
 Reference format: anywhere in the body, refer to issues and past records as "path + one phrase (what the record is)".
 
 Keep information valuable to a later reader, and don't accumulate scaffolding needed only at authoring time.
 
 - Keep: the chosen approach and its rationale, rejected alternatives and why, constraints that matter later (key types / state transitions / protocols, constraints found via a trial implementation), and representative entry-point files needed to understand the existing design.
-- Don't accumulate: verbatim copies of a skill's or code's procedure (the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, session narrative, and notes that duplicate other sections.
+- Don't accumulate: verbatim copies of a skill's or code's procedure (the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, session narrative, and notes that duplicate other sections (overlap between 決めたこと and 設計方針 excepted).
 
 ## Quality bar
 
@@ -155,5 +155,5 @@ The bar splits in three:
 - polish's exit: the issue alone is enough to start implementation, and 未決 is empty.
 - done's exit: every 完了条件 is ticked, 未決 is empty, and the body matches what was built.
 
-Don't leave vague wording or open questions in the body.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"a3ac07d42505c89bb8ed35cf88e29486"} -->
+Before invoking done, the implementer rewrites 設計方針 and 実装メモ to match what was actually built. Remaining work goes to a separate issue or is dropped.
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"d4859fd1b2466f380d7d0da64e240cf1"} -->
