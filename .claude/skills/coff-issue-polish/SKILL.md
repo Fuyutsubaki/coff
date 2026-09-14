@@ -21,17 +21,17 @@ license: MIT
    - Does each 完了条件 have a matching, executable check?
    - Do the premises match the code?
    - Was any point the user should decide silently decided?
-   - Are there exchanges or approved recommendations under 決めたこと? Does 設計方針 contradict it?
-   - Does 未決 hold anything other than points awaiting decision?
+   - Does 決めたこと contain exchanges, or decisions whose reason is not in what the user said? Does 設計方針 contradict it?
+   - Is 未決 empty?
    - Is there anything an implementer would stumble on?
    - Is there anything useless, or quick to go stale, for a later reader?
    - Are rejected alternatives or the substance of decisions scattered outside 設計方針? Does each rejection reason actually argue against that alternative (rewrite or drop ones that misread the alternative's premise or state generalities unrelated to it)?
    - Does the prose follow the coff-japanese-tech-writing skill?
 9. Update the 要約 under the title (2-3 lines: what and why) if needed, and overwrite the issue file. If the issue is in the old template (has `## 要約`, `## 人間が決めた判断`, etc.), rewrite it into the new template's structure. Preserve the leading frontmatter (including `status`) and don't change the `status` value (deciding completion is coff-issue-done's job). Write Japanese following the coff-japanese-tech-writing skill and check the line of argument with the coff-argument-gap-edit skill.
-10. Run an implementer simulation. Spawn a fresh-context subagent (not a fork that inherits the conversation), have it read only the updated issue file, and return four things: an outline of its implementation plan / anything blocking it from starting / anything ambiguous / whether each 完了条件 is executable. Do not pass the polish session's conversation context (repo reads are allowed; the implementer can read the repo too). Resolve the findings only inside 「実装メモ」; touch anything above the fold only when 決めたこと or 未決 changes. Rerun only if you changed the issue. Cap it at two rounds; of what remains unresolved, leave the points needing the user's decision under 「未決」. Discard off-target findings; don't inflate the issue defending against them.
+10. Run an implementer simulation. Spawn a fresh-context subagent (not a fork that inherits the conversation), have it read only the updated issue file, and return four things: an outline of its implementation plan / anything blocking it from starting / anything ambiguous / whether each 完了条件 is executable. Do not pass the polish session's conversation context (repo reads are allowed; the implementer can read the repo too). Resolve the findings only inside 「実装メモ」; touch anything above the fold only when 決めたこと or 未決 changes. Rerun only if you changed the issue. Cap it at two rounds; of what remains unresolved, settle the points needing the user's decision by asking on the spot under step 5's discipline (do not finish with them left under 未決). Discard off-target findings; don't inflate the issue defending against them.
 11. Report the changes applied and remaining tasks.
 
 ## Finish criteria
 
 - Meets detail's exit bar for polish.
-<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"b5864f8b18e531a887b7cc714a790ed6"} -->
+<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"f9858b2b984ca5372b6b88beaac41731"} -->

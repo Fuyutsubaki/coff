@@ -59,7 +59,7 @@ gh pr list --search <ハッシュ> --state merged      # そのコミットを�
 
 Premise: the change to done and the implementation go into the same PR.
 
-Listings are generated on demand by coff-issue-list. Do not keep a listing file (README or the like).
+Listings (status, path, title) are generated on demand by coff-issue-list. Do not keep a listing file (README or the like).
 
 ## Language
 
@@ -133,7 +133,7 @@ Ownership and empty sections: create writes only 要約, 目的, and 現状 (plu
 
 The fold: everything below `## 実装メモ` is for the implementer; the user need not read it, and no preamble is needed under the heading. Keep everything above `## 実装メモ` within one screen (about 50 lines). If it overflows, raise the level of summary; if there are multiple intents, split.
 
-決めたこと: record only the points where the user chose differently from the AI's recommendation, and the points the AI could not decide and left to the user. An approved recommendation just goes into 設計方針. One decision per line, as `<decision>（<gist of the reason>）`, with no date (git has it). Do not record exchanges ("agreed", "replied OK"). Write the reason in the user's own vocabulary; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). 設計方針 must not contradict the decisions recorded here.
+決めたこと: record only decisions whose reason exists nowhere but in what the user said. A decision whose reason follows from the code or the technology goes into 設計方針 only. One decision per line, as `<decision>（<gist of the reason>）`; leave the reason out if the user gave none. No date (git has it). Do not record exchanges ("agreed", "replied OK"). Write the reason in the user's own vocabulary; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). 設計方針 must not contradict the decisions recorded here.
 
 未決: only points awaiting the user's decision. A concern goes under 現状 if it is a fact, under 設計方針 as out-of-scope if it is a judgment, and nowhere otherwise. When empty, omit the section.
 
@@ -157,4 +157,4 @@ The bar splits in three:
 Before invoking done, the implementer rewrites 設計方針 and 実装メモ to match what was actually built. Remaining work goes to a separate issue or is dropped.
 
 Don't leave vague wording or open questions in the body.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"09867b59d0129803fb227f3e06a364d3"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"e53e89613dd56a5f4fb94811ee075cf5"} -->
