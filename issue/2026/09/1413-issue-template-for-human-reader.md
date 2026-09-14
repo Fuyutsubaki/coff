@@ -42,6 +42,7 @@ issue テンプレートを、ユーザーが読む上半分と実装者が読�
 - done 前に設計方針を実態に合わせて書き換える。計画から外れた点と積み残しは書かない（役に立つ場面が思い当たらない）
 - 決めたことに承認された推奨は書かない（設計方針と食い違うのはおかしい。日付付きで並べると議事録になる）
 - 設計 issue と実装 issue を分ける規律は足さない
+- 一覧スキルは LLM の手順にせず、埋め込みコマンドで bash を実行するだけにする
 
 ## 完了条件
 
@@ -59,7 +60,7 @@ issue テンプレートを、ユーザーが読む上半分と実装者が読�
 - `.coff/src/coff-issue-create.skill.md`：要約を create が書く。プレースホルダを置かない。
 - `.coff/src/coff-issue-polish.skill.md`：調査記録の置き場、未決の出口、完了条件の上下分離、自己レビュー項目、シミュレーション指摘の行き先。
 - `.coff/src/coff-issue-done.skill.md`：完了条件の節名、未決が残っていれば保留、食い違いの直し手は実装者。
-- `.coff/src/coff-issue-list.skill.md`：新設。`issue/**/*.md` を走査し status、パス、タイトル、要約（タイトル後の最初の本文行）を表で出す。
+- `.coff/src/coff-issue-list.skill.md`：新設。LLM の手順ではなく、埋め込みコマンド（`!` バッククォート）の awk 1 本で `issue/*/*/*.md` から status、パス、タイトル、要約（タイトル後の最初の本文行）を表にする。`allowed-tools: Bash(awk *)` で前もって許可する。
 - `.coff/src/coff-init.skill.md`：導入対象と CLAUDE.md 追記に coff-issue-list を足す。
 - ビルドは `/compile`。`.claude/skills/` と配布用 `skills/` の両方に出る。
 

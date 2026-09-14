@@ -2,29 +2,10 @@
 name: coff-issue-list
 description: List the issues under `issue/`. Argument is `open` (default) | `done` | `all`. Prints a table of status, path, title, and the first line of the summary.
 license: MIT
+allowed-tools: Bash(awk *)
 ---
 
-## Procedure
+Below is the listing of `issue/` (argument `$ARGUMENTS`; `open` if empty). Present this table as is. Do not modify issue files.
 
-1. Read the argument: one of `open` / `done` / `all`; `open` if absent.
-2. Walk the `*.md` files under `issue/` in path order and take each file's status, title, and summary. Interpret status per the status spec in `.claude/skills/coff-detail-issue/SKILL.md` (`open` if there is no frontmatter or no `status`). The summary is the first line after the title that is neither a heading nor blank (the paragraph under the title in the new template; the first line of the first section in the old ones).
-
-   ```bash
-   find issue -name '*.md' | sort | while read -r f; do
-     status=open
-     if [ "$(head -1 "$f")" = "---" ]; then
-       s=$(sed -n '2,/^---$/p' "$f" | sed -n 's/^status:[[:space:]]*\([a-z]*\).*/\1/p' | head -1)
-       [ -n "$s" ] && status=$s
-     fi
-     title=$(grep -m1 '^# ' "$f" | sed 's/^# //')
-     summary=$(awk '/^# /{f=1; next} f && NF && !/^#/ {print; exit}' "$f")
-     printf '%s\t%s\t%s\t%s\n' "$status" "$f" "$title" "$summary"
-   done
-   ```
-
-3. Filter by the argument and print a Markdown table (status | path | title | summary), followed by the count. Leave the summary cell empty for issues where none can be extracted; do not warn.
-
-## Scope
-
-- Read-only. Never modify issue files.
-<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"0a885785bd5ffdd0a6ea5230cc729afd"} -->
+!`awk -v want="$ARGUMENTS" 'BEGIN{if(want=="")want="open";print "| 状態 | パス | タイトル | 要約 |";print "|---|---|---|---|"} function flush(){ if(f!=""&&(want=="all"||want==st)){gsub(/\|/,"\\|",t);gsub(/\|/,"\\|",s);printf "| %s | %s | %s | %s |\n",st,f,t,s;n++} } FNR==1{flush();f=FILENAME;st="open";t="";s="";fm=($0=="---")} fm{ if(FNR>1&&$0=="---"){fm=0;next} if(match($0,/^status:[ \t]*[a-z]+/)){st=substr($0,RSTART,RLENGTH);sub(/^status:[ \t]*/,"",st)} next } t==""&&/^# /{t=substr($0,3);next} t!=""&&s==""&&NF&&!/^#/{s=$0} END{flush();printf "\n%d 件\n",n+0}' issue/*/*/*.md 2>/dev/null`
+<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"5b3b62326d4d87853af23da7effa6533"} -->
