@@ -7,7 +7,7 @@ allowed-tools: Bash(awk *)
 ---
 
 <!--
-一覧に判断は要らないので、LLM の手順ではなく埋め込みコマンドで出す。埋め込みでは `$0` `$1` が N 番目の引数に置換されるため、awk の `$0` は `$(0)` と書く。グロブが空だと gawk は致命エラーで END を実行しないため、`ls` の失敗時は `/dev/null` を渡す。
+一覧に判断は要らないので、LLM の手順ではなく埋め込みコマンドで出す。埋め込みでは `$0` `$1` が N 番目の引数に置換されるため、awk の `$0` は `$(0)` と書く。グロブが空だと gawk は致命エラーで END を実行しないため、`ls` の失敗時は `/dev/null` を渡す。BEGIN の `exit` 後も END は走るので、END 側で引数を再確認している。
 -->
 
 `issue/` の一覧。そのまま提示する。
@@ -29,6 +29,8 @@ fm {
   if (match($(0), /^status:[ \t]*[a-z]+/)) { st = substr($(0), RSTART, RLENGTH); sub(/^status:[ \t]*/, "", st) }
   next
 }
+/^```/ { fence = !fence; next }
+fence { next }
 t == "" && /^# / { t = substr($(0), 3) }
 END { if (want == "open" || want == "done" || want == "all") { flush(); printf "\n%d 件\n", n } }
 ' $(ls issue/*/*/*.md 2>/dev/null || echo /dev/null)

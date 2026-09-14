@@ -24,8 +24,10 @@ fm {
   if (match($(0), /^status:[ \t]*[a-z]+/)) { st = substr($(0), RSTART, RLENGTH); sub(/^status:[ \t]*/, "", st) }
   next
 }
+/^```/ { fence = !fence; next }
+fence { next }
 t == "" && /^# / { t = substr($(0), 3) }
 END { if (want == "open" || want == "done" || want == "all") { flush(); printf "\n%d 件\n", n } }
 ' $(ls issue/*/*/*.md 2>/dev/null || echo /dev/null)
 ```
-<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"03b8b757f4e0b50742bd4ec35170dd8f"} -->
+<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"29a01055fb5b825ffc2f1ae6b6cd6715"} -->
