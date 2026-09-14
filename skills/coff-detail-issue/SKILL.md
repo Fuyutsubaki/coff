@@ -64,7 +64,7 @@ Listings (status, path, title) are generated on demand by coff-issue-list. Do no
 
 ## Language
 
-Write issue bodies in Japanese, following the coff-japanese-tech-writing skill. An issue is a spec, though, so write the file names, function names, and identifiers it refers to concretely; that skill's rule against naming things not referenced later does not apply to issues.
+Write issue bodies in Japanese, following the coff-japanese-tech-writing skill. An issue is a spec, so write the file names, function names, and identifiers the implementation needs concretely.
 
 ## Problem space and solution space
 
@@ -83,7 +83,7 @@ Both when create frames the problem and when polish checks the problem at its en
 - Is the question framed correctly?
 - Is there another way to frame it?
 
-A rejected framing is left as a one-sentence "not covered" note under 目的 at the create stage, and polish gathers it into 設計方針's out-of-scope list. Doubts that need the user's decision go under 「未決」.
+Rejected framings and out-of-scope items are gathered in 設計方針. At the create stage, where 設計方針 does not exist yet, leave them as one sentence under 目的 and let polish move them. Doubts that need the user's decision go under 「未決」.
 
 ## Template
 
@@ -134,9 +134,9 @@ Ownership and empty sections: create writes only 要約, 目的, and 現状 (plu
 
 The fold: `## 実装メモ` is the fold; everything below it is for the implementer, the user need not read it, and no preamble is needed under the heading. Keep everything above the fold within one screen (about 50 lines). If it overflows, raise the level of summary; if there are multiple intents, split.
 
-決めたこと: record only decisions whose reason exists nowhere but in what the user said. A decision whose reason follows from the code or the technology goes into 設計方針 only. One decision per line, as `<decision>（<gist of the reason>）`; leave the reason out if the user gave none. No date (git has it). Do not record exchanges ("agreed", "replied OK"). Write the reason in the user's own vocabulary; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). 設計方針 must not contradict the decisions recorded here.
+決めたこと: record the conclusions the user explicitly chose, one decision per line as `<decision>（<gist of the reason>）`. Write only reasons the user actually gave, in the user's own vocabulary, and leave the reason out if the user gave none; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). Do not record exchanges ("agreed", "replied OK") or dates. 設計方針 elaborates the decisions recorded here: overlap is fine, contradiction is not.
 
-未決: only points awaiting the user's decision. A concern goes under 現状 if it is a fact, under 設計方針 as out-of-scope if it is a judgment, and nowhere otherwise. When empty, omit the section.
+未決: only points awaiting the user's decision. Do not write other concerns (an immovable fact may go under 現状 as one sentence). When empty, omit the section.
 
 完了条件: write only the conditions. Put the way to check each one under 「完了条件の確認手段」 in 実装メモ, numbered in the same order. Conditions and their checks are needed to implement, so don't drop them for the sake of brevity. The checkboxes are ticked by whoever implemented the issue, after running each check.
 
@@ -145,7 +145,7 @@ Reference format: anywhere in the body, refer to issues and past records as "pat
 Keep information valuable to a later reader, and don't accumulate scaffolding needed only at authoring time.
 
 - Keep: the chosen approach and its rationale, rejected alternatives and why, constraints that matter later (key types / state transitions / protocols, constraints found via a trial implementation), and representative entry-point files needed to understand the existing design.
-- Don't accumulate: verbatim copies of a skill's or code's procedure (the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, session narrative, and notes that duplicate other sections.
+- Don't accumulate: verbatim copies of a skill's or code's procedure (the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, session narrative, and notes that duplicate other sections (overlap between 決めたこと and 設計方針 excepted).
 
 ## Quality bar
 
@@ -156,4 +156,4 @@ The bar splits in three:
 - done's exit: every 完了条件 is ticked, 未決 is empty, and the body matches what was built.
 
 Before invoking done, the implementer rewrites 設計方針 and 実装メモ to match what was actually built. Remaining work goes to a separate issue or is dropped.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"da28f0d93c78348e19338b7b4f26883b"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"d4859fd1b2466f380d7d0da64e240cf1"} -->

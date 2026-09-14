@@ -10,7 +10,7 @@ license: MIT
 2. Read the target issue and check the problem space first. Confirm the problem is correctly framed (meets the four validity angles); if not, re-frame 「目的 / 現状」 (bounce back to the problem space). Also check whether it bundles multiple problems whose adoption and completion can be judged independently; if so, propose splitting (one issue = one intent, per detail's purpose section). 
 3. Code investigation: actually read the related files, existing implementation, dependencies, and related skills / docs / issues, and fill in 「現状 / 実装詳細」 based on facts. Findings from external material go under 「調査記録」 with their sources.
 4. Verify premises with a checklist: do the stated premises contradict the current code / do referenced file paths exist. Fix contradictions; move points needing the user's decision to 「未決」.
-5. Sort the open points. Split points that come up into "the code answers this" and "the user must decide this". Resolve the former yourself in steps 3-4 — don't ask the human. Ask only the latter, before fixing anything. Discipline when asking: one question at a time, with a recommended answer for each, and look things up yourself when the code can answer. The exit of the Q&A is "this issue is implementable on its own", not "general agreement". Remove each settled point from 「未決」 and write it under 「決めたこと」 or 設計方針 per detail's rules. Never spec by guessing.
+5. Sort the open points. Split points that come up into "the code answers this" and "the user must decide this". Resolve the former yourself in steps 3-4 — don't ask the human. Ask only the latter, before fixing anything. Discipline when asking: one question at a time, with a recommended answer for each, and look things up yourself when the code can answer. The exit of the Q&A is "this issue is implementable on its own", not "general agreement". Remove each settled point from 「未決」; record the conclusion the user chose under 「決めたこと」 and elaborate it in 設計方針. Never spec by guessing.
 6. Write the solution space (設計方針 / 完了条件 / 実装メモ) per detail's template rules. In 設計方針, gather the chosen approach and its rationale, the alternatives considered with rejection reasons, and what is out of scope; don't scatter them into other sections. 実装メモ follows detail's "Keep / Don't accumulate" bar.
 7. (If needed) trial implementation. Where feasibility is uncertain, try it small. Safety procedure:
    - Before starting, `git stash` the working tree; after checking, `git stash pop` or discard.
@@ -27,4 +27,4 @@ license: MIT
 ## Finish criteria
 
 - Meets detail's exit bar for polish.
-<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"a5110faaac59f47c2fc6b6ab4c3d4c8c"} -->
+<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"3e577b891e4fcd95d4d320476439a347"} -->
