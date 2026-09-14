@@ -7,7 +7,7 @@ allowed-tools: Bash(awk *)
 ---
 
 <!--
-一覧に判断は要らないので、LLM の手順ではなく埋め込みコマンドで出す。埋め込みでは `$0` `$1` が N 番目の引数に置換されるため、awk の `$0` は `$(0)` と書く。
+一覧に判断は要らないので、LLM の手順ではなく埋め込みコマンドで出す。埋め込みでは `$0` `$1` が N 番目の引数に置換されるため、awk の `$0` は `$(0)` と書く。グロブが空だと gawk は致命エラーで END を実行しないため、`ls` の失敗時は `/dev/null` を渡す。
 -->
 
 `issue/` の一覧。そのまま提示する。
@@ -16,6 +16,7 @@ allowed-tools: Bash(awk *)
 awk -v want="$ARGUMENTS" '
 BEGIN {
   if (want == "") want = "open"
+  if (want != "open" && want != "done" && want != "all") { print "引数は open | done | all のいずれか: " want; exit 1 }
   print "| 状態 | パス | タイトル | 要約 |"
   print "|---|---|---|---|"
 }
@@ -34,6 +35,6 @@ fm {
 }
 t == "" && /^# / { t = substr($(0), 3); next }
 t != "" && s == "" && NF && !/^#/ { s = $(0) }
-END { flush(); printf "\n%d 件\n", n + 0 }
-' issue/*/*/*.md 2>/dev/null
+END { if (want == "open" || want == "done" || want == "all") { flush(); printf "\n%d 件\n", n } }
+' $(ls issue/*/*/*.md 2>/dev/null || echo /dev/null)
 ```

@@ -1,6 +1,6 @@
 ---
 name: coff-issue-done
-description: Mark an issue under `issue/` as done. Verify the completion conditions are met and the record is consistent with the current state, then update its frontmatter `status` to `done`.
+description: Mark an issue under `issue/` as done.
 license: MIT
 ---
 
@@ -24,4 +24,4 @@ license: MIT
 ## Scope
 
 - Updates go in the `done` direction only. Reverting (`done` → `open`) is done by hand.
-<!--{"src":".coff/src/coff-issue-done.skill.md","md5":"fdb8b167eecbf8b9d56dc1226b6fd88b"} -->
+<!--{"src":".coff/src/coff-issue-done.skill.md","md5":"4ee0d85127de6805d1a205a8359b5287"} -->

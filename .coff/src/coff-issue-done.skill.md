@@ -1,6 +1,6 @@
 ---
 name: coff-issue-done
-description: `issue/` の issue を完了扱いにする。完了条件の充足と現状との整合を確認したうえで frontmatter の `status` を `done` に更新する。
+description: `issue/` の issue を完了扱いにする。
 license: MIT
 coff-dist: true
 ---

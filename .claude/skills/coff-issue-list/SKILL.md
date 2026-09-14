@@ -11,6 +11,7 @@ Listing of `issue/`. Present it as is.
 awk -v want="$ARGUMENTS" '
 BEGIN {
   if (want == "") want = "open"
+  if (want != "open" && want != "done" && want != "all") { print "引数は open | done | all のいずれか: " want; exit 1 }
   print "| 状態 | パス | タイトル | 要約 |"
   print "|---|---|---|---|"
 }
@@ -29,7 +30,7 @@ fm {
 }
 t == "" && /^# / { t = substr($(0), 3); next }
 t != "" && s == "" && NF && !/^#/ { s = $(0) }
-END { flush(); printf "\n%d 件\n", n + 0 }
-' issue/*/*/*.md 2>/dev/null
+END { if (want == "open" || want == "done" || want == "all") { flush(); printf "\n%d 件\n", n } }
+' $(ls issue/*/*/*.md 2>/dev/null || echo /dev/null)
 ```
-<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"f5c4b4ca84e49ad588cb5145aefc5b93"} -->
+<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"11ee821ac27d461c64fa70383de9ef6c"} -->
