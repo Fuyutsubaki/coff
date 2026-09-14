@@ -16,8 +16,8 @@ coff-dist: true
 
    ```bash
    # 対象: coff-detail-issue coff-issue-create coff-issue-polish coff-issue-done
-   #       coff-compile coff-japanese-tech-writing coff-argument-gap-edit
-   #       coff-review-diff-code
+   #       coff-issue-list coff-compile coff-japanese-tech-writing
+   #       coff-argument-gap-edit coff-review-diff-code
    gh skill install Fuyutsubaki/coff <name> --agent claude-code
    ```
 
@@ -29,7 +29,7 @@ coff-dist: true
      ```markdown
      ## coff
      - `.claude/` 配下の coff 成果物（skills など）は手で編集しない。変更は `.coff/src/` のソースを編集し、`/coff-compile` でビルドする。
-     - issue 運用の入口は coff-issue-create skill。流れは create → polish → 実装 → done。
+     - issue 運用の入口は coff-issue-create skill。流れは create → polish → 実装 → done。一覧は coff-issue-list skill。
      ```
 4. 報告: 導入したスキルと初期化の結果を報告する。あわせて issue 運用の流れ（create → polish → 実装 → done）と、自作スキルをソース管理するなら `.coff/src/` 規約と `/coff-compile` が使えることを短く案内する。
 
