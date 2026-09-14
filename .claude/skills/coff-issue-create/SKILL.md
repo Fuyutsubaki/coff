@@ -6,15 +6,15 @@ license: MIT
 
 ## Procedure
 
-1. Read `.claude/skills/coff-detail-issue/SKILL.md` to learn the location, naming, template, and quality bar.
-2. Prepare the current month's directory with `mkdir -p "issue/$(date +%Y/%m)"`.
-3. Write only the problem space. From the user's request, articulate タイトル / 背景・目的 / 現状. Write the body following the coff-japanese-tech-writing skill.
-4. Examine the problem's validity against detail's four angles. Also check whether it contains multiple problems whose adoption and completion can be judged independently; if so, propose filing them as separate issues (1 issue = 1 intent, per detail's Purpose section). If the user explicitly instructs to bundle them, follow it and record that fact and the reason under 「人間が決めた判断」. Leave doubts, alternative framings, and rejected scopes under "リスク・未解決". Don't do deep code investigation (reading the minimum to confirm the problem exists is fine). Only when the problem's frame (type, purpose, success criteria) can't be determined, ask lightly. Questioning discipline: one question at a time, attach a recommended answer to each, and investigate what the code can answer yourself instead of asking. No relentless full-breadth interview; stop once the frame is settled.
-5. Don't write the solution space (要約 / 変更方針 / 実装詳細 / 検証). Leave placeholders such as "解決空間。polish で詰める".
-6. Pick a filename per the naming rule and create `issue/<yyyy>/<mm>/<name>.md`. Add a `status: open` frontmatter at the top of the file (per detail's status spec).
-7. Report the created path. To go on and work out the solution, point to the coff-issue-polish skill.
+1. Read `.claude/skills/coff-detail-issue/SKILL.md` to get the location, naming, template, and quality bar.
+2. Create the month directory with `mkdir -p "issue/$(date +%Y/%m)"`.
+3. Write only the problem space. From the user's request, articulate 「タイトル / 要約 / 目的 / 現状」. The 要約 goes right under the title, in 2-3 lines. 現状 holds only facts about the code and its operation — no survey of external material. Write the body following the coff-japanese-tech-writing skill.
+4. Examine problem validity from detail's four angles. Also check whether the request bundles multiple problems whose adoption and completion can be judged independently; if so, propose filing them separately (one issue = one intent, per detail's purpose section). If the user explicitly instructs to bundle, comply and record that fact and reason as one line under 「決めたこと」. Leave rejected framings as one sentence under 目的, and doubts that need the user's decision under 「未決」. Do not do deep code investigation (minimal reading to confirm the problem exists is fine). Ask only when the problem's framing (kind, purpose, success condition) cannot be determined, and ask lightly. Discipline: one question at a time, with a recommended answer for each, and look things up yourself when the code can answer. No exhaustive interrogation; stop once the framing is settled.
+5. Do not write the solution space (設計方針 / 完了条件 / 実装メモ), and do not leave placeholders. Include 決めたこと and 未決 only when there is something to record.
+6. Name the file per the naming rule and create `issue/<yyyy>/<mm>/<name>.md`. Put `status: open` frontmatter at the top (per detail's status spec).
+7. Report the created path. If the solution is to be refined next, point to the coff-issue-polish skill.
 
-## Exit bar
+## Exit criteria
 
 - The problem is correctly framed. The solution is left to polish.
-<!--{"src":".coff/src/coff-issue-create.skill.md","md5":"f3ad597a0cd1caee1d161efa1b6434c8"} -->
+<!--{"src":".coff/src/coff-issue-create.skill.md","md5":"7ae7021b7c25e0bd7c3c03759e5947a9"} -->

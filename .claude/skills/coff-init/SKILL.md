@@ -11,8 +11,8 @@ license: MIT
 
    ```bash
    # 対象: coff-detail-issue coff-issue-create coff-issue-polish coff-issue-done
-   #       coff-compile coff-japanese-tech-writing coff-argument-gap-edit
-   #       coff-review-diff-code
+   #       coff-issue-list coff-compile coff-japanese-tech-writing
+   #       coff-argument-gap-edit coff-review-diff-code
    gh skill install Fuyutsubaki/coff <name> --agent claude-code
    ```
 
@@ -24,11 +24,11 @@ license: MIT
      ```markdown
      ## coff
      - `.claude/` 配下の coff 成果物（skills など）は手で編集しない。変更は `.coff/src/` のソースを編集し、`/coff-compile` でビルドする。
-     - issue 運用の入口は coff-issue-create skill。流れは create → polish → 実装 → done。
+     - issue 運用の入口は coff-issue-create skill。流れは create → polish → 実装 → done。一覧は coff-issue-list skill。
      ```
 4. Report: report the installed skills and the initialization results. Also briefly introduce the issue workflow (create → polish → implement → done), and note that the `.coff/src/` conventions with `/coff-compile` are available for source-managing one's own skills.
 
 ## Exit bar
 
 - The coff skill suite is present under `.claude/skills/`, and `issue/` and the CLAUDE.md coff section exist.
-<!--{"src":".coff/src/coff-init.skill.md","md5":"5ae5232922c08152b6bd47303319c591"} -->
+<!--{"src":".coff/src/coff-init.skill.md","md5":"a98ffd17c115bdb372d76109b25770f9"} -->
