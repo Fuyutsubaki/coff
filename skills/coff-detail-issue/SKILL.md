@@ -107,7 +107,7 @@ status: open   # open（未完了）| done（完了）
 <採用案と理由。却下した代替案は理由を一言添えて箇条書き。対象外を明示する>
 
 ## 決めたこと
-- <mm-dd>：<決定>（<理由の要点。ユーザーの語彙で>）
+- <決定>（<理由の要点。ユーザーの語彙で>）
 
 ## 未決
 - <ユーザーの判断待ちの論点>
@@ -134,7 +134,7 @@ Ownership and empty sections: create writes only 要約, 目的, and 現状 (plu
 
 The fold: everything below `## 実装メモ` is for the implementer; the user need not read it, and no preamble is needed under the heading. Keep everything above `## 実装メモ` within one screen (about 50 lines). If it overflows, raise the level of summary; if there are multiple intents, split. 実装メモ has no line limit but follows "Keep / Don't accumulate" below.
 
-決めたこと: one decision per line, as `<date>：<decision>（<gist of the reason>）`. Do not record exchanges ("agreed", "replied OK"). Write the reason in the user's own vocabulary; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side).
+決めたこと: record only the points where the user chose differently from the AI's recommendation, and the points the AI could not decide and left to the user. An approved recommendation just goes into 設計方針. One decision per line, as `<decision>（<gist of the reason>）`, with no date (git has it). Do not record exchanges ("agreed", "replied OK"). Write the reason in the user's own vocabulary; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). 設計方針 must not contradict the decisions recorded here.
 
 未決: only points awaiting the user's decision. A concern goes under 現状 if it is a fact, under 設計方針 as out-of-scope if it is a judgment, and nowhere otherwise. Empty it at polish's exit and at done's exit. When empty, omit the section.
 
@@ -156,4 +156,4 @@ The bar splits in three:
 - done's exit: every 完了条件 is ticked, 未決 is empty, and the body matches what was built.
 
 Don't leave vague wording or open questions in the body.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"4dd2265fc5ebd365947d5984f839b47c"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"a3ac07d42505c89bb8ed35cf88e29486"} -->
