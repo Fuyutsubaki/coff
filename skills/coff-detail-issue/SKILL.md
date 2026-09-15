@@ -118,7 +118,7 @@ status: open   # open（未完了）| done（完了）
 ## 実装メモ
 
 ### 実装詳細
-<触る範囲と代表的なファイルパス、手順、データ構造、インターフェース。単体で実装できる粒度で>
+<触るソースを反映順に「パス：反映する変更を一言」で。続けて後で効く制約。手順や下書きは書かない>
 
 ### 完了条件の確認手段
 1. <上の完了条件 1 番目の確認手段>
@@ -140,12 +140,14 @@ The fold: `## 実装メモ` is the fold; everything below it is for the implemen
 
 完了条件: write only the conditions. Put the way to check each one under 「完了条件の確認手段」 in 実装メモ, numbered in the same order. Conditions and their checks are needed to implement, so don't drop them for the sake of brevity. The checkboxes are ticked by whoever implemented the issue, after running each check.
 
+実装詳細: list the sources to touch in the order they are applied, as 「パス：反映する変更を一言」 (path: one phrase on the change), followed by constraints that matter later (the "Keep" item). Do not write procedures, or drafts of skill text or code (the "Don't accumulate" item).
+
 Reference format: anywhere in the body, refer to issues and past records as "path + one phrase (what the record is)".
 
 Keep information valuable to a later reader, and don't accumulate scaffolding needed only at authoring time.
 
 - Keep: the chosen approach and its rationale, rejected alternatives and why, constraints that matter later (key types / state transitions / protocols, constraints found via a trial implementation), and representative entry-point files needed to understand the existing design.
-- Don't accumulate: verbatim copies of a skill's or code's procedure (the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, session narrative, and notes that duplicate other sections (overlap between 決めたこと and 設計方針 excepted).
+- Don't accumulate: verbatim copies or drafts of a skill's or code's procedure (procedure outlines, draft wording, code sketches — the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, session narrative, and notes that duplicate other sections (overlap between 決めたこと and 設計方針 excepted).
 
 ## Quality bar
 
@@ -156,4 +158,4 @@ The bar splits in three:
 - done's exit: every 完了条件 is ticked, 未決 is empty, and the body matches what was built.
 
 Before invoking done, the implementer rewrites 設計方針 and 実装メモ to match what was actually built. Remaining work goes to a separate issue or is dropped.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"d4859fd1b2466f380d7d0da64e240cf1"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"1001219fce272cc1ac650b320130e365"} -->
