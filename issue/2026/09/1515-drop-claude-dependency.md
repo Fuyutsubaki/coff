@@ -10,7 +10,7 @@ status: open
 ## 目的
 
 coff は agent 横断で使う汎用ツールだが、配布対象の skill 本文が claude の配置（`.claude/skills/`）、記法（`/name`）、ツール名（`AskUserQuestion`）を前提にしている。
-解けた状態は、同じ配布物が claude-code と codex のどちらの配置に導入されても動作し、それをテストで確かめられることである。
+解けた状態は、同じ配布物が claude-code と codex のどちらの配置に導入されても動作し、相互参照の解決と coff-issue-done の完走を静的検査と E2E で確かめられることである。
 claude 固有の種別（output style / agent 型）、coff repo 内でしか使わない非配布 skill（compile / care-giver / codex-delegate）、codex 以外の agent は扱わない。
 
 ## 現状
