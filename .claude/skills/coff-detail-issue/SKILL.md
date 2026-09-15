@@ -6,7 +6,7 @@ license: MIT
 
 ## Direct invocation
 
-When `/coff-detail-issue` is invoked directly, just present the sections below (purpose, location and naming, status, language, problem and solution space, template, quality bar). Do not create or edit issues (creation is coff-issue-create's job; refinement is coff-issue-polish's).
+When the coff-detail-issue skill is invoked directly, just present the sections below (purpose, location and naming, status, language, problem and solution space, template, quality bar). Do not create or edit issues (creation is coff-issue-create's job; refinement is coff-issue-polish's).
 
 ## Purpose
 
@@ -158,4 +158,4 @@ The bar splits in three:
 - done's exit: every 完了条件 is ticked, 未決 is empty, and the body matches what was built.
 
 Before invoking done, the implementer rewrites 設計方針 and 実装メモ to match what was actually built. Remaining work goes to a separate issue or is dropped.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"1001219fce272cc1ac650b320130e365"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"96ed01b65766e3a407e1a4449da507ae"} -->

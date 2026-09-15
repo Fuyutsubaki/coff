@@ -44,13 +44,13 @@ CI への組み込みと coff repo 自身の `.agents/` ビルドは対象外と
 
 ## 完了条件
 
-- [ ] 配布対象 skill の相互参照が claude-code と codex の両方の配置で解決する
-- [ ] 配布対象 skill の本文に `.claude/skills/` 配下への SKILL.md 参照、claude のツール名、`/coff-*` 記法が残っていない
-- [ ] coff-init がどちらの配置からでも兄弟 skill の導入と規約追記を完了する
-- [ ] coff-issue-list が両 agent で引数付きで動く
-- [ ] `test/static.sh` が上 2 条件を決定的に検査し、現状の master では失敗し、修正後に通る
-- [ ] `test/e2e.sh` が両 CLI で coff-issue-done を実行し `status: done` を確認する
-- [ ] README に codex での導入手順とテストの実行方法がある
+- [x] 配布対象 skill の相互参照が claude-code と codex の両方の配置で解決する
+- [x] 配布対象 skill の本文に `.claude/skills/` 配下への SKILL.md 参照、claude のツール名、`/coff-*` 記法が残っていない
+- [x] coff-init がどちらの配置からでも兄弟 skill の導入と規約追記を完了する
+- [x] coff-issue-list が両 agent で引数付きで動く
+- [x] `test/static.sh` が上 2 条件を決定的に検査し、現状の master では失敗し、修正後に通る
+- [x] `test/e2e.sh` が両 CLI で coff-issue-done を実行し `status: done` を確認する
+- [x] README に codex での導入手順とテストの実行方法がある
 
 ## 実装メモ
 
@@ -74,14 +74,14 @@ CI への組み込みと coff repo 自身の `.agents/` ビルドは対象外と
 - 静的検査の対象はフェンスコード外の本文だけ。参照抽出も禁止パターン検査も同じ範囲に適用する。「SKILL.md 参照」は、バッククォートで囲まれ、`/` を含み、`SKILL.md` で終わり、`<` `*` `$` を含まない文字列（coff-compile の出力先表 `skills/<name>/SKILL.md` や coff-japanese-tech-writing の引用「SKILL.md」を対象外にするため）。
 - `test/static.sh` は自身の位置から repo ルートを決める（`$(dirname "$0")/..`）。master との比較は、コミット後でも `git worktree add` した master にスクリプトをコピーして実行できる。
 - `claude -p` のスラッシュ呼び出しは、モデルの turn を要する skill なら動く。埋め込みだけの skill は 0 turn・空出力。書き込みを伴う skill には `--allowedTools 'Skill,Bash,Read,Edit,Write'` を付ける。
-- codex の非対話実行は `codex exec --skip-git-repo-check '$name 引数'`。書き込みを伴う skill には `--sandbox workspace-write` が要る。既定のサンドボックスはネットワークを遮断するので、リモートからの `gh skill install` は対話での承認か `-c sandbox_workspace_write.network_access=true` が要る。
+- codex の非対話実行は `codex exec --skip-git-repo-check '$name 引数'`。書き込みを伴う skill には `--sandbox workspace-write` が要る。`workspace-write` のサンドボックスはネットワークを遮断し、`.agents/` を読み取り専用にするので、coff-init の兄弟導入は対話での承認か `--sandbox danger-full-access` が要る（`--from-local` でも `.agents/` への書き込みで止まる。実測）。
 - E2E の fixture は frontmatter `status: open` と `# タイトル` だけの最小 issue。完了条件の節が無い issue は coff-issue-done が警告付きで通す。
 
 ### 完了条件の確認手段
 
 1. `test/static.sh` を実行する。一時 repo を 2 つ作り、`skills/` の全 skill を `--from-local` で claude-code / codex それぞれの配置に導入し、各 SKILL.md のフェンスコード外にある `SKILL.md` 参照が親ディレクトリ基準で存在することを確認する。
 2. 同じスクリプトで、`skills/*/SKILL.md` のフェンスコード外に `.claude/skills/` を含む SKILL.md 参照、`AskUserQuestion`、`` `/coff- `` の各パターンが無いことを確認する。
-3. coff-init 本文の導入コマンドを `--from-local <repo>` に差し替えた一時コピーを、両 agent の一時 repo に置き、各 CLI で coff-init を実行する。兄弟 skill が同じ配置に揃い、claude-code では CLAUDE.md、codex では AGENTS.md に coff 節が 1 回だけ入ることを見る（再実行で重複しないことも見る）。`--from-local` ならネットワークは要らない。
+3. coff-init 本文の導入コマンドを `--from-local <repo>` に差し替えた一時コピーを、両 agent の一時 repo に置き、各 CLI で coff-init を実行する。兄弟 skill が同じ配置に揃い、claude-code では CLAUDE.md、codex では AGENTS.md に coff 節が 1 回だけ入ることを見る（再実行で重複しないことも見る）。`--from-local` ならネットワークは要らないが、codex は `.agents/` への書き込みのため `--sandbox danger-full-access` で実行する。
 4. 手順 1 の一時 repo に issue を 1 件置き、各 CLI で coff-issue-list を `done` 引数で実行して 0 件が返ることを見る。claude は自然文で skill を指名する（スラッシュ呼び出しでは出力が出ない）。
 5. master 相当を用意して `test/static.sh` が失敗し、ブランチで成功することを見る。未コミットなら `git stash`（`-u` なし。未追跡の `test/` は残る）、コミット後なら `git worktree add <一時dir> master` に `test/static.sh` をコピーして実行する。
 6. `test/e2e.sh` を実行する。手順 1 と同じく `--from-local` で導入した両 agent の一時 repo に fixture issue を置き、`claude -p '/coff-issue-done <path>' --allowedTools 'Skill,Bash,Read,Edit,Write'` と `codex exec --skip-git-repo-check --sandbox workspace-write '$coff-issue-done <path>'` を実行し、frontmatter が `status: done` になることを確認する。
