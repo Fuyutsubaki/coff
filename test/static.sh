@@ -8,6 +8,7 @@
 # Prose = everything outside fenced code blocks. References containing < * $
 # (placeholders) are ignored.
 set -uo pipefail
+command -v gh >/dev/null || { echo "missing: gh"; exit 2; }
 root=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -21,7 +22,7 @@ for f in "$root"/skills/*/SKILL.md; do
   p=$(prose "$f")
   grep -nE '`[^`<*$]*\.claude/skills/[^`<*$]*SKILL\.md`' <<<"$p" | sed "s#^#FAIL: $rel: .claude/skills/ reference: #" && fail=1
   grep -nE 'AskUserQuestion' <<<"$p" | sed "s#^#FAIL: $rel: claude tool name: #" && fail=1
-  grep -nE '`/coff-[a-z-]+' <<<"$p" | sed "s#^#FAIL: $rel: slash invocation: #" && fail=1
+  grep -nE '(^|[^A-Za-z0-9_./])/coff-[a-z-]+' <<<"$p" | sed "s#^#FAIL: $rel: slash invocation: #" && fail=1
 done
 
 for agent in claude-code codex; do

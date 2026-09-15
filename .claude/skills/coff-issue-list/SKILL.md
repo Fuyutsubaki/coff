@@ -5,7 +5,7 @@ license: MIT
 allowed-tools: Bash(awk *)
 ---
 
-Listing of `issue/`. Present it as is. If the block below has not been expanded into its output, run it yourself with the argument placeholder in the block (a dollar sign followed by ARGUMENTS) replaced by the given argument, and present the output.
+Listing of `issue/`. Present it as is. If the block below has not been expanded into its output, run it yourself with the given argument and present the output.
 
 ```!
 awk -v want="$ARGUMENTS" '
@@ -30,4 +30,4 @@ t == "" && /^# / { t = substr($(0), 3) }
 END { if (want == "open" || want == "done" || want == "all") { flush(); printf "\n%d 件\n", n } }
 ' $(ls issue/*/*/*.md 2>/dev/null || echo /dev/null)
 ```
-<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"d6a0bc05493bbd81d8ba64a23b128a9b"} -->
+<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"825ad0f2124b8e6c8ffa31efc22f8109"} -->

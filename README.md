@@ -12,6 +12,7 @@ gh skill install Fuyutsubaki/coff coff-init --agent codex         # Codex
 ```
 
 導入先のリポジトリで coff-init skill を実行すると（Claude Code は `/coff-init`、Codex は `$coff-init`）、残りの coff スキルの一括導入と issue 運用の初期化が行われる。
+Codex は既定のサンドボックスが `.agents/` に書き込めないため、兄弟スキルの導入は承認して通すか `--sandbox danger-full-access` で実行する。
 
 個別に選んで入れる場合は、対話選択の `gh skill install Fuyutsubaki/coff` も使える。
 
