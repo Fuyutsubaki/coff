@@ -13,7 +13,8 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 fail=0
 
-prose() { awk '/^```/ { f = !f; next } !f' "$1"; }
+# Fenced lines become blank lines so reported line numbers match the file.
+prose() { awk '/^[[:space:]]*```/ { f = !f; print ""; next } f { print ""; next } 1' "$1"; }
 
 for f in "$root"/skills/*/SKILL.md; do
   rel=${f#"$root"/}

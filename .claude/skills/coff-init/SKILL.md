@@ -7,7 +7,7 @@ license: MIT
 ## Procedure
 
 1. Prerequisites: confirm the current directory is a git repository, the `gh` CLI is available, and `gh skill --help` succeeds (an agent-skills-capable version). If anything is missing, report what's lacking and stop.
-2. Detect the agent: judge by the tail of this SKILL.md's location (the agent presents it when loading the skill). `.claude/skills/coff-init` means claude-code; `.agents/skills/coff-init` means codex. If no path was presented, judge by whether `.claude/skills/coff-init` and `.agents/skills/coff-init` exist under the cwd; if both exist, ask the user. Below, `<agent>` is the detected value, `<dir>` is its skills directory (`.claude/skills/` or `.agents/skills/`), and `<rules>` is the agent's rules file (CLAUDE.md for claude-code, AGENTS.md for codex).
+2. Detect the agent: judge by this SKILL.md's location (the agent presents it when loading the skill). Under `.claude/skills/` means claude-code; under `.agents/skills/` means codex. If it cannot be determined, ask the user. Below, `<agent>` is the detected value, `<dir>` is its skills directory (`.claude/skills/` or `.agents/skills/`), and `<rules>` is the agent's rules file (CLAUDE.md for claude-code, AGENTS.md for codex).
 3. Install sibling skills: for each coff skill whose directory does not exist under `<dir>`, install it one at a time with the command below. Judge "missing" by directory existence only; do not compare versions.
 
    ```bash
@@ -17,7 +17,7 @@ license: MIT
    gh skill install Fuyutsubaki/coff <name> --agent <agent>
    ```
 
-   Do not omit `--agent <agent>`. This needs network access and write access to `<dir>` (the codex sandbox makes `.agents/` read-only), so if it fails inside a sandbox, rerun with approval.
+   Do not omit `--agent <agent>`. This needs network access and write access to `<dir>` (the codex sandbox makes `.agents/` read-only).
 4. Initialize:
    - Create the `issue/` directory if absent.
    - Add the coff conventions section to `<rules>`. Create the file if absent. If the heading `## coff` already exists, do nothing. Leave existing content untouched and append the following section at the end, replacing `<dir>` with the detected skills directory and `<build>` with nothing for claude-code, or with 「（`--out .agents` で実体を出力する）」 for codex.
@@ -32,4 +32,4 @@ license: MIT
 ## Exit bar
 
 - The coff skill suite is present under `<dir>`, and `issue/` and the coff section of `<rules>` exist.
-<!--{"src":".coff/src/coff-init.skill.md","md5":"5fa8afe8f76bc488329fb605446470bb"} -->
+<!--{"src":".coff/src/coff-init.skill.md","md5":"a40f629bfded4ab0566bdb7c32414847"} -->

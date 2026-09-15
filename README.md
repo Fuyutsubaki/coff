@@ -17,8 +17,10 @@ gh skill install Fuyutsubaki/coff coff-init --agent codex         # Codex
 
 ## テスト
 
+`gh skill install --from-local` が使える gh（2.95.0 で確認）が前提。
+
 ```bash
-test/static.sh   # 配布物を両 agent の配置に導入し、相互参照の解決と claude 固有の記述の不在を検査する
+test/static.sh   # 配布物を一時 repo の両 agent 配置に導入し、相互参照の解決と claude 固有の記述の不在を検査する
 test/e2e.sh      # claude と codex を非対話で起動し、coff-issue-done が完走することを確認する（両 CLI の認証が要る）
 ```
 

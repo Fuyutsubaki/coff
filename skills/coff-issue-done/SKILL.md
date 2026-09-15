@@ -6,7 +6,7 @@ license: MIT
 
 ## Procedure
 
-1. Get the status spec and done's exit bar from `../coff-detail-issue/SKILL.md` (relative to this SKILL.md's parent directory, not the cwd).
+1. Get the status spec and done's exit bar from `../coff-detail-issue/SKILL.md` (relative to the directory containing this SKILL.md).
 2. Read the target issue file passed as the argument.
 3. Completion verification (lightweight gate). If it fails, do not set `done`; report the reason and bounce it back.
    - Confirm every item in the 「完了条件」 section's checklist (「検証」 or 「受け入れ条件」 in the old templates) is ticked (per detail's rules). If any is unticked, hold and list those items.
@@ -24,4 +24,4 @@ license: MIT
 ## Scope
 
 - Updates go in the `done` direction only. Reverting (`done` → `open`) is done by hand.
-<!--{"src":".coff/src/coff-issue-done.skill.md","md5":"6d842bba34a2fc34b1d4319d2379910e"} -->
+<!--{"src":".coff/src/coff-issue-done.skill.md","md5":"ed3c4fcc7c7939ab42df7aa1d4470a51"} -->

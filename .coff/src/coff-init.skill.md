@@ -12,7 +12,7 @@ coff-dist: true
 ## 手順
 
 1. 前提確認: カレントディレクトリが git リポジトリであること、`gh` CLI が使えること、`gh skill --help` が成功すること（agent skills 対応版であること）を確認する。欠けていれば、何が足りないかを報告して中断する。
-2. agent の判別: この SKILL.md の配置パス（agent が skill の読み込み時に提示する）の末尾で判別する。`.claude/skills/coff-init` なら claude-code、`.agents/skills/coff-init` なら codex。パスが提示されていなければ、cwd 配下の `.claude/skills/coff-init` と `.agents/skills/coff-init` の有無で判別し、両方あればユーザーに聞く。以降、`<agent>` は判別した値、`<dir>` はその配置ディレクトリ（`.claude/skills/` または `.agents/skills/`）、`<rules>` は agent の規約ファイル（claude-code は CLAUDE.md、codex は AGENTS.md）を指す。 <!-- 環境変数で判別しないのは、codex にセッションを識別する安定した変数が無いため -->
+2. agent の判別: この SKILL.md の配置パス（agent が skill の読み込み時に提示する）で判別する。`.claude/skills/` 配下なら claude-code、`.agents/skills/` 配下なら codex。判別できなければユーザーに聞く。以降、`<agent>` は判別した値、`<dir>` はその配置ディレクトリ（`.claude/skills/` または `.agents/skills/`）、`<rules>` は agent の規約ファイル（claude-code は CLAUDE.md、codex は AGENTS.md）を指す。 <!-- 環境変数で判別しないのは、codex にセッションを識別する安定した変数が無いため -->
 3. 兄弟スキルの導入: `<dir>` にディレクトリが存在しない coff スキルを、次のコマンドで 1 つずつ導入する。不足判定はディレクトリの有無だけで行い、版の新旧は見ない。
 
    ```bash
@@ -22,7 +22,7 @@ coff-dist: true
    gh skill install Fuyutsubaki/coff <name> --agent <agent>
    ```
 
-   `--agent <agent>` は省略しない。 <!-- 省くと非対話時の既定が github-copilot になり、別のディレクトリに入る --> ネットワークと `<dir>` への書き込みが要る（codex のサンドボックスは `.agents/` を読み取り専用にする）ので、サンドボックスで失敗したら承認付きで再実行する。
+   `--agent <agent>` は省略しない。 <!-- 省くと非対話時の既定が github-copilot になり、別のディレクトリに入る --> ネットワークと `<dir>` への書き込みが要る（codex のサンドボックスは `.agents/` を読み取り専用にする）。
 4. 初期化:
    - `issue/` ディレクトリがなければ作成する。
    - `<rules>` に coff の規約節を追記する。ファイルがなければ作成する。既に見出し `## coff` があれば何もしない。 <!-- 再実行しても重複させない -->既存の記述には触れず、末尾に次の節を追加する。`<dir>` は判別した配置ディレクトリに、`<build>` は claude-code なら空、codex なら「（`--out .agents` で実体を出力する）」に置き換える。 <!-- coff-compile の codex プリセットは .claude/ の正本への参照 stub なので、codex 単独の環境では成立しない -->

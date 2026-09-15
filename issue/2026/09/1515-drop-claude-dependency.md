@@ -27,10 +27,10 @@ claude 固有の種別（output style / agent 型）、coff repo 内でしか使
 
 ## 設計方針
 
-- 相互参照は「その SKILL.md と同じ親ディレクトリ」基準の `../<name>/SKILL.md` に統一する。両 agent の配置で同じ形で解決し、repo 内の `--agent codex` stub 経由でも正本側で解決する（両 CLI で試行済み）。
+- 相互参照は「その SKILL.md があるディレクトリ」基準の `../<name>/SKILL.md` に統一する。両 agent の配置で同じ形で解決し、repo 内の `--agent codex` stub 経由でも正本側で解決する（両 CLI で試行済み）。
 - 呼び出しは記法を書かず「<name> skill を実行する」と書く。ユーザー向けの例示は引数だけを示し、接頭辞が agent 依存であることを一言添える。
 - agent 固有のツール名は書かず、機能で書く。
-- coff-init は実行中の agent を自身の配置場所で判別する（`.claude/skills/coff-init` なら claude-code、`.agents/skills/coff-init` なら codex）。導入の `--agent`、規約ファイル（CLAUDE.md / AGENTS.md）、規約文中の skill ディレクトリをそれに合わせる。
+- coff-init は実行中の agent を自身の配置場所で判別する（`.claude/skills/coff-init` なら claude-code、`.agents/skills/coff-init` なら codex）。導入の `--agent`、規約ファイル（CLAUDE.md / AGENTS.md）、規約文中の skill ディレクトリをそれに合わせる。規約文のビルド指示は codex なら `--out .agents` にする（coff-compile の codex プリセットは `.claude/` の正本への参照 stub で、codex 単独では成立しない）。
 - coff-issue-list は `!` フェンスを残し、展開されていなければ引数を置き換えて自分で実行する一文を足す。
 - サブエージェントの語は残す。「fork ではない」は「会話を継承しない」に言い換え、codex-delegate 参照は「導入されている場合のみ」に統一する。
 - テストは `test/static.sh` と `test/e2e.sh` の 2 本。static は配布物を両 agent の配置に `--from-local` で導入し、参照解決と禁止パターンを検査する。e2e は両 CLI を非対話で起動し、相対参照を辿る coff-issue-done が完走することを見る。
@@ -48,7 +48,7 @@ CI への組み込みと coff repo 自身の `.agents/` ビルドは対象外と
 - [x] 配布対象 skill の本文に `.claude/skills/` 配下への SKILL.md 参照、claude のツール名、`/coff-*` 記法が残っていない
 - [x] coff-init がどちらの配置からでも兄弟 skill の導入と規約追記を完了する
 - [x] coff-issue-list が両 agent で引数付きで動く
-- [x] `test/static.sh` が上 2 条件を決定的に検査し、現状の master では失敗し、修正後に通る
+- [x] `test/static.sh` が上 2 条件を決定的に検査し、変更前の配布物では失敗し、修正後に通る
 - [x] `test/e2e.sh` が両 CLI で coff-issue-done を実行し `status: done` を確認する
 - [x] README に codex での導入手順とテストの実行方法がある
 
@@ -63,28 +63,24 @@ CI への組み込みと coff repo 自身の `.agents/` ビルドは対象外と
 - `.coff/src/coff-init.skill.md`：配置場所による agent 判別、`--agent` の可変化、規約ファイルの選択、規約文と出口基準の `.claude/` と `/coff-compile` を記法非依存へ。規約文のビルド指示は claude-code なら既定出力、codex なら `--out .agents`（実体出力）。兄弟導入にネットワークが要る旨を注記。
 - `README.md`：codex 向け導入コマンド（`--agent codex`、`$coff-init`）とテストの実行方法。
 - `test/static.sh`（新規）、`test/e2e.sh`（新規）。
-- 最後に compile skill で成果物と `skills/` ミラーを再生成する。
 
 後で効く制約:
 
-- 相対参照の基準は cwd ではなく「その SKILL.md の親ディレクトリ」。本文にそう明記する（cwd 基準で解決されると失敗する）。
-- coff-init の agent 判別は、agent が skill 読み込み時に提示する自身の SKILL.md のパス（claude は「Base directory for this skill」、codex は skill 一覧のパス）の末尾（`.claude/skills/coff-init` / `.agents/skills/coff-init`）で行い、user scope でも同じ。提示が無ければ cwd 配下の両ディレクトリの有無で判別し、両方あればユーザーに聞く。兄弟導入の `--scope` は既定（project）のまま。
+- 相対参照の基準は cwd ではなく「その SKILL.md があるディレクトリ」。本文にそう明記する（cwd 基準で解決されると失敗する）。
+- coff-init の agent 判別は、agent が skill 読み込み時に提示する自身の SKILL.md のパス（claude は「Base directory for this skill」、codex は skill 一覧のパス）が `.claude/skills/` と `.agents/skills/` のどちらの配下かで行い、user scope でも同じ。判別できなければユーザーに聞く。兄弟導入の `--scope` は既定（project）のまま。
 - codex 単独の環境では coff-compile の `codex` プリセット（`.claude/` の正本への参照 stub）は成立しない。実体を `.agents/` に出すには `--out .agents` を使う。
 - `gh skill install --scope project` の配置は claude-code が `.claude/skills/`、codex が `.agents/skills/`（gh 2.95.0 で実測）。マージ前はリモートに変更が無いので `--from-local <repo>` で導入する。
-- 静的検査の対象はフェンスコード外の本文だけ。参照抽出も禁止パターン検査も同じ範囲に適用する。「SKILL.md 参照」は、バッククォートで囲まれ、`/` を含み、`SKILL.md` で終わり、`<` `*` `$` を含まない文字列（coff-compile の出力先表 `skills/<name>/SKILL.md` や coff-japanese-tech-writing の引用「SKILL.md」を対象外にするため）。
-- `test/static.sh` は自身の位置から repo ルートを決める（`$(dirname "$0")/..`）。master との比較は、コミット後でも `git worktree add` した master にスクリプトをコピーして実行できる。
 - `claude -p` のスラッシュ呼び出しは、モデルの turn を要する skill なら動く。埋め込みだけの skill は 0 turn・空出力。書き込みを伴う skill には `--allowedTools 'Skill,Bash,Read,Edit,Write'` を付ける。
 - codex の非対話実行は `codex exec --skip-git-repo-check '$name 引数'`。書き込みを伴う skill には `--sandbox workspace-write` が要る。`workspace-write` のサンドボックスはネットワークを遮断し、`.agents/` を読み取り専用にするので、coff-init の兄弟導入は対話での承認か `--sandbox danger-full-access` が要る（`--from-local` でも `.agents/` への書き込みで止まる。実測）。
-- E2E の fixture は frontmatter `status: open` と `# タイトル` だけの最小 issue。完了条件の節が無い issue は coff-issue-done が警告付きで通す。
 
 ### 完了条件の確認手段
 
-1. `test/static.sh` を実行する。一時 repo を 2 つ作り、`skills/` の全 skill を `--from-local` で claude-code / codex それぞれの配置に導入し、各 SKILL.md のフェンスコード外にある `SKILL.md` 参照が親ディレクトリ基準で存在することを確認する。
+1. `test/static.sh` を実行する。一時 repo を 2 つ作り、`skills/` の全 skill を `--from-local` で claude-code / codex それぞれの配置に導入し、各 SKILL.md のフェンスコード外にある `SKILL.md` 参照が、参照元の SKILL.md があるディレクトリ基準で存在することを確認する。
 2. 同じスクリプトで、`skills/*/SKILL.md` のフェンスコード外に `.claude/skills/` を含む SKILL.md 参照、`AskUserQuestion`、`` `/coff- `` の各パターンが無いことを確認する。
 3. coff-init 本文の導入コマンドを `--from-local <repo>` に差し替えた一時コピーを、両 agent の一時 repo に置き、各 CLI で coff-init を実行する。兄弟 skill が同じ配置に揃い、claude-code では CLAUDE.md、codex では AGENTS.md に coff 節が 1 回だけ入ることを見る（再実行で重複しないことも見る）。`--from-local` ならネットワークは要らないが、codex は `.agents/` への書き込みのため `--sandbox danger-full-access` で実行する。
 4. 手順 1 の一時 repo に issue を 1 件置き、各 CLI で coff-issue-list を `done` 引数で実行して 0 件が返ることを見る。claude は自然文で skill を指名する（スラッシュ呼び出しでは出力が出ない）。
-5. master 相当を用意して `test/static.sh` が失敗し、ブランチで成功することを見る。未コミットなら `git stash`（`-u` なし。未追跡の `test/` は残る）、コミット後なら `git worktree add <一時dir> master` に `test/static.sh` をコピーして実行する。
-6. `test/e2e.sh` を実行する。手順 1 と同じく `--from-local` で導入した両 agent の一時 repo に fixture issue を置き、`claude -p '/coff-issue-done <path>' --allowedTools 'Skill,Bash,Read,Edit,Write'` と `codex exec --skip-git-repo-check --sandbox workspace-write '$coff-issue-done <path>'` を実行し、frontmatter が `status: done` になることを確認する。
+5. 変更前の配布物（変更前のコミットの worktree に `test/static.sh` をコピーして実行）で失敗し、ブランチで成功することを見る。
+6. `test/e2e.sh` を実行する。`--from-local` で coff-detail-issue と coff-issue-done を導入した両 agent の一時 repo に fixture issue（frontmatter と題だけ）を置き、`claude -p '/coff-issue-done <path>' --allowedTools 'Skill,Bash,Read,Edit,Write'` と `codex exec --skip-git-repo-check --sandbox workspace-write '$coff-issue-done <path>'` を実行し、frontmatter が `status: done` になることを確認する。
 7. README を目視する。
 
 ### 調査記録
@@ -95,6 +91,7 @@ CI への組み込みと coff repo 自身の `.agents/` ビルドは対象外と
 - Claude Code 2.1.272 の skill 発見は `.claude/skills/` と `~/.claude/skills/` のみ。`.agents/skills/` 対応要望は未対応のまま open。出典: https://code.claude.com/docs/en/skills 、https://github.com/anthropics/claude-code/issues/31005
 - codex にセッションを識別する安定した環境変数は無い（`CODEX_SESSION_ID` は要望段階）。出典: https://github.com/openai/codex/issues/8923
 - 試行（2026-09-15、一時 repo に 3 skill を導入）: codex は `$coff-issue-list` と `$coff-issue-list done` を正しく返し、相対参照に書き換えた coff-issue-done で `.agents/skills/coff-detail-issue/SKILL.md` を読んで `status: done` にした。claude は `-p '/coff-issue-done <path>'` で同様に `status: done` にした。`-p '/coff-issue-list'` は 0 turn・空出力、自然文で指名すると表が返った。
+- 確認（2026-09-15、実装後）: coff-init を導入コマンドの `--from-local` 差し替えで両 CLI で 2 回ずつ実行し、兄弟 9 skill が同じ配置に揃い、claude-code は CLAUDE.md、codex は AGENTS.md に coff 節が 1 つだけ入った。codex は `workspace-write` では `.agents/` への書き込みで止まり、`--sandbox danger-full-access` で通った。coff-issue-list の `done` 引数は両 CLI で 0 件を返した。
 
 ### 参考
 

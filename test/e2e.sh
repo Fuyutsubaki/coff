@@ -4,10 +4,11 @@
 # coff-detail-issue and flips the fixture issue to `status: done`.
 # Requires both CLIs to be installed and authenticated.
 set -uo pipefail
+for c in gh claude codex; do command -v "$c" >/dev/null || { echo "missing: $c"; exit 2; }; done
 root=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
 fail=0
+trap '[ "$fail" = 0 ] && rm -rf "$tmp"' EXIT   # keep the logs on failure
 fixture=issue/2026/01/0101-fixture.md
 
 setup() { # $1 = agent
@@ -18,14 +19,13 @@ setup() { # $1 = agent
       || { echo "FAIL: [$1] install $n"; fail=1; }
   done
   printf -- '---\nstatus: open\n---\n# e2e fixture\n' > "$d/$fixture"
-  git -C "$d" add -A && git -C "$d" -c user.name=e2e -c user.email=e2e@example.com commit -qm fixture
 }
 
 check() { # $1 = agent
   if head -3 "$tmp/$1/$fixture" | grep -q '^status: done$'; then
     echo "PASS: [$1] coff-issue-done"
   else
-    echo "FAIL: [$1] coff-issue-done (log: $tmp/$1.log)"; tail -20 "$tmp/$1.log"; fail=1
+    echo "FAIL: [$1] coff-issue-done (log kept: $tmp/$1.log)"; tail -20 "$tmp/$1.log"; fail=1
   fi
 }
 

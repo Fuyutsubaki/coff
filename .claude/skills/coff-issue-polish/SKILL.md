@@ -6,7 +6,7 @@ license: MIT
 
 ## Procedure
 
-1. Read `../coff-detail-issue/SKILL.md` (relative to this SKILL.md's parent directory, not the cwd) to get the template and quality bar.
+1. Read `../coff-detail-issue/SKILL.md` (relative to the directory containing this SKILL.md) to get the template and quality bar.
 2. Read the target issue and check the problem space first. Confirm the problem is correctly framed (meets the four validity angles); if not, re-frame 「目的 / 現状」 (bounce back to the problem space). Also check whether it bundles multiple problems whose adoption and completion can be judged independently; if so, propose splitting (one issue = one intent, per detail's purpose section). 
 3. Code investigation: actually read the related files, existing implementation, dependencies, and related skills / docs / issues, and fill in 「現状 / 実装詳細」 based on facts. Findings from external material go under 「調査記録」 with their sources.
 4. Verify premises with a checklist: do the stated premises contradict the current code / do referenced file paths exist. Fix contradictions; move points needing the user's decision to 「未決」.
@@ -27,4 +27,4 @@ license: MIT
 ## Finish criteria
 
 - Meets detail's exit bar for polish.
-<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"a75a25ae60434dbf596abd689e629fba"} -->
+<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"888800f1ea54615312b17ed4c5455e44"} -->
