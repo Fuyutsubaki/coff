@@ -20,11 +20,11 @@ license: MIT
    Do not omit `--agent <agent>`. This needs network access and write access to `<dir>` (the codex sandbox makes `.agents/` read-only).
 4. Initialize:
    - Create the `issue/` directory if absent.
-   - Add the coff conventions section to `<rules>`. Create the file if absent. If the heading `## coff` already exists, do nothing. Leave existing content untouched and append the following section at the end, replacing `<dir>` with the detected skills directory and `<build>` with nothing for claude-code, or with 「（`--out .agents` で実体を出力する）」 for codex.
+   - Add the coff conventions section to `<rules>`. Create the file if absent. If the heading `## coff` already exists, do nothing. Leave existing content untouched and append the following section at the end, replacing `<dir>` with the detected skills directory.
 
      ```markdown
      ## coff
-     - `<dir>` 配下の coff 成果物（skills など）は手で編集しない。変更は `.coff/src/` のソースを編集し、coff-compile skill でビルドする<build>。
+     - `<dir>` 配下の coff 成果物（skills など）は手で編集しない。変更は `.coff/src/` のソースを編集し、coff-compile skill でビルドする。
      - issue 運用の入口は coff-issue-create skill。流れは create → polish → 実装 → done。一覧は coff-issue-list skill。
      ```
 5. Report: report the detected agent, the installed skills, and the initialization results. Also briefly introduce the issue workflow (create → polish → implement → done), and note that the `.coff/src/` conventions with the coff-compile skill are available for source-managing one's own skills.
@@ -32,4 +32,4 @@ license: MIT
 ## Exit bar
 
 - The coff skill suite is present under `<dir>`, and `issue/` and the coff section of `<rules>` exist.
-<!--{"src":".coff/src/coff-init.skill.md","md5":"a40f629bfded4ab0566bdb7c32414847"} -->
+<!--{"src":".coff/src/coff-init.skill.md","md5":"033b9e63c9ac9a658e3551a48f258a9a"} -->

@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: coff のソース (`.coff/src/`) を agent の配置先（既定 `.claude/`）の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
+description: coff のソース (`.coff/src/`) を実行中 agent の配置先を既定として実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
 license: MIT
 coff-dist: true
 ---
@@ -17,13 +17,13 @@ lint:
 
 ## 入出力
 
-ソース種別ごとに出力先が決まる。`<name>` はファイル名から `.<type>.md` を取り除いたもの。
+ソース種別ごとに出力先が決まる。`<name>` はファイル名から `.<type>.md` を取り除いたもの、`<root>` は後述の規則で導出した出力ルート。
 
 | ソース glob | 出力パス |
 |---|---|
-| `.coff/src/*.skill.md` | `.claude/skills/<name>/SKILL.md` |
-| `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
-| `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
+| `.coff/src/*.skill.md` | `<root>/skills/<name>/SKILL.md` |
+| `.coff/src/*.outputstyle.md` | `<root>/output-styles/<name>.md` |
+| `.coff/src/*.agent.md` | `<root>/agents/<name>.md` |
 
 ## オプション
 
@@ -31,9 +31,9 @@ lint:
 
 - `--lint-only`: lint だけ実行してそこで止める。コンパイル前の確認も行わない。
 - `--force`: md5 一致によるスキップを無視して、対象すべてを処理する。
-- `--out <root>`: 出力ルート（既定 `.claude`）を置き換える。種別ごとのサブレイアウト（`skills/<name>/SKILL.md` など）はルート配下でそのまま使う。
-- `--ref`: `--out` と併用して、コンパイル済み本文の複製ではなく正本への参照 stub を出力する。`--out` なしで指定されたらエラーとして中断する。
-- `--agent <name>`: agent 名から `--out` と `--ref` を決めるプリセット（後述の表）。複数指定は各プリセットの出力を合算する。明示の `--out` / `--ref` と同時に指定されたらエラーとして中断する。
+- `--out <root>`: 実行中 agent から導出する既定の出力ルートを置き換える。種別ごとのサブレイアウト（`skills/<name>/SKILL.md` など）はルート配下でそのまま使う。
+- `--ref`: `--out` と併用して、skill はコンパイル済み本文の複製ではなく正本への参照 stub を出力する。`--out` なしで指定されたらエラーとして中断する。
+- `--agent <name>`: agent 名から出力ルートを決めるプリセット（後述の表）。複数指定は各プリセットの出力を合算する。明示の `--out` / `--ref` と同時に指定されたらエラーとして中断する。
 - `<path|name> [<path|name> ...]`: 指定したソースだけを処理する。フルパス `.coff/src/foo.skill.md` や `.coff/src/foo.outputstyle.md`、ベース名 `foo`、ファイル名 `foo.skill.md` のいずれでも受け付ける。指定がなければ全 glob を対象にする。ベース名 `foo` が複数の種別に一致する場合（`foo.skill.md` と `foo.outputstyle.md` が両方ある等）は曖昧として報告し、フルパスかファイル名での指定を求める。
 
 例:
@@ -41,21 +41,32 @@ lint:
 - `--force` — md5 を無視して全件再ビルド。
 - `foo` — foo だけ lint+compile。
 - `my-style` — my-style の output style だけビルド。
-- `--agent codex` — codex 向けの参照 stub を `.agents/skills/` に出力。
+- `--agent codex` — codex 向けの出力を `.agents/skills/` に出す（実行中 agent が codex でなければ参照 stub）。
 
 ## agent プリセットと参照出力
 
-agent 向けの実体（正本）はリポジトリに 1 箇所とし、他の agent 向けには参照 stub を置く。 <!-- 実体を複数箇所に置くと更新漏れで drift するため -->
+この SKILL.md の配置パスが `.claude/skills/` 配下なら実行中 agent は claude-code、`.agents/skills/` 配下なら codex と判別する。 <!-- 環境変数で判別しないのは、codex にセッションを識別する安定した変数が無いため -->
 
-| agent | 出力ルート | 配置モード | 対象種別 |
-|---|---|---|---|
-| `claude-code`（既定） | `.claude/` | 実体 | skill / outputstyle / agent |
-| `codex` | `.agents/` | 参照 | skill のみ |
+判別できなければユーザーに聞き、対話できなければ推測せずエラーとして中断する。
+以降、`<current-agent>` は判別した agent、`<current-root>` はその agent に対応する次の出力ルートを指す。
+user scope に配置されていても、出力ルートはカレントリポジトリ直下とする。
+
+| agent | 出力ルート |
+|---|---|
+| `claude-code` | `.claude/` |
+| `codex` | `.agents/` |
 
 <!-- codex は project scope で `.agents/skills/*/SKILL.md` を発見する（`gh skill install --agent codex` の配置先と同じ）。`.agents/` は agent 横断の標準ディレクトリなので、対応 agent を増やすときはこの表に行を足す -->
 
-- claude-code 固有の種別（outputstyle / agent 型）は、他 agent のビルドでは対象外として扱い、レポートにも出さない。
-- 参照 stub は正本と同じ frontmatter（`coff-*` キー除去後）を持ち、本文は正本への相対パス 1 行とする。フッタも同じ規則で付ける。
+- オプションで出力先を明示しなければ `<current-root>` を出力ルートとし、skill の実体を置く。
+- `--agent` で指定した agent が `<current-agent>` ならそのルートに skill の実体を置き、他の agent ならそのルートに `<current-root>` の正本を指す参照 stub を置く。 <!-- 実体を複数箇所に置くと更新漏れで drift するため -->
+- skill の正本は常に `<current-root>/skills/<name>/SKILL.md` とし、`--out` で出力ルートを置き換えても正本の位置は変えない。
+- `--out` 単独なら指定先に skill の実体を置き、`--ref` もあれば指定先に正本への参照 stub を置く。
+- 参照 stub の相対パスは、stub を置くディレクトリから正本までを計算して求める。`../` の数を固定しない。 <!-- 出力ルートの深さを変えても参照を解決できるようにするため -->
+- claude-code 固有の種別（outputstyle / agent 型）は正本／参照を区別せず、`.claude/` に置く 1 つを常に実体とする。
+  agent から導出した出力ルートに `.claude/` が含まれるときだけ対象にし、含まれなければレポートにも出さない。
+  `--out` で出力ルートを明示した場合は、指定先に全種別の実体を出す。
+- 参照 stub は正本と同じ frontmatter（`coff-*` キー除去後）を持ち、本文を正本への相対パス 1 行として、同じ規則でフッタを付ける。
 
   ```markdown
   ---
@@ -63,35 +74,46 @@ agent 向けの実体（正本）はリポジトリに 1 箇所とし、他の a
   description: <正本と同一>
   ---
 
-  This file is a reference. Read and follow `../../../.claude/skills/<name>/SKILL.md`.
+  This file is a reference. Read and follow `<relative-path-to-canonical>`.
   <!--{"src":".coff/src/<name>.skill.md","md5":"<src md5>"} -->
   ```
 
-- ビルド順は正本 → 参照。参照を書くとき正本が存在しなければエラーとして報告する。
+- ビルド順は実体 → 参照とする。
+- 参照を書くとき `<current-root>` の正本が存在しないか、それ自体が参照 stub ならエラーとして報告する。 <!-- 参照だけを書いて、どこにも実体のない相互参照を作らないため -->
 
 ## 1. 対象ファイルの選定
 
-ソースの拡張子から種別を判定し、出力先の集合 `dsts` を導出する。
+ソースの拡張子から種別を判定し、出力先をキー、期待する配置モード（実体または参照）を値とする連想配列 `dsts` を導出する。
+
+出力ルートと配置モードは前節の規則で決める。
 
 ```bash
+declare -A dsts   # 出力先 -> 期待する配置モード（body=実体 / ref=参照）
 case "$src" in
-  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md" ;;
-  *.outputstyle.md) name=$(basename "$src" .outputstyle.md); dsts=".claude/output-styles/$name.md" ;;
-  *.agent.md)       name=$(basename "$src" .agent.md);       dsts=".claude/agents/$name.md" ;;
+  *.skill.md)       name=$(basename "$src" .skill.md);       rel="skills/$name/SKILL.md" ;;
+  *.outputstyle.md) name=$(basename "$src" .outputstyle.md); rel="output-styles/$name.md" ;;
+  *.agent.md)       name=$(basename "$src" .agent.md);       rel="agents/$name.md" ;;
   *) echo "unknown source type: $src"; continue ;;
 esac
 src_md5=$(md5sum "$src" | cut -d' ' -f1)
+ref_prefix='This file is a reference. Read and follow `'
 verdict=skip
-for dst in $dsts; do
+for dst in "${!dsts[@]}"; do
   dst_md5=$(tail -n 1 "$dst" 2>/dev/null | grep -oP '"md5":"\K[a-f0-9]{32}')
   [ "$src_md5" = "$dst_md5" ] || verdict=build
+  if [ "${dsts[$dst]}" = ref ]; then
+    canonical=$(realpath -m --relative-to="$(dirname "$dst")" "$current_root/skills/$name/SKILL.md")
+    grep -qxF "${ref_prefix}${canonical}\`." "$dst" 2>/dev/null || verdict=build
+  else
+    grep -qF "$ref_prefix" "$dst" 2>/dev/null && verdict=build
+  fi
 done
 echo $verdict
 ```
 
-スキップは全出力先の md5 が一致するときに限る。
+スキップは全出力先の md5 が一致し、参照先では期待する参照行が文字列一致し、実体の出力先では参照行の形がないときに限る。 <!-- 実体と参照、または参照先だけが違う stub はソースが同じなら md5 も同じになるため -->
 
-`--out` / `--agent` があるときは、この導出に出力ルートの置換と参照出力の追加を適用する。参照出力も `dsts` に加え、skip 判定は全出力先に同じフッタ規則で行う。
+`--out` / `--agent` があるときも、参照出力を含む全出力先を `dsts` に加え、同じフッタ規則と配置モードの規則で skip を判定する。
 
 空のソースはエラーとして報告し、次のファイルへ進む。
 
@@ -161,11 +183,12 @@ b. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!--
 
 c. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-` で始まるキーは出力の frontmatter からすべて取り除く。 <!-- ビルド指示（ラッパー skill が拡張するものを含む）の名前空間であって、実行時情報ではないため -->
 
-d. **出力を書き、フッタを付ける。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。プレーンな markdown なので末尾の HTML コメントは無害で、スキップ判定にも使う。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。スニペットの `$content` は、出力先が実体なら本文、参照なら stub の本文（いずれもフッタ手前まで）。
+d. **出力を書き、フッタを付ける。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。プレーンな markdown なので末尾の HTML コメントは無害で、スキップ判定にも使う。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。`$content` は、その出力先の配置モードが実体なら本文、参照なら stub の本文（いずれもフッタ手前まで）。
 
    ```bash
-   for dst in $dsts; do
+   for dst in "${!dsts[@]}"; do
      mkdir -p "$(dirname "$dst")"
+     content=$(build_content "${dsts[$dst]}" "$dst")   # body なら本文、ref なら stub の本文
      printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
    done
    ```

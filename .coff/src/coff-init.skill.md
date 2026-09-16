@@ -25,11 +25,11 @@ coff-dist: true
    `--agent <agent>` は省略しない。 <!-- 省くと非対話時の既定が github-copilot になり、別のディレクトリに入る --> ネットワークと `<dir>` への書き込みが要る（codex のサンドボックスは `.agents/` を読み取り専用にする）。
 4. 初期化:
    - `issue/` ディレクトリがなければ作成する。
-   - `<rules>` に coff の規約節を追記する。ファイルがなければ作成する。既に見出し `## coff` があれば何もしない。 <!-- 再実行しても重複させない -->既存の記述には触れず、末尾に次の節を追加する。`<dir>` は判別した配置ディレクトリに、`<build>` は claude-code なら空、codex なら「（`--out .agents` で実体を出力する）」に置き換える。 <!-- coff-compile の codex プリセットは .claude/ の正本への参照 stub なので、codex 単独の環境では成立しない -->
+   - `<rules>` に coff の規約節を追記する。ファイルがなければ作成する。既に見出し `## coff` があれば何もしない。 <!-- 再実行しても重複させない -->既存の記述には触れず、末尾に次の節を追加する。`<dir>` は判別した配置ディレクトリに置き換える。
 
      ```markdown
      ## coff
-     - `<dir>` 配下の coff 成果物（skills など）は手で編集しない。変更は `.coff/src/` のソースを編集し、coff-compile skill でビルドする<build>。
+     - `<dir>` 配下の coff 成果物（skills など）は手で編集しない。変更は `.coff/src/` のソースを編集し、coff-compile skill でビルドする。
      - issue 運用の入口は coff-issue-create skill。流れは create → polish → 実装 → done。一覧は coff-issue-list skill。
      ```
 5. 報告: 判別した agent、導入したスキル、初期化の結果を報告する。あわせて issue 運用の流れ（create → polish → 実装 → done）と、自作スキルをソース管理するなら `.coff/src/` 規約と coff-compile skill が使えることを短く案内する。
