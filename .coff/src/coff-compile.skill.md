@@ -36,7 +36,7 @@ lint:
 - `--agent <name>`: agent 名から `--out` と `--ref` を決めるプリセット（後述の表）。複数指定は各プリセットの出力を合算する。明示の `--out` / `--ref` と同時に指定されたらエラーとして中断する。
 - `<path|name> [<path|name> ...]`: 指定したソースだけを処理する。フルパス `.coff/src/foo.skill.md` や `.coff/src/foo.outputstyle.md`、ベース名 `foo`、ファイル名 `foo.skill.md` のいずれでも受け付ける。指定がなければ全 glob を対象にする。ベース名 `foo` が複数の種別に一致する場合（`foo.skill.md` と `foo.outputstyle.md` が両方ある等）は曖昧として報告し、フルパスかファイル名での指定を求める。
 
-例（skill の呼び出し記法は agent ごとに違うので、引数だけ示す）:
+例:
 - `--lint-only` — 全件 lint のみ（md5 一致のものはスキップ）。
 - `--force` — md5 を無視して全件再ビルド。
 - `foo` — foo だけ lint+compile。

@@ -31,16 +31,17 @@ claude 固有の種別（output style / agent 型）、coff repo 内でしか使
 - 呼び出しは記法を書かず「<name> skill を実行する」と書く。ユーザー向けの例示は引数だけを示し、接頭辞が agent 依存であることを一言添える。
 - agent 固有のツール名は書かず、機能で書く。
 - coff-init は実行中の agent を自身の配置場所で判別する（`.claude/skills/coff-init` なら claude-code、`.agents/skills/coff-init` なら codex）。導入の `--agent`、規約ファイル（CLAUDE.md / AGENTS.md）、規約文中の skill ディレクトリをそれに合わせる。規約文のビルド指示は codex なら `--out .agents` にする（coff-compile の codex プリセットは `.claude/` の正本への参照 stub で、codex 単独では成立しない）。
-- coff-issue-list は `!` フェンスを残し、展開されていなければ引数を置き換えて自分で実行する一文を足す。
+- coff-issue-list は claude 固有の `!` フェンスをやめ、普通の bash ブロックと「実行して出力を提示する」の一文にする。どの agent でも同じ手順で動き、claude では Bash 呼び出しが 1 回増える。
 - サブエージェントの語は残す。「fork ではない」は「会話を継承しない」に言い換え、codex-delegate 参照は「導入されている場合のみ」に統一する。
 - テストは `test/static.sh` と `test/e2e.sh` の 2 本。static は配布物を両 agent の配置に `--from-local` で導入し、参照解決と禁止パターンを検査する。e2e は両 CLI を非対話で起動し、相対参照を辿る coff-issue-done が完走することを見る。
 
-却下した案: 全 skill を `.agents/skills/` に一本化する（Claude Code 2.1.272 は `.agents/` を発見しない）。環境変数で agent を判別する（codex にセッションを識別する安定した変数が無い）。coff-issue-list を LLM の手順に書き換える（claude で LLM を介さない設計を失う）。
+却下した案: 全 skill を `.agents/skills/` に一本化する（Claude Code 2.1.272 は `.agents/` を発見しない）。環境変数で agent を判別する（codex にセッションを識別する安定した変数が無い）。coff-issue-list の `!` フェンスを残して未展開時の注記で分岐させる（agent ごとに動き方が変わる）。
 CI への組み込みと coff repo 自身の `.agents/` ビルドは対象外とし、必要なら別 issue にする。
 
 ## 決めたこと
 
 - テストは静的検査スクリプトと両 CLI の E2E の両方を作る
+- coff-issue-list は注記で分岐させず、どちらの agent でも同じ形式で動く bash ブロックにする
 
 ## 完了条件
 
@@ -59,7 +60,7 @@ CI への組み込みと coff repo 自身の `.agents/` ビルドは対象外と
 - `.coff/src/coff-detail-issue.skill.md`：先頭コメントと「直接呼び出し」節の `.claude/...` と `/coff-detail-issue` を記法非依存に。
 - `.coff/src/coff-issue-create.skill.md` / `coff-issue-polish.skill.md` / `coff-issue-done.skill.md`：手順 1 の参照を `../coff-detail-issue/SKILL.md` へ。polish は「fork」但し書きと codex-delegate 参照の条件付け。
 - `.coff/src/coff-compile.skill.md`：`AskUserQuestion` / `multiSelect` を機能記述へ。例示を引数だけにして接頭辞の注記。description の `.claude/` を「既定の配置先」へ。
-- `.coff/src/coff-issue-list.skill.md`：埋め込み未展開時の指示を 1 文追加。
+- `.coff/src/coff-issue-list.skill.md`：`!` フェンスを bash ブロックに変え、実行指示を 1 文追加。
 - `.coff/src/coff-init.skill.md`：配置場所による agent 判別、`--agent` の可変化、規約ファイルの選択、規約文と出口基準の `.claude/` と `/coff-compile` を記法非依存へ。規約文のビルド指示は claude-code なら既定出力、codex なら `--out .agents`（実体出力）。兄弟導入にネットワークが要る旨を注記。
 - `README.md`：codex 向け導入コマンド（`--agent codex`、`$coff-init`）とテストの実行方法。
 - `test/static.sh`（新規）、`test/e2e.sh`（新規）。
@@ -77,7 +78,7 @@ CI への組み込みと coff repo 自身の `.agents/` ビルドは対象外と
 1. `test/static.sh` を実行し PASS を見る（検査内容はスクリプト冒頭のコメント）。
 2. 同じスクリプトの禁止パターン検査で確認する。
 3. coff-init 本文の導入コマンドを `--from-local <repo>` に差し替えた一時コピーを、両 agent の一時 repo に置き、各 CLI で coff-init を実行する。兄弟 skill が同じ配置に揃い、claude-code では CLAUDE.md、codex では AGENTS.md に coff 節が 1 回だけ入ることを見る（再実行で重複しないことも見る）。`--from-local` ならネットワークは要らないが、codex は `.agents/` への書き込みのため `--sandbox danger-full-access` で実行する。
-4. 一時 repo に issue を 1 件置き、各 CLI で coff-issue-list を `done` 引数で実行して 0 件が返ることを見る。claude は自然文で skill を指名する。
+4. 一時 repo に issue を 1 件置き、各 CLI で coff-issue-list を `done` 引数で実行して 0 件が返ることを見る。
 5. 変更前の配布物（変更前のコミットの worktree に `test/static.sh` をコピーして実行）で失敗し、ブランチで成功することを見る。
 6. `test/e2e.sh` を実行し、両 agent が PASS になることを見る。
 7. README を目視する。
