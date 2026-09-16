@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 ---
 # coff スキルの claude 前提を外し、claude と codex の両方で動くことを検証するテストを加える
 
