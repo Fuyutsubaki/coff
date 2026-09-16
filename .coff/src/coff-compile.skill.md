@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
+description: coff のソース (`.coff/src/`) を agent の配置先（既定 `.claude/`）の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
 license: MIT
 coff-dist: true
 ---
@@ -37,11 +37,11 @@ lint:
 - `<path|name> [<path|name> ...]`: 指定したソースだけを処理する。フルパス `.coff/src/foo.skill.md` や `.coff/src/foo.outputstyle.md`、ベース名 `foo`、ファイル名 `foo.skill.md` のいずれでも受け付ける。指定がなければ全 glob を対象にする。ベース名 `foo` が複数の種別に一致する場合（`foo.skill.md` と `foo.outputstyle.md` が両方ある等）は曖昧として報告し、フルパスかファイル名での指定を求める。
 
 例:
-- `/coff-compile --lint-only` — 全件 lint のみ（md5 一致のものはスキップ）。
-- `/coff-compile --force` — md5 を無視して全件再ビルド。
-- `/coff-compile foo` — foo だけ lint+compile。
-- `/coff-compile my-style` — my-style の output style だけビルド。
-- `/coff-compile --agent codex` — codex 向けの参照 stub を `.agents/skills/` に出力。
+- `--lint-only` — 全件 lint のみ（md5 一致のものはスキップ）。
+- `--force` — md5 を無視して全件再ビルド。
+- `foo` — foo だけ lint+compile。
+- `my-style` — my-style の output style だけビルド。
+- `--agent codex` — codex 向けの参照 stub を `.agents/skills/` に出力。
 
 ## agent プリセットと参照出力
 
@@ -121,10 +121,10 @@ echo $verdict
 
 ## 3. 対話による承認
 
-候補があれば、`AskUserQuestion` の `multiSelect=true` で一度に提示する。
+候補があれば、複数選択できる問い合わせで一度に提示する（選択式の質問ツールがあればそれを使い、なければ番号付き一覧で聞く）。
 
 - 候補はファイル単位でまとめ、各ラベルに「該当行、引用、適用方法、推奨、適用後のプレビュー」を含める。
-- 推奨はラベルの先頭タグで示す。推奨される候補は `[推奨]`、ユーザー判断が必要な候補は `[要判断]`。 <!-- AskUserQuestion に事前選択がないため -->
+- 推奨はラベルの先頭タグで示す。推奨される候補は `[推奨]`、ユーザー判断が必要な候補は `[要判断]`。 <!-- 質問ツールに事前選択がないため -->
 - ユーザーが選んだものだけソースに反映する。
 
 反映の仕方:

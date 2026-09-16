@@ -6,12 +6,12 @@ coff-dist: true
 ---
 
 <!--
-issue 関連の共通事項の唯一の参照元。coff には skill 間の include がないため、共通事項はここに集約し、coff-issue-create / coff-issue-polish / coff-issue-done は実行時に `.claude/skills/coff-detail-issue/SKILL.md` を読み込んでこれを参照する（coff-issue-list は埋め込みコマンドだけで、何も読まない）。重複は各 skill に書かない。
+issue 関連の共通事項の唯一の参照元。coff には skill 間の include がないため、共通事項はここに集約し、coff-issue-create / coff-issue-polish / coff-issue-done は実行時に、自身と同じ skills ディレクトリにある `coff-detail-issue/SKILL.md` を相対パスで読み込んでこれを参照する（coff-issue-list は埋め込みコマンドだけで、何も読まない）。重複は各 skill に書かない。
 -->
 
 ## 直接呼び出し時の動作
 
-`/coff-detail-issue` が直接呼ばれたときは、以下の各節（目的、保存先と命名、状態、言語、問題空間と解決空間、テンプレート、品質基準）を提示するだけにとどめる。issue の生成も編集もしない（生成は coff-issue-create、磨き込みは coff-issue-polish の役目）。
+coff-detail-issue skill が直接呼ばれたときは、以下の各節（目的、保存先と命名、状態、言語、問題空間と解決空間、テンプレート、品質基準）を提示するだけにとどめる。issue の生成も編集もしない（生成は coff-issue-create、磨き込みは coff-issue-polish の役目）。
 
 ## 目的
 

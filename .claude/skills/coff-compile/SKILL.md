@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` / `--ref` / `--agent` add destination override, reference stubs, and per-agent output.
+description: Build coff sources (`.coff/src/`) into runtime artifacts under the agent's location (default `.claude/`). `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` / `--ref` / `--agent` add destination override, reference stubs, and per-agent output.
 license: MIT
 ---
 
@@ -25,12 +25,12 @@ Args (any order, combinable):
 - `--agent <name>`: preset that derives `--out` and `--ref` from the agent name (table below). Multiple `--agent` flags aggregate each preset's outputs. Combining with explicit `--out` / `--ref` is an error; abort.
 - `<path|name> [<path|name> ...]`: process only the specified sources. Accepts full path `.coff/src/foo.skill.md` or `.coff/src/foo.outputstyle.md`, bare name `foo`, or filename `foo.skill.md`. No args = all globs. If a bare name `foo` matches more than one source type (e.g. both `foo.skill.md` and `foo.outputstyle.md` exist), report it as ambiguous and require a full path or filename.
 
-Examples:
-- `/coff-compile --lint-only` — lint only (md5-matched files skipped).
-- `/coff-compile --force` — rebuild all, ignoring md5.
-- `/coff-compile foo` — lint+compile only `foo`.
-- `/coff-compile my-style` — build only the my-style output style.
-- `/coff-compile --agent codex` — write codex reference stubs under `.agents/skills/`.
+Examples (skill invocation syntax differs per agent, so only the arguments are shown):
+- `--lint-only` — lint only (md5-matched files skipped).
+- `--force` — rebuild all, ignoring md5.
+- `foo` — lint+compile only `foo`.
+- `my-style` — build only the my-style output style.
+- `--agent codex` — write codex reference stubs under `.agents/skills/`.
 
 ## Agent presets and reference output
 
@@ -108,7 +108,7 @@ Exception: frontmatter `description` is checked separately. For a skill source, 
 
 ## 3. Interactive approval
 
-If candidates exist, present them in a batch via `AskUserQuestion` with `multiSelect=true`.
+If candidates exist, present them in one multi-select prompt (use a selection-style question tool if available; otherwise ask with a numbered list).
 
 - Group candidates by file. Each option label includes the target line, quoted text, action, recommendation, and post-apply preview.
 - Mark the recommendation with a leading tag in the label. Use `[推奨]` for recommended candidates and `[要判断]` for those needing user judgment.
@@ -171,4 +171,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"1497ce715eac28ee5775bb1e1368313c"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"86b31d758b3c0c521026627039713a24"} -->

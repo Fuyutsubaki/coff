@@ -5,9 +5,9 @@ license: MIT
 allowed-tools: Bash(awk *)
 ---
 
-Listing of `issue/`. Present it as is.
+Listing of `issue/`. Run the following command and present its output as is. `$ARGUMENTS` is the given argument (empty if none).
 
-```!
+```bash
 awk -v want="$ARGUMENTS" '
 BEGIN {
   if (want == "") want = "open"
@@ -30,4 +30,4 @@ t == "" && /^# / { t = substr($(0), 3) }
 END { if (want == "open" || want == "done" || want == "all") { flush(); printf "\n%d 件\n", n } }
 ' $(ls issue/*/*/*.md 2>/dev/null || echo /dev/null)
 ```
-<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"29a01055fb5b825ffc2f1ae6b6cd6715"} -->
+<!--{"src":".coff/src/coff-issue-list.skill.md","md5":"a208b48dd7f2e1667279925d702cf0c5"} -->

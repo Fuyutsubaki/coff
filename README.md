@@ -7,12 +7,23 @@ skill as a code/token save/care giver
 GitHub CLI の agent skills 対応版（`gh skill` が使えること）が前提。
 
 ```bash
-gh skill install Fuyutsubaki/coff coff-init --agent claude-code
+gh skill install Fuyutsubaki/coff coff-init --agent claude-code   # Claude Code
+gh skill install Fuyutsubaki/coff coff-init --agent codex         # Codex
 ```
 
-導入先のリポジトリで Claude Code から `/coff-init` を実行すると、残りの coff スキルの一括導入と issue 運用の初期化が行われる。
+導入先のリポジトリで coff-init skill を実行すると（Claude Code は `/coff-init`、Codex は `$coff-init`）、残りの coff スキルの一括導入と issue 運用の初期化が行われる。
+Codex は既定のサンドボックスが `.agents/` に書き込めないため、兄弟スキルの導入は承認して通すか `--sandbox danger-full-access` で実行する。
 
 個別に選んで入れる場合は、対話選択の `gh skill install Fuyutsubaki/coff` も使える。
+
+## テスト
+
+`gh skill install --from-local` が使える gh（2.95.0 で確認）が前提。
+
+```bash
+test/static.sh   # 配布物を一時 repo の両 agent 配置に導入し、相互参照の解決と claude 固有の記述の不在を検査する
+test/e2e.sh      # claude と codex を非対話で起動し、coff-issue-done が完走することを確認する（両 CLI の認証が要る）
+```
 
 ## ライセンス
 
