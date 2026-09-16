@@ -78,7 +78,7 @@ user scope に配置されていても、出力ルートはカレントリポジ
   <!--{"src":".coff/src/<name>.skill.md","md5":"<src md5>"} -->
   ```
 
-- ビルド順は実体 → 参照とする。
+- ビルド順は実体 → 参照とする。同じ実行で両方を出すときも、実体をすべて書き終えてから参照を書く。
 - 参照を書くとき `<current-root>` の正本が存在しないか、それ自体が参照 stub ならエラーとして報告する。 <!-- 参照だけを書いて、どこにも実体のない相互参照を作らないため -->
 
 ## 1. 対象ファイルの選定
@@ -101,17 +101,19 @@ verdict=skip
 for dst in "${!dsts[@]}"; do
   dst_md5=$(tail -n 1 "$dst" 2>/dev/null | grep -oP '"md5":"\K[a-f0-9]{32}')
   [ "$src_md5" = "$dst_md5" ] || verdict=build
+  # frontmatter を閉じた後の最初の非空行。本文が stub かどうかはこの 1 行で決まる
+  head_line=$(awk 'NR>1 && /^---$/ {f=1; next} f && NF {print; exit}' "$dst" 2>/dev/null)
   if [ "${dsts[$dst]}" = ref ]; then
     canonical=$(realpath -m --relative-to="$(dirname "$dst")" "$current_root/skills/$name/SKILL.md")
-    grep -qxF "${ref_prefix}${canonical}\`." "$dst" 2>/dev/null || verdict=build
+    [ "$head_line" = "${ref_prefix}${canonical}\`." ] || verdict=build
   else
-    grep -qF "$ref_prefix" "$dst" 2>/dev/null && verdict=build
+    case "$head_line" in "$ref_prefix"*) verdict=build ;; esac
   fi
 done
 echo $verdict
 ```
 
-スキップは全出力先の md5 が一致し、参照先では期待する参照行が文字列一致し、実体の出力先では参照行の形がないときに限る。 <!-- 実体と参照、または参照先だけが違う stub はソースが同じなら md5 も同じになるため -->
+スキップは全出力先の md5 が一致し、参照先では本文 1 行目が期待する参照行と文字列一致し、実体の出力先では本文 1 行目が参照行の形でないときに限る。 <!-- 実体と参照、または参照先だけが違う stub はソースが同じなら md5 も同じになるため。判定を本文 1 行目に限るのは、stub の定型句を例示として含む skill が常に再ビルドになるのを避けるため -->
 
 `--out` / `--agent` があるときも、参照出力を含む全出力先を `dsts` に加え、同じフッタ規則と配置モードの規則で skip を判定する。
 
@@ -186,10 +188,13 @@ c. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブ�
 d. **出力を書き、フッタを付ける。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。プレーンな markdown なので末尾の HTML コメントは無害で、スキップ判定にも使う。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。`$content` は、その出力先の配置モードが実体なら本文、参照なら stub の本文（いずれもフッタ手前まで）。
 
    ```bash
-   for dst in "${!dsts[@]}"; do
-     mkdir -p "$(dirname "$dst")"
-     content=$(build_content "${dsts[$dst]}" "$dst")   # body なら本文、ref なら stub の本文
-     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
+   for mode in body ref; do   # 連想配列の走査順は不定なので、実体を先に書き切ってから参照を書く
+     for dst in "${!dsts[@]}"; do
+       [ "${dsts[$dst]}" = "$mode" ] || continue
+       mkdir -p "$(dirname "$dst")"
+       content=$(build_content "$mode" "$dst")   # body なら本文、ref なら stub の本文
+       printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
+     done
    done
    ```
 

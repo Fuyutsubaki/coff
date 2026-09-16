@@ -65,7 +65,7 @@ Even when installed at user scope, the output root is directly under the current
   <!--{"src":".coff/src/<name>.skill.md","md5":"<src md5>"} -->
   ```
 
-- Build order is bodies → references.
+- Build order is bodies → references. When one run emits both, finish writing every body before writing any reference.
 - When writing a reference, report an error if the canonical file under `<current-root>` is missing or is itself a reference stub.
 
 ## 1. Identify build targets
@@ -88,17 +88,19 @@ verdict=skip
 for dst in "${!dsts[@]}"; do
   dst_md5=$(tail -n 1 "$dst" 2>/dev/null | grep -oP '"md5":"\K[a-f0-9]{32}')
   [ "$src_md5" = "$dst_md5" ] || verdict=build
+  # first non-blank line after the closing frontmatter; this single line decides stub or body
+  head_line=$(awk 'NR>1 && /^---$/ {f=1; next} f && NF {print; exit}' "$dst" 2>/dev/null)
   if [ "${dsts[$dst]}" = ref ]; then
     canonical=$(realpath -m --relative-to="$(dirname "$dst")" "$current_root/skills/$name/SKILL.md")
-    grep -qxF "${ref_prefix}${canonical}\`." "$dst" 2>/dev/null || verdict=build
+    [ "$head_line" = "${ref_prefix}${canonical}\`." ] || verdict=build
   else
-    grep -qF "$ref_prefix" "$dst" 2>/dev/null && verdict=build
+    case "$head_line" in "$ref_prefix"*) verdict=build ;; esac
   fi
 done
 echo $verdict
 ```
 
-Skip only when every output's md5 matches, each reference output matches its expected reference line exactly, and no body output carries a reference line.
+Skip only when every output's md5 matches, each reference output's first body line matches its expected reference line exactly, and no body output's first body line has the reference form.
 
 With `--out` / `--agent`, every output including reference ones joins `dsts`, and skip detection applies the same footer and placement-mode rules to all of them.
 
@@ -173,10 +175,13 @@ c. **Preserve frontmatter structure.** The leading `---` … `---` block must re
 d. **Write the output and append the footer.** Footer goes on the last line, after the body, outside any code block. Output-style files also get the footer; it is a plain markdown file, so the trailing HTML comment is harmless and is also used for skip detection. For reference-mode outputs, write the stub from "Agent presets and reference output" instead of the body. `$content` is the body when that output's placement mode is body, or the stub content when it is a reference (both up to the footer).
 
    ```bash
-   for dst in "${!dsts[@]}"; do
-     mkdir -p "$(dirname "$dst")"
-     content=$(build_content "${dsts[$dst]}" "$dst")   # body -> compiled body, ref -> stub content
-     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
+   for mode in body ref; do   # associative array order is undefined, so write all bodies before any reference
+     for dst in "${!dsts[@]}"; do
+       [ "${dsts[$dst]}" = "$mode" ] || continue
+       mkdir -p "$(dirname "$dst")"
+       content=$(build_content "$mode" "$dst")   # body -> compiled body, ref -> stub content
+       printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
+     done
    done
    ```
 
@@ -194,4 +199,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"758919da2d63edaf1d7d4bec1e1b304d"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"e469db372f7f9803b563befa0ac08fcf"} -->

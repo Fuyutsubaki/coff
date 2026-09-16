@@ -83,7 +83,7 @@ codex 以外の agent への対応は扱わない。
 ### 完了条件の確認手段
 
 1. 一時 repo（git init 済み）に lint 候補の出ない最小の `.coff/src/foo.skill.md` を 1 件置き、作業ツリーの coff-compile を `gh skill install --from-local <repo> coff-compile --agent <agent> --scope project` で両 agent の配置に導入する。同じ repo で各 CLI から coff-compile を引数なしで実行し、claude-code では `.claude/skills/foo/SKILL.md`、codex では `.agents/skills/foo/SKILL.md` に本文付きの実体が出ることを見る。codex は上記サンドボックスの制約があるので `--sandbox danger-full-access` で実行する。
-2. 同じ repo で claude-code から `--agent codex` を、続けて codex から `--agent claude-code` を実行する。それぞれ出た stub の参照行が実行中 agent のルートを指し、そのパスが stub のディレクトリから `test -e` で解決することを見る。
+2. 同じ repo で claude-code から `--agent codex` を実行する。次に codex から引数なしで実行して `.agents/` を実体に戻したうえで、codex から `--agent claude-code` を実行する（正本が stub のままでは参照出力がエラーになる）。それぞれ出た stub の参照行が実行中 agent のルートを指し、そのパスが stub のディレクトリから `test -e` で解決することを見る。
 3. 手順 2 の 1 つ目の実行を見る。`.agents/skills/foo/SKILL.md` は手順 1 で実体になっていて md5 も一致しているのに skip されず、レポートに `compiled` が出て本文が stub に置き換わっていることを確かめる。
 4. `grep -n '\.claude' .coff/src/coff-compile.skill.md` を実行し、既定の出力ルートを `.claude/` と書いている行が無いことを見る。残ってよいのは agent 判別規則・プリセット表の claude-code 行・claude 固有種別の置き場の 3 種のみ。
 5. coff-init 本文の規約節テンプレートを読み、`<build>` の置換指示とプレースホルダが消えていること、残った文面が手順 1 で成立した引数なしのビルドを指していることを見る。
