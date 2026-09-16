@@ -1,32 +1,31 @@
 #!/usr/bin/env bash
-# E2E: run coff-issue-done non-interactively through claude and codex, each in
-# its own layout, and check that it follows the relative reference to
-# coff-detail-issue and flips the fixture issue to `status: done`.
-# Requires both CLIs to be installed and authenticated.
+# E2E: claude と codex をそれぞれの配置で非対話に起動して coff-issue-done を実行し、
+# coff-detail-issue への相対参照を辿って fixture issue を `status: done` にすることを確かめる。
+# 両 CLI が導入・認証済みであることが前提。
 set -uo pipefail
-for c in gh claude codex; do command -v "$c" >/dev/null || { echo "missing: $c"; exit 2; }; done
+for c in gh claude codex; do command -v "$c" >/dev/null || { echo "$c が見つからない"; exit 2; }; done
 root=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 fail=0
-trap '[ "$fail" = 0 ] && rm -rf "$tmp"' EXIT   # keep the logs on failure
+trap '[ "$fail" = 0 ] && rm -rf "$tmp"' EXIT   # 失敗時はログを残す
 fixture=issue/2026/01/0101-fixture.md
 
-setup() { # $1 = agent
+setup() { # $1 = agent 名
   local d="$tmp/$1" ok=1
   mkdir -p "$d/$(dirname "$fixture")" && git -C "$d" init -q
   for n in coff-detail-issue coff-issue-done; do
     (cd "$d" && gh skill install --from-local "$root" "$n" --agent "$1" --scope project >/dev/null 2>&1) \
-      || { echo "FAIL: [$1] install $n"; fail=1; ok=0; }
+      || { echo "FAIL: [$1] $n の導入に失敗"; fail=1; ok=0; }
   done
   printf -- '---\nstatus: open\n---\n# e2e fixture\n' > "$d/$fixture"
   [ "$ok" = 1 ]
 }
 
-check() { # $1 = agent
+check() { # $1 = agent 名
   if head -3 "$tmp/$1/$fixture" | grep -q '^status: done$'; then
     echo "PASS: [$1] coff-issue-done"
   else
-    echo "FAIL: [$1] coff-issue-done (log kept: $tmp/$1.log)"; tail -20 "$tmp/$1.log"; fail=1
+    echo "FAIL: [$1] coff-issue-done（ログ: $tmp/$1.log）"; tail -20 "$tmp/$1.log"; fail=1
   fi
 }
 
@@ -36,7 +35,7 @@ if setup claude-code; then
 fi
 
 if setup codex; then
-  (cd "$tmp/codex" && codex exec --skip-git-repo-check --sandbox workspace-write "\$coff-issue-done $fixture" </dev/null >"$tmp/codex.log" 2>&1)   # codex reads stdin when it is not a TTY
+  (cd "$tmp/codex" && codex exec --skip-git-repo-check --sandbox workspace-write "\$coff-issue-done $fixture" </dev/null >"$tmp/codex.log" 2>&1)   # codex は stdin が端末でないと入力を待つので閉じる
   check codex
 fi
 
