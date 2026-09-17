@@ -243,6 +243,7 @@ sub _effect {
     my ($kind, $topic, $input, $code) = @_;
     die "effect called outside a workflow\n" unless $CURRENT;
     my $index = $CURRENT->{cursor}++;
+    $input = _snapshot($input);
     my $hash = md5_hex(_encode({ kind => $kind, topic => $topic, input => $input }));
     my $journal = $CURRENT->{journal};
     my $effect = $journal->{effects}[$index];
@@ -267,14 +268,14 @@ sub _effect {
     }
 
     if ($kind eq 'step') {
-        return $effect->{result} if exists $effect->{result};
+        return _snapshot($effect->{result}) if exists $effect->{result};
         my $result = $code->();
-        $effect->{result} = $result;
+        $effect->{result} = _snapshot($result);
         _write_json(_journal_path($CURRENT->{run_dir}), $journal);
-        return $result;
+        return _snapshot($effect->{result});
     }
 
-    return $effect->{answer} if exists $effect->{answer};
+    return _snapshot($effect->{answer}) if exists $effect->{answer};
     $journal->{pending} = $index;
     _write_json(_journal_path($CURRENT->{run_dir}), $journal);
     die bless({ payload => _ask_payload($journal, $effect) }, 'Coff::Workflow::Suspend');
@@ -500,6 +501,13 @@ sub _non_deterministic {
 }
 
 sub _encode { return $JSON->encode($_[0]) }
+
+# journal に入れる値と workflow に返す値を切り離す。同じ参照を共有すると、workflow 側の書き換えが記録に混ざり、replay の入力ハッシュが変わる。
+sub _snapshot {
+    my ($value) = @_;
+    return $value unless ref $value;
+    return $JSON->decode(_encode($value));
+}
 
 sub _bytes {
     my ($content) = @_;

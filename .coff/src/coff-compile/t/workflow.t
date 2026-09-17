@@ -161,6 +161,40 @@ is(read_file($skill_path), "new skill\n", 'valid publish replaces SKILL.md');
 is(read_file($perl_path), "use strict;\n1;\n", 'valid publish replaces the script');
 is(read_file($module_path), "new module\n", 'valid publish replaces the bundle');
 
+# step の結果を workflow が書き換えても、journal の記録は変わらない
+my $aliasing_script = File::Spec->catfile($tmp, 'aliasing.pl');
+{
+    my $quoted_lib = $lib;
+    $quoted_lib =~ s/(['\\])/\\$1/g;
+    write_file($aliasing_script, <<"PERL");
+use strict;
+use warnings;
+use lib '$quoted_lib';
+use Coff::Workflow qw(run_workflow llm step);
+exit run_workflow(
+    name => 'sample',
+    script => \$0,
+    workflow => sub {
+        my \$plan = step { { content => 'first' } } 'plan', {};
+        my \$first = llm('judge', { content => \$plan->{content} });
+        \$plan->{content} = 'mutated';
+        my \$second = llm('judge-again', { n => 1 });
+        return { value => "\$first:\$second" };
+    },
+);
+# <!--{"src":"sample","md5":"${\ ('c' x 32) }"} -->
+PERL
+}
+$script = $aliasing_script;
+($status, $stdout, $stderr) = run_script('start');
+is($status, 0, 'aliasing workflow starts');
+my $aliasing_run = decode_line($stdout)->{run};
+($status, $stdout, $stderr) = run_script_with_input('a', 'resume', $aliasing_run, 1);
+is($status, 0, 'first resume passes the mutation');
+($status, $stdout, $stderr) = run_script_with_input('b', 'resume', $aliasing_run, 2);
+is($status, 0, 'replay after the mutation is still deterministic') or diag($stderr);
+is(decode_line($stdout)->{report}{value}, 'a:b', 'mutated step result does not leak into the journal');
+
 done_testing();
 
 sub write_script {
