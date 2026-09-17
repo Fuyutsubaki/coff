@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
+use utf8;
 use 5.030;
 
 use Digest::MD5 qw(md5_hex);
@@ -828,5 +829,4 @@ sub _footer_md5 {
     return $1 if $last =~ /"md5":"([a-f0-9]{32})"/;
     return undef;
 }
-
-# <!--{"src":".coff/src/coff-compile.skill.md","md5":"b54b85c9c38f880d34fca5a109cf481e"} -->
+# <!--{"src":".coff/src/coff-compile.skill.md","md5":"1c20282ca32a5f732b2fa9189e6acdd4"} -->
