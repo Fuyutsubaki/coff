@@ -2,173 +2,55 @@
 name: coff-compile
 description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` / `--ref` / `--agent` add destination override, reference stubs, and per-agent output.
 license: MIT
+allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/coff-compile.pl *)
 ---
 
-## Inputs / Outputs
+## Run the workflow
 
-Each source type determines its output path. `<name>` is the source filename with the `.<type>.md` suffix stripped.
+Run `perl ${CLAUDE_SKILL_DIR}/scripts/coff-compile.pl start $ARGUMENTS` and read its JSON response.
 
-| Source glob | Output path |
-|---|---|
-| `.coff/src/*.skill.md` | `.claude/skills/<name>/SKILL.md` |
-| `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
-| `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
+For a response with `ask`, answer according to its `kind` and `topic`, then pass only the answer on standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/coff-compile.pl resume <run> <index>`.
+Use a single-quoted heredoc so the answer is passed verbatim.
+Repeat until the response has `done: true`.
 
-## Options
+Use `status <run>` to retrieve the unanswered question after context loss, `cancel <run>` to terminate a run, and `gc` to remove runs older than seven days.
 
-Args (any order, combinable):
+## LLM topics
 
-- `--lint-only`: run lint only and stop. The pre-compile confirmation is also skipped.
-- `--force`: ignore md5-match skip and process all targets.
-- `--out <root>`: replace the default output root `.claude`. The per-type sublayout (`skills/<name>/SKILL.md` etc.) stays the same under the new root.
-- `--ref`: use together with `--out`; write a reference stub pointing at the canonical file instead of a copy of the compiled body. `--ref` without `--out` is an error; abort.
-- `--agent <name>`: preset that derives `--out` and `--ref` from the agent name (table below). Multiple `--agent` flags aggregate each preset's outputs. Combining with explicit `--out` / `--ref` is an error; abort.
-- `<path|name> [<path|name> ...]`: process only the specified sources. Accepts full path `.coff/src/foo.skill.md` or `.coff/src/foo.outputstyle.md`, bare name `foo`, or filename `foo.skill.md`. No args = all globs. If a bare name `foo` matches more than one source type (e.g. both `foo.skill.md` and `foo.outputstyle.md` exist), report it as ambiguous and require a full path or filename.
+For `lint-candidates`, inspect the supplied source conservatively.
+Return a JSON array whose entries contain `start`, `end`, `replacement`, and `label`.
+Use one-based inclusive line numbers, ascending non-overlapping ranges, and `[]` when there are no candidates.
+The label must include the affected lines, quotation, action, recommendation (`[推奨]` or `[要判断]`), and resulting preview.
 
-Examples:
-- `/coff-compile --lint-only` — lint only (md5-matched files skipped).
-- `/coff-compile --force` — rebuild all, ignoring md5.
-- `/coff-compile foo` — lint+compile only `foo`.
-- `/coff-compile my-style` — build only the my-style output style.
-- `/coff-compile --agent codex` — write codex reference stubs under `.agents/skills/`.
+Flag design rationale and reader-facing notes for HTML-comment wrapping, repeated wording and redundant condition restatements for deletion, and duplicated structure or excessive examples for concise replacement.
+Exclude existing HTML comments, frontmatter, fenced code, and inline code.
+Check frontmatter `description` separately: keep only what the artifact does and how or when the user invokes it.
+Only propose a change when removing it from the compiled artifact still leaves enough instruction to complete the task.
 
-## Agent presets and reference output
+For `dullmify-perl`, return a complete Perl program beginning with `#!/usr/bin/env perl`, without a Markdown fence or generated footer.
+Preserve the supplied existing program and change only what the source requires.
+Use Perl 5.30 syntax and core modules, locate `lib/` with `FindBin`, and use `Coff::Workflow` exports `run_workflow`, `llm`, `user`, `step`, and `publish_files`.
+Keep all side effects inside `step`, avoid clocks and randomness, iterate hash keys in sorted order, and never wrap an effect call in `eval`.
+Use `llm` only for textual judgment or code generation and `user` only for questions that require the user's decision.
 
-For agent placement, the real body (the canonical copy) lives in exactly one place in the repository; other agents get a reference stub.
+For `dullmify-skill`, return only the thin skill body in the source language, without frontmatter, a footer, or fenced code.
+Keep the start/resume loop, the topic-specific judgment rules the LLM needs, user-question handling, terminal reporting, and the `status`, `cancel`, and `gc` commands.
+Do not restate deterministic workflow control.
 
-| agent | Output root | Placement mode | Source types |
-|---|---|---|---|
-| `claude-code` (default) | `.claude/` | body | skill / outputstyle / agent |
-| `codex` | `.agents/` | reference | skill only |
+For `translate`, return the complete supplied document in concise English.
+Translate prose, headings, lists, and the frontmatter `description`.
+Preserve quoted literals used for matching or verbatim output, identifiers, paths, flags, regular expressions, command arguments, fenced and inline code, frontmatter keys and identifier values, proper nouns, UI strings, and error messages byte-for-byte.
+When uncertain, preserve the original.
 
-- Claude-code-specific types (outputstyle / agent) are out of scope when building for other agents; leave them out of the report as well.
-- A reference stub carries the same frontmatter as the canonical output (after `coff-*` key removal); its body is a single line with the relative path to the canonical file. It gets a footer under the same rule.
+## User topics
 
-  ```markdown
-  ---
-  name: <name>
-  description: <正本と同一>
-  ---
+For `lint-approval`, call AskUserQuestion once with `multiSelect=true` and the supplied candidate labels.
+Return a JSON array containing the zero-based indexes of the selected candidates.
 
-  This file is a reference. Read and follow `../../../.claude/skills/<name>/SKILL.md`.
-  <!--{"src":".coff/src/<name>.skill.md","md5":"<src md5>"} -->
-  ```
+For `compile-confirmation`, show the supplied message with AskUserQuestion and return `yes` only when the user approves; otherwise return `no`.
 
-- Build order is canonical → references. When writing a reference, if the canonical file does not exist, report it as an error.
+## Completion
 
-## 1. Identify build targets
-
-Determine the type from the source extension and derive the output path set `dsts`.
-
-```bash
-case "$src" in
-  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md" ;;
-  *.outputstyle.md) name=$(basename "$src" .outputstyle.md); dsts=".claude/output-styles/$name.md" ;;
-  *.agent.md)       name=$(basename "$src" .agent.md);       dsts=".claude/agents/$name.md" ;;
-  *) echo "unknown source type: $src"; continue ;;
-esac
-src_md5=$(md5sum "$src" | cut -d' ' -f1)
-verdict=skip
-for dst in $dsts; do
-  dst_md5=$(tail -n 1 "$dst" 2>/dev/null | grep -oP '"md5":"\K[a-f0-9]{32}')
-  [ "$src_md5" = "$dst_md5" ] || verdict=build
-done
-echo $verdict
-```
-
-Skip only when every output's md5 matches.
-
-With `--out` / `--agent`, apply the root replacement and reference additions to this derivation. Reference outputs also join `dsts`; skip detection applies the same footer rule to every output.
-
-Empty sources are reported as errors; continue to the next file.
-
-## 2. Lint
-
-For each selected source, detect the following patterns.
-
-| Candidate | Action | Recommended |
-|---|---|---|
-| Design rationale or big-picture explanation (WHY) | wrap in `<!-- -->` | ON |
-| Reader-facing notes (e.g. "do not hand-edit") | wrap in `<!-- -->` | ON |
-| Sentences that say the same thing with different wording (especially "positive X. negative X." pairs) | delete the latter | ON |
-| Redundant restatement of a condition, or Yes/No enumeration ("Yes→A / No→B" list, or "X then Y. not X then not Y." pattern) | delete the redundant side | ON |
-| Same content duplicated (frontmatter `description` ⇄ opening paragraph, etc.) | delete or merge | OFF |
-| H1 heading ⇄ frontmatter `name` duplication | delete | OFF |
-| Frontmatter `description` is verbose | shorten | OFF |
-| Structural duplication (a high-level summary section and detailed sections both describe the same procedure) | delete the summary | OFF |
-| Redundant examples (a generalization rule followed by an exhaustive enumeration of combinations — e.g. listing every combination after stating `combinable`) | trim to 2-3 representative examples | OFF |
-
-Heuristic: if the sentence is removed from the **compiled output**, can the executing LLM still complete the procedure? If yes, flag it as a candidate.
-
-Excluded from scope:
-- Anything already inside `<!-- -->`.
-- Inside frontmatter, fenced code blocks, or inline code spans.
-
-Exception: frontmatter `description` is checked separately. For a skill source, if it contains anything beyond WHAT and user-facing HOW (args, invocation) — internal procedure, implementation details, or WHY — flag as a shortening candidate (recommended OFF), quoting the parts to drop and proposing a shortened version. For an agent source, the `description` is what the model uses to decide whether to spawn the subagent, so treat it like a skill (anything beyond WHAT and when-to-spawn — internal procedure, implementation details, or WHY — is a shortening candidate, recommended OFF). An output-style source has no concept of args/invocation, so flag anything beyond WHAT (what the style is for) as a shortening candidate (recommended OFF).
-
-## 3. Interactive approval
-
-If candidates exist, present them in a batch via `AskUserQuestion` with `multiSelect=true`.
-
-- Group candidates by file. Each option label includes the target line, quoted text, action, recommendation, and post-apply preview.
-- Mark the recommendation with a leading tag in the label. Use `[推奨]` for recommended candidates and `[要判断]` for those needing user judgment.
-- Only items the user selects are written back to the source.
-
-Write-back:
-- Comment-out candidates: wrap the range in `<!-- ... -->`. Do not alter the wording.
-- Delete/rewrite candidates: replace with the proposed rewrite, or delete the line.
-
-If candidates don't fit in a single batch, split per-file → per-section and present sequentially.
-
-## 4. Pre-compile confirmation
-
-If lint surfaced ≥1 candidate (regardless of whether any were applied), confirm explicitly before compiling:
-
-> "Lint 完了。N 件適用、M 件却下。コンパイルしますか？"
-
-If rejected, abort. If approved, proceed to 5.
-
-## 5. Compile
-
-If lint modified the source, recompute the md5 before writing the footer. For each build target:
-
-a. **Translate Japanese to English.** Rewrite prose, headings, list items, and the frontmatter `description` value into concise English. If the source frontmatter has `coff-translate: false`, skip this step entirely (output the body and `description` untranslated).
-
-   But do not translate (preserve byte-for-byte):
-   - Quoted string literals the model uses for matching or verbatim emission. Example: in `ファイル名が "注文" から始まるファイル`, `"注文"` stays in Japanese; only the surrounding sentence is translated → `files whose name starts with "注文"`.
-   - Code identifiers, function names, file paths, CLI flags, regex patterns, command arguments.
-   - Contents of fenced code blocks (` ``` … ``` `) and inline code spans.
-   - Frontmatter keys, the `name` value, and other frontmatter values that act as identifiers.
-   - Proper nouns (product names, project names, people's names).
-   - UI strings, error messages, and any other strings the user/model must reproduce verbatim.
-
-   When in doubt, leave the original.
-
-b. **Strip HTML/markdown comments from the body.** Remove every `<!-- ... -->` block in the body. Do not strip comments inside fenced code blocks or inline code spans. Do not touch the frontmatter block.
-
-c. **Preserve frontmatter structure.** The leading `---` … `---` block must remain valid YAML frontmatter in the output. If the source has no frontmatter, abort with an error. Remove every key starting with `coff-` from the output frontmatter.
-
-d. **Write the output and append the footer.** Footer goes on the last line, after the body, outside any code block. Output-style files also get the footer; it is a plain markdown file, so the trailing HTML comment is harmless and is also used for skip detection. For reference-mode outputs, write the stub from "Agent presets and reference output" instead of the body. `$content` in the snippet is the body for a body output, or the stub content for a reference output (both up to the footer).
-
-   ```bash
-   for dst in $dsts; do
-     mkdir -p "$(dirname "$dst")"
-     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
-   done
-   ```
-
-## 6. Report
-
-Report each source as one of:
-- `compiled` (with the applied lint count if any)
-- `linted (N applied, M rejected)` — under `--lint-only`, or when the pre-compile confirmation was rejected
-- `failed: <reason>`
-
-Do not list skipped files. Do not list anything when `--lint-only` finds 0 candidates.
-
-## Rules
-
-- The source is only modified via lint approvals.
-- Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
-- Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"1497ce715eac28ee5775bb1e1368313c"} -->
+When the response has `done: true`, present each string in `report`.
+Do not report an empty list.
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"b54b85c9c38f880d34fca5a109cf481e"} -->
