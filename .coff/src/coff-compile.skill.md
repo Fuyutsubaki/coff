@@ -3,6 +3,8 @@ name: coff-compile
 description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
 license: MIT
 coff-dist: true
+coff-dullmify: true
+coff-bundle: [scripts]
 ---
 
 <!--
@@ -24,6 +26,19 @@ lint:
 | `.coff/src/*.skill.md` | `.claude/skills/<name>/SKILL.md` |
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
+
+`coff-dullmify: true` の skill 型は `SKILL.md` に加えて `scripts/<name>.pl` を出力する。
+参照出力には `scripts/` を置かない。
+
+## ビルド指示
+
+- `coff-bundle: [<dir>, ...]` は `.coff/src/<name>/<dir>/` を実体出力の `<dir>/` へ再帰的に複製する。
+  値はソースディレクトリ直下のサブディレクトリ名に限る。
+  通常ファイルとディレクトリだけを扱い、シンボリックリンクはエラーにする。
+- bundle はソース md5 による skip の有無にかかわらず同期し、既存内容と一致するファイルは書き換えない。
+- `coff-dullmify: true` は skill 型だけに指定する。
+  dullmify した実体出力には、実行中の coff-compile が持つ `scripts/lib/Coff/Workflow.pm` も複製する。
+- `coff-*` はビルド指示の名前空間であり、すべて成果物の frontmatter から除く。
 
 ## オプション
 
@@ -90,6 +105,9 @@ echo $verdict
 ```
 
 スキップは全出力先の md5 が一致するときに限る。
+`coff-dullmify: true` の実体出力では `SKILL.md` と `scripts/<name>.pl` の両方を判定する。
+`.pl` のフッタは最終行の `# <!--{"src":"<src>","md5":"<src md5>"} -->` とする。
+bundle はこの判定に含めず、毎回同期する。
 
 `--out` / `--agent` があるときは、この導出に出力ルートの置換と参照出力の追加を適用する。参照出力も `dsts` に加え、skip 判定は全出力先に同じフッタ規則で行う。
 
@@ -119,6 +137,11 @@ echo $verdict
 
 ただし frontmatter `description` だけは別にチェックする。skill ソースでは「何をするか」と「ユーザーがどう呼ぶか（引数や呼び出し方）」以外のもの（内部手順、実装詳細、WHY）が含まれていたら短縮候補（推奨 OFF）として、削るべき箇所を引用しつつ短縮案を提示する。agent ソースの `description` はモデルがサブエージェント起動を判断する材料なので skill と同じ扱い（WHAT＋いつ起動するか以外、つまり内部手順、実装詳細、WHY を短縮候補とし、推奨 OFF）。output style ソースには引数や呼び出し方の概念がないため、WHAT（何のためのスタイルか）以外を短縮候補（推奨 OFF）として扱う。
 
+`lint-candidates` の答えは JSON 配列とする。
+候補は `{start, end, replacement, label}` で表し、`start` と `end` は 1 始まりの行番号、`replacement` は承認時に範囲全体と置き換える文字列、`label` は提示文とする。
+候補なしは `[]` とする。
+範囲を昇順かつ重複なしにし、元の文字列と同じ `replacement` は返さない。
+
 ## 3. 対話による承認
 
 候補があれば、`AskUserQuestion` の `multiSelect=true` で一度に提示する。
@@ -126,6 +149,7 @@ echo $verdict
 - 候補はファイル単位でまとめ、各ラベルに「該当行、引用、適用方法、推奨、適用後のプレビュー」を含める。
 - 推奨はラベルの先頭タグで示す。推奨される候補は `[推奨]`、ユーザー判断が必要な候補は `[要判断]`。 <!-- AskUserQuestion に事前選択がないため -->
 - ユーザーが選んだものだけソースに反映する。
+- `lint-approval` の答えは承認する候補の 0 始まりの索引を JSON 配列で返す。
 
 反映の仕方:
 - コメント化候補: 該当範囲を `<!-- ... -->` で囲う。文言そのものは変えない。
@@ -145,7 +169,7 @@ lint で候補が 1 件でも提示されていれば（実際に適用したか
 
 lint がソースを書き換えた場合は、フッタを書く前に md5 を取り直す。 <!-- §1 で取った md5 は lint で書き換えると古くなる --> 各対象ファイルについて:
 
-a. **日本語を英語に訳す。** 散文・見出し・箇条書き、および frontmatter の `description` 値を簡潔な英語に書き直す。 <!-- 出力のトークン削減のため --> ソースの frontmatter に `coff-translate: false` があれば、この工程は丸ごと行わない（本文も `description` も原文のまま出力する）。 <!-- 日本語の書き方そのものが内容のスキルは、英訳すると価値が壊れるため -->
+a. **日本語を英語に訳す。** `translate` の問いへの答えとして、散文・見出し・箇条書き、および frontmatter の `description` 値を簡潔な英語に書き直した文書全体を返す。 <!-- 出力のトークン削減のため --> ソースの frontmatter に `coff-translate: false` があれば、この工程は丸ごと行わない（本文も `description` も原文のまま出力する）。 <!-- 日本語の書き方そのものが内容のスキルは、英訳すると価値が壊れるため -->
 
    ただし以下は訳さない（バイト単位でそのまま残す）:
    - モデルが照合や逐語出力に使う引用符付きリテラル。例: `ファイル名が "注文" から始まるファイル` の `"注文"` は日本語のまま。周囲の文だけを訳す → `files whose name starts with "注文"`。
@@ -157,18 +181,38 @@ a. **日本語を英語に訳す。** 散文・見出し・箇条書き、およ
 
    迷ったら原文のまま残す。
 
-b. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!-- ... -->` をすべて除去する。フェンスコードブロックやインラインコードの中にあるコメントは触らない。フロントマターも触らない。
+b. **dullmify する。** `coff-dullmify: true` のソースだけを、逐次 Perl と薄い skill に分ける。
 
-c. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-` で始まるキーは出力の frontmatter からすべて取り除く。 <!-- ビルド指示（ラッパー skill が拡張するものを含む）の名前空間であって、実行時情報ではないため -->
+   - ファイルの読み書き、計算、対象の選定、繰り返し、ファイル状態による分岐を Perl に置く。
+   - 文章を読んで判断する処理を `llm`、ユーザーへの問いを `user`、副作用を `step` に置く。
+   - `dullmify-perl` の問いには、ソース全文と既存の `scripts/<name>.pl` を渡す。
+     答えは shebang から始まる完全な Perl とし、Markdown フェンスとフッタを含めない。
+     既存コードがある場合は必要な変更に限る。
+   - `dullmify-skill` の問いにはソース全文を渡す。
+     答えは薄い skill の本文だけとし、frontmatter、フッタ、フェンスコードブロックを含めない。
+     本文には `start`、`resume <run> <index>`、`status`、`cancel`、`gc` の呼び出し、`kind: llm` の topic ごとの判断基準、`kind: user` の AskUserQuestion、`done` の報告だけを残す。
+   - 薄い skill の frontmatter は元の frontmatter から `coff-*` と既存の `allowed-tools` を除いて組み立て、`allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/<name>.pl *)` だけを加える。
+   - 薄い skill を組み立てた後で a の翻訳を適用する。
+     `coff-translate: false` の扱いも同じとする。
 
-d. **出力を書き、フッタを付ける。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。プレーンな markdown なので末尾の HTML コメントは無害で、スキップ判定にも使う。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。スニペットの `$content` は、出力先が実体なら本文、参照なら stub の本文（いずれもフッタ手前まで）。
+   生成する Perl は 5.30 以上で動く構文と core モジュールだけを使い、`FindBin` から自身の `lib/` を読み込む。
+   `Coff::Workflow` の `run_workflow`、`llm`、`user`、`step`、`publish_files` を使う。
+   副作用はすべて `step` の中に置き、時計と乱数を使わず、hash のキーは sort してから回す。
+   effect を `eval {}` で囲まない。
+   問いには判断に必要な入力と基準を指す topic だけを入れ、次の工程を答えに含めない。
 
-   ```bash
-   for dst in $dsts; do
-     mkdir -p "$(dirname "$dst")"
-     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
-   done
-   ```
+   runtime は問いを `{"run":...,"index":...,"ask":{"topic":...,"kind":"llm"|"user","input":...}}`、終了を `{"run":...,"done":true,"report":...}` として返す。
+   薄い skill は問いへの答えを標準入力で同じ `run` と `index` の `resume` に渡し、終了まで繰り返す。
+
+c. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!-- ... -->` をすべて除去する。フェンスコードブロックやインラインコードの中にあるコメントは触らない。フロントマターも触らない。
+
+d. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-` で始まるキーは出力の frontmatter からすべて取り除く。 <!-- ビルド指示（ラッパー skill が拡張するものを含む）の名前空間であって、実行時情報ではないため -->
+
+e. **全出力を検査してから書く。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。
+   dullmify した `.pl` は `perl -c` を通す。
+   1 ソースの `SKILL.md`、`.pl`、bundle をすべて同じファイルシステム上の一時ファイルへ書き、すべての検査が通った後に出力先ごとに原子的に rename する。
+   検査か rename に失敗したら `failed` とし、既存の全出力を元に戻す。
+   新規出力ならどの出力も残さない。
 
 ## 6. レポート
 
@@ -184,6 +228,12 @@ d. **出力を書き、フッタを付ける。** フッタは最終行に置き
 - ソースを書き換えるのは lint で承認されたものだけ。
 - frontmatter の `name` 値、出力パスを構成する識別子は lint でも触らない。
 - lint も compile も、途中で失敗したら中途半端な書き込みを残さない。
+- dullmify した workflow の journal は `${XDG_STATE_HOME:-$HOME/.local/state}/coff/<name>/<run>/` に置く。
+- journal は開始時の `.pl` のフッタ md5 と `Workflow.pm` の md5 を固定する。
+- effect の実行順または入力ハッシュが再生時に変わったら非決定として停止する。
+- 回答済みの索引へ同じ答えを再送したら、workflow を進めず現在の問いか終端結果を返す。
+- `done` と `cancel` は journal を削除して終端結果だけを残す。
+  `gc` は 7 日より古い run を終端結果ごと削除する。
 
 <!--
 実装メモ:
