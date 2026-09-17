@@ -106,6 +106,11 @@ sub run_dullmify {
     return ($status, $stdout, $stderr) if $status;
     my $question = $JSON->decode($stdout);
     is($question->{ask}{topic}, 'workflow', 'first dullmify question is workflow');
+    my $default_workflow = File::Spec->catfile('.claude', 'skills', 'coff-compile', 'scripts', 'workflow.pl');
+    if (!-f File::Spec->catfile($out, 'scripts', 'workflow.pl') && -f $default_workflow) {
+        like($question->{ask}{input}{existing}, qr/sub workflow/, 'existing falls back to the default artifact');
+        unlike($question->{ask}{input}{existing}, qr/\Ause utf8;/, 'existing omits the use utf8 line');
+    }
     my $run = $question->{run};
 
     ($status, $stdout, $stderr) = run_process(
