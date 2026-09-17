@@ -14,7 +14,7 @@ use IPC::Open3 qw(open3);
 use JSON::PP;
 use Symbol qw(gensym);
 
-our @EXPORT_OK = qw(run_workflow llm user step publish_files);
+our @EXPORT_OK = qw(run_workflow llm user step attempt publish_files);
 
 my $JSON = JSON::PP->new->canonical->utf8->allow_nonref;
 our $CURRENT;
@@ -49,7 +49,7 @@ sub run_workflow {
             name         => $name,
             run          => $run,
             args         => \@argv,
-            workflow_md5 => _workflow_md5($script),
+            workflow_md5 => _file_md5($script),
             runtime_md5  => _file_md5($runtime),
             created_at   => time,
             effects      => [],
@@ -146,18 +146,25 @@ sub user {
     return _question('user', $topic, $input);
 }
 
-sub step (&;$$) {
-    my ($code, $topic, $input) = @_;
-    $topic = 'step' unless defined $topic;
-    $input = {} unless defined $input;
-    return _effect('step', $topic, $input, $code);
+sub step (&) {
+    my ($code) = @_;
+    return _effect('step', undef, undef, $code);
+}
+
+sub attempt (&) {
+    my ($code) = @_;
+    my ($value, $error);
+    eval { $value = $code->(); 1 }
+        or $error = $@ || 'workflow failed';
+    die $error if ref($error) eq 'Coff::Workflow::Suspend';
+    return (undef, "$error") if $error;
+    return (_snapshot($value), undef);
 }
 
 sub publish_files {
     my (%opt) = @_;
     my $files = $opt{files};
-    return { ok => JSON::PP::false, error => 'files must be an array' }
-        unless ref($files) eq 'ARRAY';
+    die "files must be an array\n" unless ref($files) eq 'ARRAY';
 
     my %seen;
     my @staged;
@@ -168,7 +175,7 @@ sub publish_files {
             && defined $file->{content}
             && !$seen{$file->{path}}++) {
             _cleanup_staged(\@staged);
-            return { ok => JSON::PP::false, error => 'invalid or duplicate file entry' };
+            die "invalid or duplicate file entry\n";
         }
         next if _same_content($file->{path}, $file->{content});
 
@@ -180,12 +187,12 @@ sub publish_files {
         );
         if (-e $tmp) {
             _cleanup_staged(\@staged);
-            return { ok => JSON::PP::false, error => "temporary path already exists: $tmp" };
+            die "temporary path already exists: $tmp\n";
         }
         unless (_write_raw($tmp, $file->{content})) {
             my $error = $! || 'write failed';
             _cleanup_staged(\@staged);
-            return { ok => JSON::PP::false, error => "cannot stage $file->{path}: $error" };
+            die "cannot stage $file->{path}: $error\n";
         }
         push @staged, { %$file, tmp => $tmp };
     }
@@ -200,10 +207,7 @@ sub publish_files {
         if ($status != 0) {
             _cleanup_staged(\@staged);
             $diagnostic =~ s/\s+\z//;
-            return {
-                ok    => JSON::PP::false,
-                error => "perl -c failed for $file->{path}: $diagnostic",
-            };
+            die "perl -c failed for $file->{path}: $diagnostic\n";
         }
     }
 
@@ -214,7 +218,7 @@ sub publish_files {
         unless (rename $file->{path}, $backup) {
             _restore_backups(\@backups);
             _cleanup_staged(\@staged);
-            return { ok => JSON::PP::false, error => "cannot prepare $file->{path}: $!" };
+            die "cannot prepare $file->{path}: $!\n";
         }
         push @backups, { path => $file->{path}, backup => $backup };
     }
@@ -225,12 +229,12 @@ sub publish_files {
             unlink $_ for @installed;
             _restore_backups(\@backups);
             _cleanup_staged(\@staged);
-            return { ok => JSON::PP::false, error => "cannot install $file->{path}: $!" };
+            die "cannot install $file->{path}: $!\n";
         }
         push @installed, $file->{path};
     }
     unlink $_->{backup} for @backups;
-    return { ok => JSON::PP::true, changed => scalar @staged };
+    return { changed => scalar @staged };
 }
 
 sub _question {
@@ -243,26 +247,29 @@ sub _effect {
     my ($kind, $topic, $input, $code) = @_;
     die "effect called outside a workflow\n" unless $CURRENT;
     my $index = $CURRENT->{cursor}++;
-    $input = _snapshot($input);
-    my $hash = md5_hex(_encode({ kind => $kind, topic => $topic, input => $input }));
+    $input = _snapshot($input) unless $kind eq 'step';
+    my $hash = $kind eq 'step'
+        ? undef
+        : md5_hex(_encode({ kind => $kind, topic => $topic, input => $input }));
     my $journal = $CURRENT->{journal};
     my $effect = $journal->{effects}[$index];
 
     if ($effect) {
-        _non_deterministic($index)
-            unless $effect->{kind} eq $kind
-                && $effect->{topic} eq $topic
+        my $same = $effect->{kind} eq $kind;
+        if ($kind ne 'step') {
+            $same &&= $effect->{topic} eq $topic
                 && $effect->{input_hash} eq $hash;
+        }
+        _non_deterministic($index) unless $same;
     }
     else {
         _non_deterministic($index) unless $index == @{ $journal->{effects} };
-        $effect = {
-            index      => $index,
-            kind       => $kind,
-            topic      => $topic,
-            input      => $input,
-            input_hash => $hash,
-        };
+        $effect = { index => $index, kind => $kind };
+        if ($kind ne 'step') {
+            $effect->{topic} = $topic;
+            $effect->{input} = $input;
+            $effect->{input_hash} = $hash;
+        }
         push @{ $journal->{effects} }, $effect;
         _write_json(_journal_path($CURRENT->{run_dir}), $journal);
     }
@@ -322,7 +329,7 @@ sub _replay {
 sub _verify_versions {
     my ($journal, $script, $runtime) = @_;
     die "workflow changed since this run started\n"
-        unless $journal->{workflow_md5} eq _workflow_md5($script);
+        unless $journal->{workflow_md5} eq _file_md5($script);
     die "Coff::Workflow changed since this run started\n"
         unless $journal->{runtime_md5} eq _file_md5($runtime);
 }
@@ -406,16 +413,6 @@ sub _run_dir {
 
 sub _journal_path { return File::Spec->catfile($_[0], 'journal.json') }
 sub _terminal_path { return File::Spec->catfile($_[0], 'terminal.json') }
-
-sub _workflow_md5 {
-    my ($path) = @_;
-    open my $fh, '<:raw', $path or die "cannot read workflow $path: $!\n";
-    my $last = '';
-    $last = $_ while <$fh>;
-    close $fh or die "cannot close workflow $path: $!\n";
-    return $1 if $last =~ /# <!--\{"src":.*"md5":"([a-f0-9]{32})"\} -->\s*\z/;
-    die "workflow footer md5 is missing: $path\n";
-}
 
 sub _file_md5 {
     my ($path) = @_;
