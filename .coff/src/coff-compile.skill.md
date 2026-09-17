@@ -38,7 +38,6 @@ lint:
 - bundle はソース md5 による skip の有無にかかわらず同期し、既存内容と一致するファイルは書き換えない。
 - `coff-dullmify: true` は skill 型だけに指定する。
   dullmify した実体出力には、実行中の coff-compile が持つ `scripts/lib/Coff/Workflow.pm` も複製する。
-- `coff-*` はビルド指示の名前空間であり、すべて成果物の frontmatter から除く。
 
 ## オプション
 
@@ -107,7 +106,6 @@ echo $verdict
 スキップは全出力先の md5 が一致するときに限る。
 `coff-dullmify: true` の実体出力では `SKILL.md` と `scripts/<name>.pl` の両方を判定する。
 `.pl` のフッタは最終行の `# <!--{"src":"<src>","md5":"<src md5>"} -->` とする。
-bundle はこの判定に含めず、毎回同期する。
 
 `--out` / `--agent` があるときは、この導出に出力ルートの置換と参照出力の追加を適用する。参照出力も `dsts` に加え、skip 判定は全出力先に同じフッタ規則で行う。
 
@@ -195,7 +193,7 @@ b. **dullmify する。** `coff-dullmify: true` のソースだけを、逐次 P
    - 薄い skill を組み立てた後で a の翻訳を適用する。
      `coff-translate: false` の扱いも同じとする。
 
-   生成する Perl は 5.30 以上で動く構文と core モジュールだけを使い、`FindBin` から自身の `lib/` を読み込む。
+   生成する Perl は 5.30 以上で動く構文と core モジュールだけを使い、`use utf8` を宣言し、`FindBin` から自身の `lib/` を読み込む。
    `Coff::Workflow` の `run_workflow`、`llm`、`user`、`step`、`publish_files` を使う。
    副作用はすべて `step` の中に置き、時計と乱数を使わず、hash のキーは sort してから回す。
    effect を `eval {}` で囲まない。
