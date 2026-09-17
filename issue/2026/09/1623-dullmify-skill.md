@@ -62,7 +62,8 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 
 後で効く制約:
 
-- Perl は 5.30 以上の構文と core モジュールだけを使い、生成プログラムは `FindBin` から runtime を読む。
+- Perl は 5.30 以上の構文と core モジュールだけを使い、生成プログラムは `use utf8` を宣言し（非 ASCII の文字列リテラルが JSON 出力で二重にエンコードされる）、`FindBin` から runtime を読む。
+- runtime は journal に入れる値と workflow に返す値を JSON の往復で切り離す（同じ参照を共有すると、workflow 側の書き換えが記録に混ざり、replay の入力ハッシュが変わって非決定として止まる。初回の自己ビルドで顕在化した）。
 - 副作用は `step` に置き、時計と乱数を使わず、hash のキーを sort し、effect 呼び出しを `eval` で囲まない。
 - 問いは `{"run":…,"index":…,"ask":{"topic":…,"kind":"llm"|"user","input":…}}`、終了は `{"run":…,"done":true,"report":…}` とする。
 - `resume` の stdin は UTF-8 の文字列として保存し、JSON を要求する topic だけを生成プログラム側で decode する。
