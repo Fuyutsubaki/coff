@@ -40,7 +40,7 @@ workflow.pl は雛形の頭（use 群と runtime の読み込み）、`sub workf
    ソースの frontmatter から `coff-*` と `allowed-tools` を除き、`allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` を加える。
 9. SKILL.md の本文を `templates/skill-prefix.md`、topics の答え、`templates/skill-suffix.md` の順に組み立てる。
    定型は変更せずに差し込む。
-10. workflow.pl を一時ファイルへ書き、`perl -c` を通す。
+10. workflow.pl を一時ファイルへ書き、同梱の runtime の `lib` を `-I` で渡して `perl -c` を通す（一時ファイルの場所では雛形の `use lib` が runtime を見つけられない）。
     構文検査に失敗した場合は `<dir>` へ何も書かない。
 11. 構文検査後に3ファイルを書く。
     各ファイルを出力先と同じディレクトリの一時ファイルへ書き、rename で置き換える。
