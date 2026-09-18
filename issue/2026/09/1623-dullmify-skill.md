@@ -3,7 +3,7 @@ status: open
 ---
 # skill をワークフロー部分と LLM 部分に分ける skill dullmify を作り、coff-compile から呼べるようにする
 
-`/coff-dullmify <source>.skill.md -o <dir>` が skill ソースを、決定論的な Perl の workflow と薄い SKILL.md に分けて出力する。LLM が作るのは workflow 本体と topic 節だけで、runtime と driver と定型は雛形を複製する。
+`/coff-dullmify <source>.skill.md -o <dir>` が skill ソースを、決定論的な Perl の workflow と薄い SKILL.md に分けて出力する。LLM が作るのは workflow 本体と topic 節だけで、runtime と Perl の土台と SKILL.md の定型は雛形を複製する。
 制御をプログラムに移し、LLM は問われた判断にだけ答える形にして、トークン消費と想定外の挙動を減らし、事前承認をプログラム呼び出しだけに絞る。
 coff-compile は `coff-dullmify: true` のソースで一時ディレクトリに `/coff-dullmify` を書かせ、英訳とフッタを施して公開する。最初の適用先は coff-compile と coff-dullmify 自身。
 
@@ -23,10 +23,10 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 ## 設計方針
 
 1. `coff-dullmify` は独立 skill とし、`<source>.skill.md -o <dir>` から4ファイルを一時出力する。既存 workflow は `workflow` の問いへ全文を渡し、md5、フッタ、英訳、最終出力は扱わない。
-2. `.coff/src/coff-dullmify.skill.md` は手順と判断基準を持つ太いソースとする。runtime、19行の driver、SKILL.md の定型だけを手書きし、workflow.pl はソースから生成する。
+2. `.coff/src/coff-dullmify.skill.md` は手順と判断基準を持つ太いソースとする。runtime、workflow.pl の頭と尻の雛形、SKILL.md の定型だけを手書きし、workflow.pl はソースから生成する。
 3. runtime は `llm(topic, input)`、`step { ... }`、`die`、実行順の journal、非決定の検出、JSON による値の切り離し、`start` / `resume` だけを持つ。done と failed で run を削除する。
 4. coff-compile は staging に既存 workflow を置き、topic `dullmify` で一時出力を書かせる。SKILL.md の英訳とコメント除去、SKILL.md と workflow.pl のフッタ、md5 と skip、実体出力への書き出しは coff-compile が担う。
-5. 薄い skill の `allowed-tools` は `Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)` だけとする。runtime と driver は節ごと、生成 workflow は補助関数ごとに日本語のコメントを書く。
+5. 薄い skill の `allowed-tools` は `Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` だけとする。runtime と雛形は節ごと、生成 workflow は補助関数ごとに日本語のコメントを書く。
 
 生成規則を coff-compile に埋める案、dullmify のソースを薄くする案、dullmify が最終位置へ直接書く案は採らない。共通部分の重複、ソースの位置付け、責務の混在を避ける。
 
@@ -48,12 +48,12 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 ## 完了条件
 
 - [x] `Coff::Workflow` が `llm` / `step`、`die` による中断、実行順の journal と非決定の検出、値の切り離し、`start` / `resume` だけを持ち、テストが通る
-- [x] `/coff-dullmify .coff/src/coff-compile.skill.md -o <dir>` が 4 ファイルを書き、`run.pl`、runtime、SKILL.md の定型は同梱の雛形とバイト一致する。`<dir>/scripts/workflow.pl` があれば `workflow` の問いに `existing` として渡る
+- [x] `/coff-dullmify .coff/src/coff-compile.skill.md -o <dir>` が 3 ファイルを書き、workflow.pl の頭と尻、runtime、SKILL.md の定型は同梱の雛形とバイト一致する。`<dir>/scripts/workflow.pl` があれば `workflow` の問いに `existing` として渡る
 - [x] `workflow` の答えが `perl -c` を通らないときは `failed` になり、`<dir>` に書かれない
 - [x] `.coff/src/coff-dullmify.skill.md` が太いソースで、その `workflow.pl` は `/compile` で自分から生成される
 - [x] coff-compile が `coff-dullmify: true` のソースで一時ディレクトリに前の `workflow.pl` を置き、topic `dullmify` の後に SKILL.md を英訳し、SKILL.md と workflow.pl にフッタを付けて公開する
-- [x] 薄い SKILL.md は `allowed-tools` が `run.pl` の呼び出しだけで `coff-*` キーが残らず、本文に bash スニペットと制御の手順が無い
-- [x] 手書きの Perl（runtime、driver）と生成した workflow.pl に意図のコメントがある
+- [x] 薄い SKILL.md は `allowed-tools` が `workflow.pl` の呼び出しだけで `coff-*` キーが残らず、本文に bash スニペットと制御の手順が無い
+- [x] 手書きの Perl（runtime、雛形）と生成した workflow.pl に意図のコメントがある
 - [ ] 薄い成果物で `/compile --force coff-compile` と `/compile --force coff-dullmify` を承認プロンプトなしで完走できる
 - [x] 配布ミラー `skills/coff-compile/` と `skills/coff-dullmify/` が正本とディレクトリ単位で一致する
 
@@ -62,30 +62,30 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 ### 実装詳細
 
 - `.coff/src/coff-dullmify/scripts/lib/Coff/Workflow.pm`：2 effect と replay に絞った runtime。各関数に意図のコメント
-- `.coff/src/coff-dullmify/scripts/run.pl`：同じディレクトリの workflow.pl を読む19行の driver
-- `.coff/src/coff-dullmify/templates/`：start / resume だけを案内する薄い SKILL.md の定型
+- `.coff/src/coff-dullmify/templates/`：workflow.pl の頭（use 群と runtime の読み込み）と尻（`run_workflow` の呼び出し）、start / resume だけを案内する薄い SKILL.md の定型
 - `.coff/src/coff-dullmify/t/`：runtime、既存 workflow の受け渡し、雛形の一致、`perl -c` の門を検証
 - `.coff/src/coff-dullmify.skill.md`：手順、`workflow` / `topics` の判断基準、組み立て規則を持つ太いソース
 - `.coff/src/coff-dullmify/scripts/dullmify.pl`：削除。生成した workflow.pl が処理を担う
 - `.coff/src/coff-compile.skill.md`：staging、topic `dullmify`、英訳、フッタ、ファイル単位の公開を定義
-- `.claude/skills/coff-compile/`、`.claude/skills/coff-dullmify/`：ブートストラップで生成した英語の薄い skill、workflow、driver、runtime
+- `.claude/skills/coff-compile/`、`.claude/skills/coff-dullmify/`：ブートストラップで生成した英語の薄い skill、workflow、runtime
 - `skills/coff-compile/`、`skills/coff-dullmify/`：正本とディレクトリ単位で一致する配布ミラー
 
 後で効く制約:
 
-- Perl は 5.30 以上の構文と core モジュールだけ。生成する `workflow.pl` は `use utf8` を宣言する（非 ASCII の文字列リテラルが JSON 出力で二重にエンコードされる）。`use` 群、`FindBin`、`run_workflow` は `run.pl` にあり、生成しない。
+- Perl は 5.30 以上の構文と core モジュールだけ。生成する `workflow.pl` は `use utf8` を宣言する（非 ASCII の文字列リテラルが JSON 出力で二重にエンコードされる）。`use` 群、`FindBin`、`run_workflow` は雛形の頭と尻にあり、生成しない。既存 workflow を LLM に渡すときはフッタと雛形の頭と尻を除く。
 - 副作用は `step` に置き、時計と乱数を使わず、hash のキーを sort する。effect を `eval {}` で囲まない（中断の例外が握りつぶされる）。
 - 問いは `{"run":…,"index":…,"ask":{"topic":…,"input":…}}`、終了は `{"run":…,"done":true,"report":…}`、失敗は `{"run":…,"done":true,"failed":"<理由>"}`。
 - `resume` の stdin は UTF-8 の文字列として保存し、JSON を要求する topic だけを workflow 側で decode する。
 - journal に入れる値と workflow に返す値は JSON の往復で切り離す（同じ参照を共有すると workflow 側の書き換えが記録に混ざり、replay が非決定として止まる）。run のディレクトリは done と failed で消す。
 - topic `dullmify` の入力は `{source, out}`、答えは `ok` か失敗の理由。一時ディレクトリの中身を LLM に運ばない。
 - lint 候補は `{start, end, replacement, label}` の JSON 配列とし、承認された索引だけをソースへ適用する。
-- 薄い SKILL.md はソースの frontmatter から `coff-*` と `allowed-tools` を落とし、`allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)` を加える。
+- 薄い SKILL.md はソースの frontmatter から `coff-*` と `allowed-tools` を落とし、`allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` を加える。
+- `perl -c` の門には runtime の `lib` を `-I` で渡す（一時ファイルの場所では雛形の `use lib` が runtime を見つけられない。テストは prove の PERL5LIB が子プロセスに継承されるので、この欠落を検出できなかった）。
 
 ### 完了条件の確認手段
 
 1. `prove -I .coff/src/coff-dullmify/scripts/lib .coff/src/coff-dullmify/t/`
-2. 一時 dir に古い `scripts/workflow.pl` を置いて `/coff-dullmify .coff/src/coff-compile.skill.md -o <一時dir>` を実行し、最初の問いの `existing` にそれが入ること、完走後に `ls` で 4 ファイル、`cmp` で `run.pl` と `Workflow.pm`、`diff` で SKILL.md の定型段落を確かめる
+2. 一時 dir に古い `scripts/workflow.pl` を置いて `/coff-dullmify .coff/src/coff-compile.skill.md -o <一時dir>` を実行し、最初の問いの `existing` にそれが入ること、完走後に `ls` で 3 ファイル、`cmp` で `Workflow.pm`、`diff` で workflow.pl の頭と尻と SKILL.md の定型段落を確かめる
 3. 組み立てをテストで叩く（壊れた workflow 本文で失敗が返り、`<dir>` に何も書かれないこと）。1 に含める
 4. `head -12 .coff/src/coff-dullmify.skill.md` に手順が書かれていること。`/compile --force coff-dullmify` を通し、`.claude/skills/coff-dullmify/scripts/workflow.pl` のフッタ md5 がソースと一致すること
 5. 8 の実行中に topic `dullmify` の問いの後に `translate` が続き、完走後に `tail -n1` で両フッタの md5 が `md5sum` と一致すること
