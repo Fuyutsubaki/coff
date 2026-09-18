@@ -111,8 +111,8 @@ sub run_dullmify {
     if (-f $existing_path) {
         is(
             $question->{ask}{input}{existing},
-            read_file($existing_path),
-            'existing workflow is passed byte-for-byte',
+            strip_generated(read_file($existing_path)),
+            'existing workflow is passed without use utf8 and the footer',
         );
     }
     else {
@@ -163,4 +163,12 @@ sub write_file {
     open my $fh, '>:raw', $path or die "cannot write $path: $!";
     print {$fh} $content;
     close $fh;
+}
+
+# 生成時に加わる use utf8 と coff-compile のフッタを除いた形（dullmify が LLM に渡す形）
+sub strip_generated {
+    my ($text) = @_;
+    $text =~ s/\Ause utf8;\n\n?//;
+    $text =~ s/\n?# <!--\{"src":.*?"md5":"[a-f0-9]{32}"\} -->\s*\z//s;
+    return $text;
 }

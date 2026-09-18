@@ -29,7 +29,7 @@ driver と runtime は同梱物をバイト単位で複製する。
    ソースは1個の `*.skill.md`、出力先は1個の `-o <dir>` とする。
    ソースが存在しない場合、空の場合、引数が余る場合は失敗する。
 2. ソース全文を UTF-8 で読む。
-   `<dir>/scripts/workflow.pl` が存在すれば、全文を UTF-8 で読み、既存 workflow とする。
+   `<dir>/scripts/workflow.pl` が存在すれば UTF-8 で読み、先頭の `use utf8;` と末尾の生成フッタを除いたものを既存 workflow とする（答えに含めてはいけないものを LLM に渡さない）。
 3. topic `workflow` を問い、入力に `{source, existing}` を渡す。
 4. topic `topics` を問い、入力に `{source}` を渡す。
 5. workflow の答えを検査する。
