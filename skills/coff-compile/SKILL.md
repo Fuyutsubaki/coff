@@ -173,7 +173,6 @@ c. **Strip HTML/markdown comments from the body.** Remove every `<!-- ... -->` b
 d. **Preserve frontmatter structure.** The leading `---` … `---` block must remain valid YAML frontmatter in the output. If the source has no frontmatter, abort with an error. Remove every key starting with `coff-` from the output frontmatter.
 
 e. **Check, then write file by file.** Footer goes on the last line, after the body, outside any code block. Output-style files also get the footer. For reference-mode outputs, write the stub from "Agent presets and reference output" instead of the body.
-   Run `perl -c` on a dullmified `workflow.pl`, passing the staged runtime's `lib` with `-I` (at the temporary file's location, the template's `use lib` cannot find the runtime).
    After the checks, write each file to a temporary file in the destination directory and replace it with rename.
 
 ## 6. Report
@@ -190,4 +189,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"c43d870bef28037bf80aa74ed44ff5d2"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"3bf052319a53b777577e5dc7c86106b3"} -->
