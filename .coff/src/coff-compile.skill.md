@@ -108,7 +108,7 @@ echo $verdict
 
 `--out` / `--agent` があるときは、この導出に出力ルートの置換と参照出力の追加を適用する。参照出力も `dsts` に加え、skip 判定は全出力先に同じフッタ規則で行う。
 
-空のソースはエラーとして報告し、次のファイルへ進む。
+空のソースはエラーで中断する。
 
 ## 2. Lint
 
@@ -184,7 +184,7 @@ b. **dullmify する。** `coff-dullmify: true` の skill ソースだけで行�
    - 実体出力に既存の `scripts/workflow.pl` があれば staging に複製しておく（coff-dullmify は出力先にある既存 workflow だけを見る）。
    - topic `dullmify` を LLM に問い、入力に `{source, out}`（ソースのパスと staging）を渡す。薄い skill は `/coff-dullmify <source> -o <staging>` を実行し、成功時は `ok`、失敗時は理由を答える。
    - `ok` 以外の答えは失敗として扱う。staging の内容を LLM の答えに含めない。
-   - Perl は staging から `SKILL.md`、`scripts/run.pl`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。欠落、余分な通常ファイル、シンボリックリンクはエラーにする。
+   - Perl は staging から `SKILL.md`、`scripts/run.pl`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。4ファイルのいずれかがなければエラーにする。
    - staging の `SKILL.md` に a の翻訳を適用する。`coff-translate: false` の扱いも同じとする。
    - c と d は staging の `SKILL.md` に適用する。`scripts/workflow.pl` にはソース md5 のフッタだけを加え、`run.pl` と runtime は変更しない。
    - staging は公開の成功後に削除する。失敗時は診断のために残す。
@@ -193,18 +193,17 @@ c. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!--
 
 d. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-` で始まるキーは出力の frontmatter からすべて取り除く。 <!-- ビルド指示（ラッパー skill が拡張するものを含む）の名前空間であって、実行時情報ではないため -->
 
-e. **全出力を検査してから書く。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。
+e. **検査してからファイルごとに書く。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。
    dullmify した `workflow.pl` は `perl -c` を通す。
-   1 ソースの `SKILL.md`、`workflow.pl`、`run.pl`、runtime、bundle をすべて同じファイルシステム上の一時ファイルへ書き、すべての検査が通った後に出力先ごとに原子的に rename する。
-   検査か rename に失敗したら `failed` とし、既存の全出力を元に戻す。
-   新規出力ならどの出力も残さない。
+   検査後に各ファイルを出力先と同じディレクトリの一時ファイルへ書き、rename で置き換える。
 
 ## 6. レポート
 
 各ソースについて以下のいずれかを報告する:
 - `compiled`（lint で適用した件数があれば併記）
 - `linted (N applied, M rejected)` — `--lint-only` のとき、またはコンパイル前の確認で却下されたとき
-- `failed: <reason>`
+
+途中の失敗は run 全体を中断し、runtime の `failed` で理由を返す。
 
 スキップしたファイルは出さない。`--lint-only` で lint 候補が 0 件のときも何も出さない。
 
@@ -212,13 +211,11 @@ e. **全出力を検査してから書く。** フッタは最終行に置き、
 
 - ソースを書き換えるのは lint で承認されたものだけ。
 - frontmatter の `name` 値、出力パスを構成する識別子は lint でも触らない。
-- lint も compile も、途中で失敗したら中途半端な書き込みを残さない。
+- workflow の失敗は `die` で run 全体を止め、runtime の `failed` として返す。
 - dullmify した workflow の journal は `${XDG_STATE_HOME:-$HOME/.local/state}/coff/<name>/<run>/` に置く。
-- journal は開始時の `workflow.pl` と `Workflow.pm` の md5 を固定する。
-- effect の実行順が変わったら非決定として停止する。`llm` と `user` は入力ハッシュの変化でも停止する。
-- 回答済みの索引へ同じ答えを再送したら、workflow を進めず現在の問いか終端結果を返す。
-- `done` と `cancel` は journal を削除して終端結果だけを残す。
-  `gc` は 7 日より古い run を終端結果ごと削除する。
+- effect は `llm(topic, input)` と block だけの `step { ... }` とする。ユーザーへの問いも `llm` の topic で表す。
+- journal は effect の実行順を持ち、`llm` は入力ハッシュも持つ。値は JSON の往復で切り離す。
+- runtime の操作は `start` と `resume <run> <index>` だけとする。done と failed で run のディレクトリを削除する。
 
 <!--
 実装メモ:
