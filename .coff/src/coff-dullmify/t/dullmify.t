@@ -15,7 +15,7 @@ my $JSON = JSON::PP->new->utf8;
 my $tmp = tempdir(CLEANUP => 1);
 my $state = File::Spec->catdir($tmp, 'state');
 my $run_pl = File::Spec->rel2abs(
-    File::Spec->catfile('.coff', 'src', 'coff-dullmify', 'scripts', 'run.pl'),
+    File::Spec->catfile('.claude', 'skills', 'coff-dullmify', 'scripts', 'run.pl'),
 );
 my $source_root = File::Spec->rel2abs(
     File::Spec->catdir('.coff', 'src', 'coff-dullmify'),
@@ -28,15 +28,16 @@ my ($status, $stdout, $stderr) = run_dullmify(
     "### topic `sample`\n\nReturn text.",
 );
 isnt($status, 0, 'invalid generated workflow fails');
-like($stderr, qr/perl -c failed/, 'invalid workflow reports the syntax gate');
+is($stderr, '', 'workflow failure is returned as JSON');
+like(decode_output($stdout)->{failed}, qr/perl -c failed/, 'invalid workflow reports the syntax gate');
 ok(!-e $new_out, 'invalid workflow does not create a new output directory');
 
 my $old_out = File::Spec->catdir($tmp, 'invalid-existing');
 my %old = (
-    'SKILL.md'                         => "old skill\n",
-    'scripts/run.pl'                   => "old driver\n",
-    'scripts/workflow.pl'              => "old workflow\n",
-    'scripts/lib/Coff/Workflow.pm'     => "old runtime\n",
+    'SKILL.md'                     => "old skill\n",
+    'scripts/run.pl'               => "old driver\n",
+    'scripts/workflow.pl'          => "use utf8;\n\nsub workflow { return ['old']; }\n",
+    'scripts/lib/Coff/Workflow.pm' => "old runtime\n",
 );
 for my $relative (sort keys %old) {
     write_file(File::Spec->catfile($old_out, split m{/}, $relative), $old{$relative});
@@ -63,7 +64,7 @@ my $topics = "### topic `sample`\n\nReturn a short text answer.";
     $topics,
 );
 is($status, 0, 'valid dullmify run succeeds') or diag($stderr);
-my $done = $JSON->decode($stdout);
+my $done = decode_output($stdout);
 ok($done->{done}, 'valid dullmify run reaches done');
 
 my @expected = (
@@ -94,38 +95,39 @@ ok(index($skill, $suffix) >= 0, 'SKILL.md contains the byte-identical suffix tem
 like($skill, qr/allowed-tools: Bash\(perl \$\{CLAUDE_SKILL_DIR\}\/scripts\/run\.pl \*\)/, 'SKILL.md allows only run.pl');
 unlike($skill, qr/^coff-/m, 'SKILL.md has no coff build keys');
 unlike($skill, qr/<!--\{"src":/, 'raw SKILL.md has no footer');
-like(read_file(File::Spec->catfile($valid_out, 'scripts', 'workflow.pl')), qr/\Ause utf8;\n\nsub workflow/, 'workflow.pl declares utf8 and contains only generated functions');
+like(read_file(File::Spec->catfile($valid_out, 'scripts', 'workflow.pl')), qr/\Ause utf8;\n\nsub workflow/, 'workflow.pl declares utf8 and contains generated functions');
 
 done_testing();
 
 sub run_dullmify {
     my ($out, $workflow_body, $topics) = @_;
     my ($status, $stdout, $stderr) = run_process(
-        '', '--workflow', 'dullmify.pl', 'start', '.coff/src/coff-compile.skill.md', '-o', $out,
+        '', 'start', '.coff/src/coff-compile.skill.md', '-o', $out,
     );
     return ($status, $stdout, $stderr) if $status;
-    my $question = $JSON->decode($stdout);
+    my $question = decode_output($stdout);
     is($question->{ask}{topic}, 'workflow', 'first dullmify question is workflow');
-    if (-f File::Spec->catfile($out, 'scripts', 'workflow.pl')) {
-        unlike($question->{ask}{input}{existing}, qr/\Ause utf8;/, 'existing omits the use utf8 line');
+    my $existing_path = File::Spec->catfile($out, 'scripts', 'workflow.pl');
+    if (-f $existing_path) {
+        is(
+            $question->{ask}{input}{existing},
+            read_file($existing_path),
+            'existing workflow is passed byte-for-byte',
+        );
     }
     else {
-        is($question->{ask}{input}{existing}, '', 'existing is empty when the output has no workflow');
+        is($question->{ask}{input}{existing}, '', 'existing is empty without an output workflow');
     }
     my $run = $question->{run};
 
     ($status, $stdout, $stderr) = run_process(
-        $workflow_body,
-        '--workflow', 'dullmify.pl', 'resume', $run, $question->{index},
+        $workflow_body, 'resume', $run, $question->{index},
     );
     return ($status, $stdout, $stderr) if $status;
-    $question = $JSON->decode($stdout);
+    $question = decode_output($stdout);
     is($question->{ask}{topic}, 'topics', 'second dullmify question is topics');
 
-    return run_process(
-        $topics,
-        '--workflow', 'dullmify.pl', 'resume', $run, $question->{index},
-    );
+    return run_process($topics, 'resume', $run, $question->{index});
 }
 
 sub run_process {
@@ -140,6 +142,10 @@ sub run_process {
     my $stderr = <$error> // '';
     waitpid($pid, 0);
     return ($? >> 8, $stdout, $stderr);
+}
+
+sub decode_output {
+    return $JSON->decode($_[0]);
 }
 
 sub read_file {
