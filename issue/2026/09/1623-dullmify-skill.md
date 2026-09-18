@@ -5,7 +5,7 @@ status: open
 
 `/coff-dullmify <source>.skill.md -o <dir>` が skill ソースを、決定論的な Perl の workflow と薄い SKILL.md に分けて出力する。LLM が作るのは workflow 本体と topic 節だけで、runtime と Perl の土台と SKILL.md の定型は雛形を複製する。
 制御をプログラムに移し、LLM は問われた判断にだけ答える形にして、トークン消費と想定外の挙動を減らし、事前承認をプログラム呼び出しだけに絞る。
-coff-compile は `coff-dullmify: true` のソースで一時ディレクトリに `/coff-dullmify` を書かせ、英訳とフッタを施して公開する。最初の適用先は coff-compile と coff-dullmify 自身。
+coff-compile は `coff-dullmify: true` のソースで一時ディレクトリに `/coff-dullmify` を書かせ、英訳とフッタを施して公開する。最初の適用先は coff-dullmify 自身で、coff-compile はまだ dullmify しない。
 
 ## 目的
 
@@ -25,7 +25,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 1. `coff-dullmify` は独立 skill とし、`<source>.skill.md -o <dir>` から `SKILL.md`、`scripts/workflow.pl`、runtime の 3 ファイルを一時出力する。既存 workflow は雛形の頭と尻とフッタを除いて `workflow` の問いへ渡し、md5、フッタ、英訳、最終出力は扱わない。
 2. `.coff/src/coff-dullmify.skill.md` は手順と判断基準を持つ太いソースとする。runtime、workflow.pl の頭と尻の雛形、SKILL.md の定型だけを手書きし、workflow.pl はソースから生成する。
 3. runtime は `llm(topic, input)`、`step { ... }`、`die`、実行順の journal、非決定の検出、JSON による値の切り離し、`start` / `resume` だけを持つ。done と failed で run を削除する。
-4. coff-compile は staging に既存 workflow を置き、topic `dullmify` で一時出力を書かせる。SKILL.md の英訳とコメント除去、SKILL.md と workflow.pl のフッタ、md5 と skip、実体出力への書き出しは coff-compile が担う。
+4. coff-compile は Markdown の skill のまま、`coff-dullmify: true` のソースで staging に既存 workflow を置き、`/coff-dullmify` に一時出力を書かせる。SKILL.md の英訳とコメント除去、SKILL.md と workflow.pl のフッタ、md5 と skip、実体出力への書き出しは coff-compile が担う。
 5. 薄い skill の `allowed-tools` は `Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` だけとする。runtime と雛形は節ごと、生成 workflow は補助関数ごとに日本語のコメントを書く。
 
 生成規則を coff-compile に埋める案、dullmify のソースを薄くする案、dullmify が最終位置へ直接書く案は採らない。共通部分の重複、ソースの位置付け、責務の混在を避ける。常駐プロセスとの往復（名前付きパイプ、MCP、`claude -p` の逆転）は Bash ツールが起動済みプロセスの stdin に書けず、`context: fork` でツールを絞る案は AskUserQuestion が使えないので採らない。
@@ -43,6 +43,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - Perl にはコメントを書く
 - driver（`run.pl`）は持たない。雛形の頭（use 群と runtime の読み込み）と尻（`run_workflow` の呼び出し）を差し込み、`workflow.pl` 1 本を実行ファイルにする
 - 削った機能が無いことを確かめるテストは持たない
+- coff-compile はまだ dullmify しない（Markdown の skill のまま、dullmify の段を手順として持つ）
 - 権限は「プログラム呼び出しの事前承認と書き出しの移譲」まで。強制はしない
 
 ## 完了条件
@@ -51,10 +52,10 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - [x] `/coff-dullmify .coff/src/coff-compile.skill.md -o <dir>` が 3 ファイルを書き、workflow.pl の頭と尻、runtime、SKILL.md の定型は同梱の雛形とバイト一致する。`<dir>/scripts/workflow.pl` があれば `workflow` の問いに `existing` として渡る
 - [x] `workflow` の答えが `perl -c` を通らないときは `failed` になり、`<dir>` に書かれない
 - [x] `.coff/src/coff-dullmify.skill.md` が太いソースで、その `workflow.pl` は `/compile` で自分から生成される
-- [x] coff-compile が `coff-dullmify: true` のソースで一時ディレクトリに前の `workflow.pl` を置き、topic `dullmify` の後に SKILL.md を英訳し、SKILL.md と workflow.pl にフッタを付けて公開する
+- [ ] coff-compile が `coff-dullmify: true` のソースで一時ディレクトリに前の `workflow.pl` を置き、`/coff-dullmify` の後に SKILL.md を英訳し、SKILL.md と workflow.pl にフッタを付けて公開する
 - [x] 薄い SKILL.md は `allowed-tools` が `workflow.pl` の呼び出しだけで `coff-*` キーが残らず、本文に bash スニペットと制御の手順が無い
 - [x] 手書きの Perl（runtime、雛形）と生成した workflow.pl に意図のコメントがある
-- [ ] 薄い成果物で `/compile --force coff-compile` と `/compile --force coff-dullmify` を承認プロンプトなしで完走できる
+- [ ] `/compile --force coff-dullmify` が、coff-dullmify の薄い成果物の呼び出しで承認プロンプトを出さずに完走できる
 - [x] 配布ミラー `skills/coff-compile/` と `skills/coff-dullmify/` が正本とディレクトリ単位で一致する
 
 ## 実装メモ
@@ -68,7 +69,8 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - `.coff/src/coff-compile.skill.md`：staging、topic `dullmify`、英訳、フッタ、ファイル単位の公開を定義
 - `.coff/src/compile.skill.md`：配布ミラーの同期を skill ディレクトリ単位にする（0501 の方針 4 を先に実施）
 - `.gitignore`：staging 用の `.coff/tmp/` を無視する
-- `.claude/skills/coff-compile/`、`.claude/skills/coff-dullmify/`：ブートストラップで生成した英語の薄い skill、workflow、runtime（coff-dullmify は雛形も同梱）
+- `.claude/skills/coff-dullmify/`：ブートストラップで生成した英語の薄い skill、workflow、runtime、雛形
+- `.claude/skills/coff-compile/`：Markdown の skill のまま（dullmify の段を手順として持つ）
 - `skills/coff-compile/`、`skills/coff-dullmify/`：正本とディレクトリ単位で一致する配布ミラー
 
 後で効く制約:
@@ -79,7 +81,6 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - `resume` の stdin は UTF-8 の文字列として保存し、JSON を要求する topic だけを workflow 側で decode する。
 - journal に入れる値と workflow に返す値は JSON の往復で切り離す（同じ参照を共有すると workflow 側の書き換えが記録に混ざり、replay が非決定として止まる）。run のディレクトリは done と failed で消す。
 - topic `dullmify` の入力は `{source, out}`、答えは `ok` か失敗の理由。一時ディレクトリの中身を LLM に運ばない。
-- lint 候補は `{start, end, replacement, label}` の JSON 配列とし、承認された索引だけをソースへ適用する。
 - 薄い SKILL.md はソースの frontmatter から `coff-*` と `allowed-tools` を落とし、`allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` を加える。
 - `perl -c` の門には runtime の `lib` を `-I` で渡す（一時ファイルの場所では雛形の `use lib` が runtime を見つけられない。テストは prove の PERL5LIB が子プロセスに継承されるので、この欠落を検出できなかった）。
 
@@ -89,10 +90,10 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 2. 一時 dir に古い `scripts/workflow.pl` を置いて `/coff-dullmify .coff/src/coff-compile.skill.md -o <一時dir>` を実行し、最初の問いの `existing` にそれが入ること、完走後に `ls` で 3 ファイル、`cmp` で `Workflow.pm`、`diff` で workflow.pl の頭と尻と SKILL.md の定型段落を確かめる
 3. 組み立てをテストで叩く（壊れた workflow 本文で失敗が返り、`<dir>` に何も書かれないこと）。1 に含める
 4. `.coff/src/coff-dullmify.skill.md` に `## 手順` 節があり Perl の呼び出しで始まっていないこと。`/compile --force coff-dullmify` を通し、`.claude/skills/coff-dullmify/scripts/workflow.pl` のフッタ md5 がソースと一致すること
-5. 8 の実行中に topic `dullmify` の問いの後に `translate` が続き、完走後に `tail -n1` で両フッタの md5 が `md5sum` と一致すること
+5. 8 の実行中に coff-compile の手順が staging を作り `/coff-dullmify` を呼び、完走後に `tail -n1` で `.claude/skills/coff-dullmify/` の SKILL.md と workflow.pl のフッタ md5 が `md5sum` と一致すること
 6. `head` で frontmatter を見る。`grep -c '```'` が 0 で、読んで制御の手順が無いこと
 7. `grep -c '^\s*#' ` で各 Perl のコメント行を数え、`sub` ごとに一言以上あることを読んで確かめる
-8. 初回は `.coff/src/coff-dullmify.skill.md` を直接読んで手順として実行し、次に `.coff/src/coff-compile.skill.md` で同じことをして成果物を作る（壊れたら `git restore`）。その後、薄い成果物で `/compile --force coff-compile` と `/compile --force coff-dullmify` を通す。Bash の承認プロンプトが出ないことを見る（auto mode では判別できないので通常の権限設定のセッションで行う）
+8. 初回は `.coff/src/coff-dullmify.skill.md` を直接読んで手順として実行し成果物を作る（壊れたら `git restore`）。その後 `/compile --force coff-dullmify` を通す。Bash の承認プロンプトが出ないことを見る（auto mode では判別できないので通常の権限設定のセッションで行う）
 9. `diff -r .claude/skills/coff-compile skills/coff-compile` と `diff -r .claude/skills/coff-dullmify skills/coff-dullmify`
 
 ### 調査記録
