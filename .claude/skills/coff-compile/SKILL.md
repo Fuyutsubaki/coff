@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No arguments builds all sources; `<name>` builds one; `--lint-only` runs only the pre-check; `--force` rebuilds unchanged sources. `--out`, `--ref`, and `--agent` select alternate outputs, reference stubs, and agent-specific outputs.
+description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` / `--ref` / `--agent` add destination override, reference stubs, and per-agent output.
 license: MIT
 allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)
 ---
@@ -9,43 +9,43 @@ allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)
 
 Run `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl start $ARGUMENTS` and read the JSON response.
 
-When the response contains `ask`, compose an answer according to `topic` and pass only the answer on standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl resume <run> <index>`.
+When the response has `ask`, compose the answer according to `topic`, and pass only the answer on standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl resume <run> <index>`.
 Pass the answer verbatim with a single-quoted heredoc.
 Repeat until `done: true`.
 
-## Judgment by topic
+## Judgment per topic
 
-### topic `lint-candidates`
+### `lint-candidates`
 
-Inspect the source in `path` and `content` conservatively.
-Return candidates as a JSON array of `{start, end, replacement, label}` objects.
-Use one-based inclusive line numbers, ascending non-overlapping ranges, and return `[]` when there are no candidates.
-Include the affected lines, quotation, action, `[推奨]` or `[要判断]`, and resulting preview in `label`.
+Inspect the source given by `path` and `content` conservatively.
+Return a JSON array whose entries have `start`, `end`, `replacement`, and `label`. Line numbers are one-based and inclusive, and ranges are ascending and non-overlapping. Return `[]` when there are no candidates.
+Include in `label` the affected lines, the quotation, the action, the recommendation (`[推奨]` or `[要判断]`), and the resulting preview.
+
+Propose wrapping design rationale and reader-facing notes in HTML comments, deleting rephrased repetition and duplicated condition explanations, and rewriting duplicated structure and redundant examples concisely.
 Exclude existing HTML comments, frontmatter, fenced code, and inline code.
-Propose only changes that still let the executing LLM complete the procedure.
+Check the frontmatter `description` separately, proposing to shorten anything beyond what it does and how the user invokes it.
+Propose only what the executing LLM can still complete the procedure without once the sentence is removed from the artifact.
 
-### topic `lint-approval`
+### `lint-approval`
 
-Present the labels in `candidates` once with AskUserQuestion and `multiSelect=true`.
+A question for the user. Call AskUserQuestion once with `multiSelect=true` and the labels in `candidates`.
 Return the zero-based indexes of the selected candidates as a JSON array.
 
-### topic `compile-confirmation`
+### `compile-confirmation`
 
-Present `message` with AskUserQuestion.
-Return `yes` only when approved; otherwise return `no`.
+A question for the user. Show `message` with AskUserQuestion and return `yes` only when approved, otherwise `no`.
 
-### topic `dullmify`
+### `dullmify`
 
 Use `source` and `out` to run `/coff-dullmify <source> -o <out>`.
-Return only `ok` after all four files are written successfully; otherwise return only the reason.
-Do not include staging contents in the answer.
+Return only `ok` when it finishes successfully with all four artifacts written. On failure, return only the reason. Do not include the staging contents in the answer.
 
-### topic `translate`
+### `translate`
 
 Return the whole document in `content` in concise English.
 Translate prose, headings, lists, and the frontmatter `description`.
 Preserve byte-for-byte quoted literals used for matching or verbatim output, identifiers, paths, flags, regular expressions, command arguments, fenced and inline code, frontmatter keys and identifier values, proper nouns, UI strings, and error messages.
-When uncertain, preserve the original.
+When uncertain, keep the original.
 
 ## Completion report
 

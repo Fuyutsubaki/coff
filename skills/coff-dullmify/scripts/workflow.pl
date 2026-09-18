@@ -46,6 +46,9 @@ sub _plan {
 
     my $existing_path = File::Spec->catfile($out, 'scripts', 'workflow.pl');
     my $existing = -f $existing_path ? _read_text($existing_path) : '';
+    # 生成時に加える use utf8 と coff-compile が付けるフッタは、答えに含めてはいけないので渡す前に落とす。
+    $existing =~ s/\Ause utf8;\n\n?//;
+    $existing =~ s/\n?# <!--\{"src":.*?"md5":"[a-f0-9]{32}"\} -->\s*\z//s;
     return {
         name              => $name,
         source            => $source,
@@ -184,4 +187,4 @@ sub _write_file {
     close $fh or die "cannot close $tmp: $!\n";
     rename $tmp, $path or die "cannot replace $path: $!\n";
 }
-# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"a4bb79947fef42785895b5fd66f6ac2c"} -->
+# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"4176c73106f733dcc6eab37f06c55f31"} -->
