@@ -14,8 +14,8 @@ use Test::More;
 my $JSON = JSON::PP->new->utf8;
 my $tmp = tempdir(CLEANUP => 1);
 my $state = File::Spec->catdir($tmp, 'state');
-my $run_pl = File::Spec->rel2abs(
-    File::Spec->catfile('.claude', 'skills', 'coff-dullmify', 'scripts', 'run.pl'),
+my $workflow_pl = File::Spec->rel2abs(
+    File::Spec->catfile('.claude', 'skills', 'coff-dullmify', 'scripts', 'workflow.pl'),
 );
 my $source_root = File::Spec->rel2abs(
     File::Spec->catdir('.coff', 'src', 'coff-dullmify'),
@@ -35,7 +35,6 @@ ok(!-e $new_out, 'invalid workflow does not create a new output directory');
 my $old_out = File::Spec->catdir($tmp, 'invalid-existing');
 my %old = (
     'SKILL.md'                     => "old skill\n",
-    'scripts/run.pl'               => "old driver\n",
     'scripts/workflow.pl'          => "use utf8;\n\nsub workflow { return ['old']; }\n",
     'scripts/lib/Coff/Workflow.pm' => "old runtime\n",
 );
@@ -69,18 +68,17 @@ ok($done->{done}, 'valid dullmify run reaches done');
 
 my @expected = (
     'SKILL.md',
-    'scripts/run.pl',
     'scripts/workflow.pl',
     'scripts/lib/Coff/Workflow.pm',
 );
 for my $relative (@expected) {
     ok(-f File::Spec->catfile($valid_out, split m{/}, $relative), "$relative is generated");
 }
-is(
-    read_file(File::Spec->catfile($valid_out, 'scripts', 'run.pl')),
-    read_file(File::Spec->catfile($source_root, 'scripts', 'run.pl')),
-    'run.pl is copied byte-for-byte',
-);
+my $head = read_file(File::Spec->catfile($source_root, 'templates', 'workflow-head.pl'));
+my $tail = read_file(File::Spec->catfile($source_root, 'templates', 'workflow-tail.pl'));
+my $generated_workflow = read_file(File::Spec->catfile($valid_out, 'scripts', 'workflow.pl'));
+is(substr($generated_workflow, 0, length $head), $head, 'workflow.pl starts with the byte-identical head template');
+is(substr($generated_workflow, -length $tail), $tail, 'workflow.pl ends with the byte-identical tail template');
 is(
     read_file(File::Spec->catfile($valid_out, 'scripts', 'lib', 'Coff', 'Workflow.pm')),
     read_file(File::Spec->catfile($source_root, 'scripts', 'lib', 'Coff', 'Workflow.pm')),
@@ -92,10 +90,10 @@ my $prefix = read_file(File::Spec->catfile($source_root, 'templates', 'skill-pre
 my $suffix = read_file(File::Spec->catfile($source_root, 'templates', 'skill-suffix.md'));
 ok(index($skill, $prefix) >= 0, 'SKILL.md contains the byte-identical prefix template');
 ok(index($skill, $suffix) >= 0, 'SKILL.md contains the byte-identical suffix template');
-like($skill, qr/allowed-tools: Bash\(perl \$\{CLAUDE_SKILL_DIR\}\/scripts\/run\.pl \*\)/, 'SKILL.md allows only run.pl');
+like($skill, qr/allowed-tools: Bash\(perl \$\{CLAUDE_SKILL_DIR\}\/scripts\/workflow\.pl \*\)/, 'SKILL.md allows only workflow.pl');
 unlike($skill, qr/^coff-/m, 'SKILL.md has no coff build keys');
 unlike($skill, qr/<!--\{"src":/, 'raw SKILL.md has no footer');
-like(read_file(File::Spec->catfile($valid_out, 'scripts', 'workflow.pl')), qr/\Ause utf8;\n\nsub workflow/, 'workflow.pl declares utf8 and contains generated functions');
+like($generated_workflow, qr/\nsub workflow\b/, 'workflow.pl contains the generated workflow');
 
 done_testing();
 
@@ -112,7 +110,7 @@ sub run_dullmify {
         is(
             $question->{ask}{input}{existing},
             strip_generated(read_file($existing_path)),
-            'existing workflow is passed without use utf8 and the footer',
+            'existing workflow is passed without the templates and the footer',
         );
     }
     else {
@@ -134,7 +132,7 @@ sub run_process {
     my ($input, @args) = @_;
     my $error = gensym;
     local %ENV = (%ENV, XDG_STATE_HOME => $state);
-    my $pid = open3(my $in, my $out, $error, $^X, $run_pl, @args);
+    my $pid = open3(my $in, my $out, $error, $^X, $workflow_pl, @args);
     print {$in} $input;
     close $in;
     local $/;
@@ -165,10 +163,17 @@ sub write_file {
     close $fh;
 }
 
-# 生成時に加わる use utf8 と coff-compile のフッタを除いた形（dullmify が LLM に渡す形）
+# 雛形の頭と尻と coff-compile のフッタを除いた形（dullmify が LLM に渡す形）
 sub strip_generated {
     my ($text) = @_;
-    $text =~ s/\Ause utf8;\n\n?//;
+    my $head = read_file(File::Spec->catfile($source_root, 'templates', 'workflow-head.pl'));
+    my $tail = read_file(File::Spec->catfile($source_root, 'templates', 'workflow-tail.pl'));
     $text =~ s/\n?# <!--\{"src":.*?"md5":"[a-f0-9]{32}"\} -->\s*\z//s;
+    $text = substr($text, length $head) if index($text, $head) == 0;
+    $text =~ s/\s+\z//;
+    (my $trimmed_tail = $tail) =~ s/\s+\z//;
+    $text = substr($text, 0, length($text) - length($trimmed_tail))
+        if length($text) >= length($trimmed_tail) && substr($text, -length($trimmed_tail)) eq $trimmed_tail;
+    $text =~ s/\s+\z//;
     return $text;
 }

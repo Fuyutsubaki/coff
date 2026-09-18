@@ -26,7 +26,7 @@ lint:
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
 
-`coff-dullmify: true` の skill 型は `SKILL.md` に加えて `scripts/run.pl`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を出力する。
+`coff-dullmify: true` の skill 型は `SKILL.md` に加えて `scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を出力する。
 参照出力には `scripts/` を置かない。
 
 ## ビルド指示
@@ -184,9 +184,9 @@ b. **dullmify する。** `coff-dullmify: true` の skill ソースだけで行�
    - 実体出力に既存の `scripts/workflow.pl` があれば staging に複製しておく（coff-dullmify は出力先にある既存 workflow だけを見る）。
    - topic `dullmify` を LLM に問い、入力に `{source, out}`（ソースのパスと staging）を渡す。薄い skill は `/coff-dullmify <source> -o <staging>` を実行し、成功時は `ok`、失敗時は理由を答える。
    - `ok` 以外の答えは失敗として扱う。staging の内容を LLM の答えに含めない。
-   - Perl は staging から `SKILL.md`、`scripts/run.pl`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。4ファイルのいずれかがなければエラーにする。
+   - Perl は staging から `SKILL.md`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。3ファイルのいずれかがなければエラーにする。
    - staging の `SKILL.md` に a の翻訳を適用する。`coff-translate: false` の扱いも同じとする。
-   - c と d は staging の `SKILL.md` に適用する。`scripts/workflow.pl` にはソース md5 のフッタだけを加え、`run.pl` と runtime は変更しない。
+   - c と d は staging の `SKILL.md` に適用する。`scripts/workflow.pl` にはソース md5 のフッタだけを加え、runtime は変更しない。
    - staging は公開の成功後に削除する。失敗時は診断のために残す。
 
 c. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!-- ... -->` をすべて除去する。フェンスコードブロックやインラインコードの中にあるコメントは触らない。フロントマターも触らない。

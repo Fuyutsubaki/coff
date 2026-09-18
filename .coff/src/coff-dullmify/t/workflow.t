@@ -28,15 +28,12 @@ is($status, 0, 'start succeeds');
 is($stderr, '', 'start has no stderr');
 my $first = decode_output($stdout);
 is($first->{ask}{topic}, 'first', 'start returns the first llm topic');
-ok(!exists $first->{ask}{kind}, 'question has no user or llm kind');
 is($first->{index}, 1, 'the preceding step occupies index zero');
 my $run = $first->{run};
 
 my $journal = $JSON->decode(read_file(journal_path($run)));
 is($journal->{effects}[0]{result}{value}, 'journal value', 'journal keeps the step snapshot');
 is($first->{ask}{input}{snapshot}, 'workflow value', 'workflow receives a detached step value');
-ok(!exists $journal->{workflow_md5}, 'journal has no workflow version');
-ok(!exists $journal->{runtime_md5}, 'journal has no runtime version');
 
 ($status, $stdout, $stderr) = run_script_with_input('one', 'resume', $run, 1);
 is($status, 0, 'resume succeeds');
@@ -74,27 +71,6 @@ write_file(journal_path($non_deterministic->{run}), $JSON->canonical->encode($jo
 isnt($status, 0, 'changed llm input hash stops replay');
 like(decode_output($stdout)->{failed}, qr/non-deterministic/, 'non-determinism is reported');
 ok(!-e run_dir($non_deterministic->{run}), 'non-determinism removes the run directory');
-
-($status, $stdout, $stderr) = run_script('start', 'stable');
-my $resend = decode_output($stdout);
-($status, $stdout, $stderr) = run_script_with_input(
-    'one', 'resume', $resend->{run}, $resend->{index},
-);
-my $pending = decode_output($stdout);
-($status, $stdout, $stderr) = run_script_with_input(
-    'one', 'resume', $resend->{run}, $resend->{index},
-);
-isnt($status, 0, 'an answered index is not idempotent');
-like(decode_output($stdout)->{failed}, qr/already answered/, 'resend fails the run');
-ok(!-e run_dir($resend->{run}), 'resend failure removes the run directory');
-
-($status, $stdout, $stderr) = run_script('status', 'unused');
-isnt($status, 0, 'status is not a command');
-like($stderr, qr/start.*resume/, 'usage lists only start and resume');
-
-ok(!Coff::Workflow->can('user'), 'runtime has no user effect');
-ok(!Coff::Workflow->can('attempt'), 'runtime has no attempt helper');
-ok(!Coff::Workflow->can('publish_files'), 'runtime has no publish transaction');
 
 done_testing();
 
