@@ -3,7 +3,6 @@ name: coff-compile
 description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
 license: MIT
 coff-dist: true
-coff-dullmify: true
 ---
 
 <!--
@@ -36,7 +35,7 @@ lint:
   通常ファイルとディレクトリだけを扱い、シンボリックリンクはエラーにする。
 - bundle はソース md5 による skip の有無にかかわらず同期し、既存内容と一致するファイルは書き換えない。
 - `coff-dullmify: true` は skill 型だけに指定する。
-  ビルド時は staging に既存の `scripts/workflow.pl` を置いたうえで topic `dullmify` で `/coff-dullmify <source> -o <staging>` の実行を求め、staging の生成物を読み込む。
+  ビルド時は staging に既存の `scripts/workflow.pl` を置いたうえで `/coff-dullmify <source> -o <staging>` を実行し、staging の生成物を読み込む。
 
 ## オプション
 
@@ -108,7 +107,7 @@ echo $verdict
 
 `--out` / `--agent` があるときは、この導出に出力ルートの置換と参照出力の追加を適用する。参照出力も `dsts` に加え、skip 判定は全出力先に同じフッタ規則で行う。
 
-空のソースはエラーで中断する。
+空のソースはエラーとして報告し、次のファイルへ進む。
 
 ## 2. Lint
 
@@ -134,11 +133,6 @@ echo $verdict
 
 ただし frontmatter `description` だけは別にチェックする。skill ソースでは「何をするか」と「ユーザーがどう呼ぶか（引数や呼び出し方）」以外のもの（内部手順、実装詳細、WHY）が含まれていたら短縮候補（推奨 OFF）として、削るべき箇所を引用しつつ短縮案を提示する。agent ソースの `description` はモデルがサブエージェント起動を判断する材料なので skill と同じ扱い（WHAT＋いつ起動するか以外、つまり内部手順、実装詳細、WHY を短縮候補とし、推奨 OFF）。output style ソースには引数や呼び出し方の概念がないため、WHAT（何のためのスタイルか）以外を短縮候補（推奨 OFF）として扱う。
 
-`lint-candidates` の答えは JSON 配列とする。
-候補は `{start, end, replacement, label}` で表し、`start` と `end` は 1 始まりの行番号、`replacement` は承認時に範囲全体と置き換える文字列、`label` は提示文とする。
-候補なしは `[]` とする。
-範囲を昇順かつ重複なしにし、元の文字列と同じ `replacement` は返さない。
-
 ## 3. 対話による承認
 
 候補があれば、`AskUserQuestion` の `multiSelect=true` で一度に提示する。
@@ -146,7 +140,6 @@ echo $verdict
 - 候補はファイル単位でまとめ、各ラベルに「該当行、引用、適用方法、推奨、適用後のプレビュー」を含める。
 - 推奨はラベルの先頭タグで示す。推奨される候補は `[推奨]`、ユーザー判断が必要な候補は `[要判断]`。 <!-- AskUserQuestion に事前選択がないため -->
 - ユーザーが選んだものだけソースに反映する。
-- `lint-approval` の答えは承認する候補の 0 始まりの索引を JSON 配列で返す。
 
 反映の仕方:
 - コメント化候補: 該当範囲を `<!-- ... -->` で囲う。文言そのものは変えない。
@@ -166,7 +159,7 @@ lint で候補が 1 件でも提示されていれば（実際に適用したか
 
 lint がソースを書き換えた場合は、フッタを書く前に md5 を取り直す。 <!-- §1 で取った md5 は lint で書き換えると古くなる --> 各対象ファイルについて:
 
-a. **日本語を英語に訳す。** `translate` の問いへの答えとして、散文・見出し・箇条書き、および frontmatter の `description` 値を簡潔な英語に書き直した文書全体を返す。 <!-- 出力のトークン削減のため --> ソースの frontmatter に `coff-translate: false` があれば、この工程は丸ごと行わない（本文も `description` も原文のまま出力する）。 <!-- 日本語の書き方そのものが内容のスキルは、英訳すると価値が壊れるため -->
+a. **日本語を英語に訳す。** 散文・見出し・箇条書き、および frontmatter の `description` 値を簡潔な英語に書き直す。 <!-- 出力のトークン削減のため --> ソースの frontmatter に `coff-translate: false` があれば、この工程は丸ごと行わない（本文も `description` も原文のまま出力する）。 <!-- 日本語の書き方そのものが内容のスキルは、英訳すると価値が壊れるため -->
 
    ただし以下は訳さない（バイト単位でそのまま残す）:
    - モデルが照合や逐語出力に使う引用符付きリテラル。例: `ファイル名が "注文" から始まるファイル` の `"注文"` は日本語のまま。周囲の文だけを訳す → `files whose name starts with "注文"`。
@@ -182,9 +175,8 @@ b. **dullmify する。** `coff-dullmify: true` の skill ソースだけで行�
 
    - source md5 を含む `.coff/tmp/coff-compile/<name>-<md5>/` を staging にする。
    - 実体出力に既存の `scripts/workflow.pl` があれば staging に複製しておく（coff-dullmify は出力先にある既存 workflow だけを見る）。
-   - topic `dullmify` を LLM に問い、入力に `{source, out}`（ソースのパスと staging）を渡す。薄い skill は `/coff-dullmify <source> -o <staging>` を実行し、成功時は `ok`、失敗時は理由を答える。
-   - `ok` 以外の答えは失敗として扱う。staging の内容を LLM の答えに含めない。
-   - Perl は staging から `SKILL.md`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。3ファイルのいずれかがなければエラーにする。
+   - `/coff-dullmify <source> -o <staging>` を実行する。失敗したらこのソースを `failed` にする。
+   - staging から `SKILL.md`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。3ファイルのいずれかがなければエラーにする。
    - staging の `SKILL.md` に a の翻訳を適用する。`coff-translate: false` の扱いも同じとする。
    - c と d は staging の `SKILL.md` に適用する。`scripts/workflow.pl` にはソース md5 のフッタだけを加え、runtime は変更しない。
    - staging は公開の成功後に削除する。失敗時は診断のために残す。
@@ -203,7 +195,6 @@ e. **検査してからファイルごとに書く。** フッタは最終行に
 - `compiled`（lint で適用した件数があれば併記）
 - `linted (N applied, M rejected)` — `--lint-only` のとき、またはコンパイル前の確認で却下されたとき
 
-途中の失敗は run 全体を中断し、runtime の `failed` で理由を返す。
 
 スキップしたファイルは出さない。`--lint-only` で lint 候補が 0 件のときも何も出さない。
 
@@ -211,11 +202,7 @@ e. **検査してからファイルごとに書く。** フッタは最終行に
 
 - ソースを書き換えるのは lint で承認されたものだけ。
 - frontmatter の `name` 値、出力パスを構成する識別子は lint でも触らない。
-- workflow の失敗は `die` で run 全体を止め、runtime の `failed` として返す。
-- dullmify した workflow の journal は `${XDG_STATE_HOME:-$HOME/.local/state}/coff/<name>/<run>/` に置く。
-- effect は `llm(topic, input)` と block だけの `step { ... }` とする。ユーザーへの問いも `llm` の topic で表す。
-- journal は effect の実行順を持ち、`llm` は入力ハッシュも持つ。値は JSON の往復で切り離す。
-- runtime の操作は `start` と `resume <run> <index>` だけとする。done と failed で run のディレクトリを削除する。
+- lint も compile も、途中で失敗したら中途半端な書き込みを残さない。
 
 <!--
 実装メモ:
