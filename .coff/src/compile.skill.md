@@ -19,7 +19,7 @@ description: coff repo のビルド入口。`/coff-compile` のラッパーで�
      dst_dir="skills/$name"
      diff -r "$src_dir" "$dst_dir" >/dev/null 2>&1 && continue
      tmp_dir=$(mktemp -d "skills/.${name}.XXXXXX")
-     cp -R "$src_dir/." "$tmp_dir/"
+     cp -R "$src_dir/." "$tmp_dir/" || { rm -rf "$tmp_dir"; echo "mirror failed: $name"; exit 1; }
      rm -rf "$dst_dir"
      mv "$tmp_dir" "$dst_dir"
      echo "mirrored: $name"

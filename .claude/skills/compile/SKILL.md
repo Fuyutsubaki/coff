@@ -17,7 +17,7 @@ description: Build entry point for the coff repo. A wrapper around `/coff-compil
      dst_dir="skills/$name"
      diff -r "$src_dir" "$dst_dir" >/dev/null 2>&1 && continue
      tmp_dir=$(mktemp -d "skills/.${name}.XXXXXX")
-     cp -R "$src_dir/." "$tmp_dir/"
+     cp -R "$src_dir/." "$tmp_dir/" || { rm -rf "$tmp_dir"; echo "mirror failed: $name"; exit 1; }
      rm -rf "$dst_dir"
      mv "$tmp_dir" "$dst_dir"
      echo "mirrored: $name"
@@ -30,4 +30,4 @@ description: Build entry point for the coff repo. A wrapper around `/coff-compil
 
 - `coff-dist` is the coff repo's distribution declaration, and this wrapper is its only interpreter. 
 - Removing the mirror of a source that dropped the declaration is done by hand.
-<!--{"src":".coff/src/compile.skill.md","md5":"fcbb3394bec4fd82be21977276632b88"} -->
+<!--{"src":".coff/src/compile.skill.md","md5":"754ee9f5b52592aed0c85a06160495ea"} -->
