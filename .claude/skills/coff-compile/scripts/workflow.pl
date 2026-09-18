@@ -1,4 +1,15 @@
+#!/usr/bin/env perl
+# ここから sub workflow の手前までは coff-dullmify が差し込む土台で、LLM は書かない。
+use strict;
+use warnings;
 use utf8;
+use 5.030;
+
+use File::Basename qw(basename dirname);
+use File::Spec;
+use FindBin;
+use lib "$FindBin::Bin/lib";
+use Coff::Workflow qw(run_workflow llm step);
 
 # 対象を選び、各ソースの lint と compile を順番に進める。
 sub workflow {
@@ -362,6 +373,7 @@ sub _collect_bundle_files {
         die "bundle directory not found: $root\n" unless -d $root;
         my $error;
         require File::Find;
+        no warnings 'once';    # $File::Find::name は wanted の中で一度しか触らない
         File::Find::find({
             no_chdir => 1,
             wanted   => sub {
@@ -486,21 +498,19 @@ sub _seed_staging {
     return 1;
 }
 
-# dullmify が書いた4ファイルを読み、workflow の構文を確かめる。
+# dullmify が書いた3ファイルを読み、workflow の構文を確かめる。
 sub _read_dullmify_output {
     my ($root) = @_;
     die "dullmify output is missing: $root\n" unless -d $root;
     my $skill_path = File::Spec->catfile($root, 'SKILL.md');
-    my $run_path = File::Spec->catfile($root, 'scripts', 'run.pl');
     my $workflow_path = File::Spec->catfile($root, 'scripts', 'workflow.pl');
     my $runtime_path = File::Spec->catfile($root, 'scripts', 'lib', 'Coff', 'Workflow.pm');
     die "missing dullmify output: $_\n"
-        for grep { !-f $_ } ($skill_path, $run_path, $workflow_path, $runtime_path);
+        for grep { !-f $_ } ($skill_path, $workflow_path, $runtime_path);
     my $workflow = _read_text($workflow_path);
     _check_perl($workflow);
     return {
         skill    => _read_text($skill_path),
-        run      => _read_text($run_path),
         workflow => $workflow,
         runtime  => _read_text($runtime_path),
     };
@@ -529,7 +539,6 @@ sub _publish_compiled {
                 my $workflow = $generated->{workflow};
                 $workflow =~ s/\s+\z//;
                 my @generated_files = (
-                    [File::Spec->catfile($scripts, 'run.pl'), $generated->{run}],
                     [File::Spec->catfile($scripts, 'workflow.pl'), "$workflow\n# $footer\n"],
                     [File::Spec->catfile($scripts, 'lib', 'Coff', 'Workflow.pm'), $generated->{runtime}],
                 );
@@ -769,4 +778,8 @@ sub _check_perl {
     $diagnostic =~ s/\s+\z//;
     die "perl -c failed for workflow.pl: $diagnostic\n";
 }
+
+# ここから下も土台。skill 名は親ディレクトリ名で、runtime に workflow と引数を渡して終了コードを返す。
+exit run_workflow(name => basename(dirname($FindBin::Bin)),
+    workflow => \&workflow, argv => \@ARGV);
 # <!--{"src":".coff/src/coff-compile.skill.md","md5":"86343ce6d7e505aafaf5cc1dfe27fafe"} -->

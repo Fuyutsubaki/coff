@@ -1,4 +1,15 @@
+#!/usr/bin/env perl
+# ここから sub workflow の手前までは coff-dullmify が差し込む土台で、LLM は書かない。
+use strict;
+use warnings;
 use utf8;
+use 5.030;
+
+use File::Basename qw(basename dirname);
+use File::Spec;
+use FindBin;
+use lib "$FindBin::Bin/lib";
+use Coff::Workflow qw(run_workflow llm step);
 
 # dullmify の二つの問いと書き出しを順番に進める。
 sub workflow {
@@ -46,9 +57,9 @@ sub _plan {
 
     my $existing_path = File::Spec->catfile($out, 'scripts', 'workflow.pl');
     my $existing = -f $existing_path ? _read_text($existing_path) : '';
-    # 生成時に加える use utf8 と coff-compile が付けるフッタは、答えに含めてはいけないので渡す前に落とす。
-    $existing =~ s/\Ause utf8;\n\n?//;
+    # coff-compile のフッタと雛形の頭と尻は、答えに含めてはいけないので渡す前に落とす。
     $existing =~ s/\n?# <!--\{"src":.*?"md5":"[a-f0-9]{32}"\} -->\s*\z//s;
+    $existing = _strip_templates($existing);
     return {
         name              => $name,
         source            => $source,
@@ -58,16 +69,17 @@ sub _plan {
     };
 }
 
-# LLM の答えと雛形を組み立て、構文検査後に4ファイルを書く。
+# LLM の答えと雛形を組み立て、構文検査後に3ファイルを書く。
 sub _publish {
     my ($plan, $workflow_body, $topics) = @_;
     $workflow_body = _workflow_body($workflow_body);
     $topics = _topics($topics);
-    my $workflow_content = "use utf8;\n\n$workflow_body\n";
-    _check_perl($workflow_content);
-
     my $scripts = dirname(__FILE__);
     my $skill_root = dirname($scripts);
+    my ($head, $tail) = _templates();
+    my $workflow_content = "$head$workflow_body\n$tail";
+    _check_perl($workflow_content);
+
     my $frontmatter = _frontmatter($plan->{source_content}, $plan->{name});
     my $prefix = _read_text(File::Spec->catfile($skill_root, 'templates', 'skill-prefix.md'));
     my $suffix = _read_text(File::Spec->catfile($skill_root, 'templates', 'skill-suffix.md'));
@@ -75,8 +87,6 @@ sub _publish {
 
     my @files = (
         [File::Spec->catfile($plan->{out}, 'SKILL.md'), $skill],
-        [File::Spec->catfile($plan->{out}, 'scripts', 'run.pl'),
-            _read_text(File::Spec->catfile($scripts, 'run.pl'))],
         [File::Spec->catfile($plan->{out}, 'scripts', 'workflow.pl'), $workflow_content],
         [File::Spec->catfile($plan->{out}, 'scripts', 'lib', 'Coff', 'Workflow.pm'),
             _read_text(File::Spec->catfile($scripts, 'lib', 'Coff', 'Workflow.pm'))],
@@ -136,8 +146,31 @@ sub _frontmatter {
         push @kept, $line unless $skip;
     }
     unshift @kept, "name: $name" unless $has_name;
-    push @kept, 'allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)';
+    push @kept, 'allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)';
     return "---\n" . join("\n", @kept) . "\n---";
+}
+
+# 雛形の頭と尻を読む。
+sub _templates {
+    my $templates = File::Spec->catdir(dirname(dirname(__FILE__)), 'templates');
+    return (
+        _read_text(File::Spec->catfile($templates, 'workflow-head.pl')),
+        _read_text(File::Spec->catfile($templates, 'workflow-tail.pl')),
+    );
+}
+
+# 既存 workflow から雛形の頭と尻を取り除き、LLM が書いた部分だけにする。
+sub _strip_templates {
+    my ($text) = @_;
+    my ($head, $tail) = _templates();
+    $text = substr($text, length $head) if index($text, $head) == 0;
+    $text =~ s/\s+\z//;
+    my $trimmed_tail = $tail =~ s/\s+\z//r;
+    $text = substr($text, 0, length($text) - length($trimmed_tail))
+        if length($text) >= length($trimmed_tail)
+        && substr($text, -length($trimmed_tail)) eq $trimmed_tail;
+    $text =~ s/\s+\z//;
+    return $text;
 }
 
 # UTF-8 のテキストファイルを文字列として読む。
@@ -187,4 +220,8 @@ sub _write_file {
     close $fh or die "cannot close $tmp: $!\n";
     rename $tmp, $path or die "cannot replace $path: $!\n";
 }
+
+# ここから下も土台。skill 名は親ディレクトリ名で、runtime に workflow と引数を渡して終了コードを返す。
+exit run_workflow(name => basename(dirname($FindBin::Bin)),
+    workflow => \&workflow, argv => \@ARGV);
 # <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"4176c73106f733dcc6eab37f06c55f31"} -->

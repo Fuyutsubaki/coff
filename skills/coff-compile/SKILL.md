@@ -2,14 +2,14 @@
 name: coff-compile
 description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` / `--ref` / `--agent` add destination override, reference stubs, and per-agent output.
 license: MIT
-allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)
+allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)
 ---
 
 ## Run the workflow
 
-Run `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl start $ARGUMENTS` and read the JSON response.
+Run `perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl start $ARGUMENTS` and read the JSON response.
 
-When the response has `ask`, compose the answer according to `topic`, and pass only the answer on standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl resume <run> <index>`.
+When the response has `ask`, compose the answer according to `topic`, and pass only the answer on standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl resume <run> <index>`.
 Pass the answer verbatim with a single-quoted heredoc.
 Repeat until `done: true`.
 

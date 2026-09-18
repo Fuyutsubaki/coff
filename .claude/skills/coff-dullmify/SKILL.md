@@ -2,14 +2,14 @@
 name: coff-dullmify
 description: Split a skill source into a deterministic Perl workflow and a thin SKILL.md. Specify the source and the output directory as `<source>.skill.md -o <dir>`.
 license: MIT
-allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)
+allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)
 ---
 
 ## Run the workflow
 
-Run `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl start $ARGUMENTS` and read the JSON response.
+Run `perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl start $ARGUMENTS` and read the JSON response.
 
-When the response has `ask`, compose the answer according to `topic`, and pass only the answer on standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl resume <run> <index>`.
+When the response has `ask`, compose the answer according to `topic`, and pass only the answer on standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl resume <run> <index>`.
 Pass the answer verbatim with a single-quoted heredoc.
 Repeat until `done: true`.
 
