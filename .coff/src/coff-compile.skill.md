@@ -36,7 +36,7 @@ lint:
   通常ファイルとディレクトリだけを扱い、シンボリックリンクはエラーにする。
 - bundle はソース md5 による skip の有無にかかわらず同期し、既存内容と一致するファイルは書き換えない。
 - `coff-dullmify: true` は skill 型だけに指定する。
-  ビルド時は topic `dullmify` で `/coff-dullmify <name> --out <staging>` の実行を求め、staging の生成物を読み込む。
+  ビルド時は staging に既存の `scripts/workflow.pl` を置いたうえで topic `dullmify` で `/coff-dullmify <source> -o <staging>` の実行を求め、staging の生成物を読み込む。
 
 ## オプション
 
@@ -181,7 +181,8 @@ a. **日本語を英語に訳す。** `translate` の問いへの答えとして
 b. **dullmify する。** `coff-dullmify: true` の skill ソースだけで行う。
 
    - source md5 を含む `.coff/tmp/coff-compile/<name>-<md5>/` を staging にする。
-   - topic `dullmify` を LLM に問い、入力に `{source, name, out}` を渡す。薄い skill は `/coff-dullmify <name> --out <staging>` を実行し、成功時は `ok`、失敗時は理由を答える。
+   - 実体出力に既存の `scripts/workflow.pl` があれば staging に複製しておく（coff-dullmify は出力先にある既存 workflow だけを見る）。
+   - topic `dullmify` を LLM に問い、入力に `{source, out}`（ソースのパスと staging）を渡す。薄い skill は `/coff-dullmify <source> -o <staging>` を実行し、成功時は `ok`、失敗時は理由を答える。
    - `ok` 以外の答えは失敗として扱う。staging の内容を LLM の答えに含めない。
    - Perl は staging から `SKILL.md`、`scripts/run.pl`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。欠落、余分な通常ファイル、シンボリックリンクはエラーにする。
    - staging の `SKILL.md` に a の翻訳を適用する。`coff-translate: false` の扱いも同じとする。
