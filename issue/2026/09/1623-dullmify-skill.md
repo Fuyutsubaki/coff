@@ -18,17 +18,17 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - coff-compile は `.coff/src/*.skill.md` を `.claude/skills/<name>/SKILL.md` に出力する。成果物は Markdown だけで、コードを含める機構はない。ビルド指示は frontmatter の `coff-*` で宣言し、skip 判定は出力先の最終行のフッタの md5 で行う。
 - LLM が bash スニペットを読んで制御を担っているソースは coff-compile、compile、coff-init、coff-review-diff-code の 4 つ。coff-issue-list は awk の埋め込みコマンドと `allowed-tools` で既にプログラム化されている。
 - Claude Code の `allowed-tools` は skill のターンで列挙したツールを事前承認する機構で、列挙外を制限しない。`${CLAUDE_SKILL_DIR}` で skill ディレクトリ基準のパスを書ける。Bash ツールは起動済みプロセスの stdin に書けない（調査記録 1）。
-- 配布の単位は skill ディレクトリで、`gh skill install` はサブディレクトリごとコピーする。ラッパー compile のミラー同期は SKILL.md 単体の複製で、issue/2026/08/0501-coff-include-directive.md（skill 同梱のビルド指示。未着手）がディレクトリ単位への拡張を予定している。
+- 配布の単位は skill ディレクトリで、`gh skill install` はサブディレクトリごとコピーする。ラッパー compile のミラー同期は SKILL.md 単体の複製で、issue/2026/08/0501-coff-include-directive.md（skill 同梱のビルド指示。未着手）がディレクトリ単位への拡張を予定している（本 issue で先に実施した）。
 
 ## 設計方針
 
-1. `coff-dullmify` は独立 skill とし、`<source>.skill.md -o <dir>` から4ファイルを一時出力する。既存 workflow は `workflow` の問いへ全文を渡し、md5、フッタ、英訳、最終出力は扱わない。
+1. `coff-dullmify` は独立 skill とし、`<source>.skill.md -o <dir>` から `SKILL.md`、`scripts/workflow.pl`、runtime の 3 ファイルを一時出力する。既存 workflow は雛形の頭と尻とフッタを除いて `workflow` の問いへ渡し、md5、フッタ、英訳、最終出力は扱わない。
 2. `.coff/src/coff-dullmify.skill.md` は手順と判断基準を持つ太いソースとする。runtime、workflow.pl の頭と尻の雛形、SKILL.md の定型だけを手書きし、workflow.pl はソースから生成する。
 3. runtime は `llm(topic, input)`、`step { ... }`、`die`、実行順の journal、非決定の検出、JSON による値の切り離し、`start` / `resume` だけを持つ。done と failed で run を削除する。
 4. coff-compile は staging に既存 workflow を置き、topic `dullmify` で一時出力を書かせる。SKILL.md の英訳とコメント除去、SKILL.md と workflow.pl のフッタ、md5 と skip、実体出力への書き出しは coff-compile が担う。
 5. 薄い skill の `allowed-tools` は `Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` だけとする。runtime と雛形は節ごと、生成 workflow は補助関数ごとに日本語のコメントを書く。
 
-生成規則を coff-compile に埋める案、dullmify のソースを薄くする案、dullmify が最終位置へ直接書く案は採らない。共通部分の重複、ソースの位置付け、責務の混在を避ける。
+生成規則を coff-compile に埋める案、dullmify のソースを薄くする案、dullmify が最終位置へ直接書く案は採らない。共通部分の重複、ソースの位置付け、責務の混在を避ける。常駐プロセスとの往復（名前付きパイプ、MCP、`claude -p` の逆転）は Bash ツールが起動済みプロセスの stdin に書けず、`context: fork` でツールを絞る案は AskUserQuestion が使えないので採らない。
 
 ## 決めたこと
 
@@ -65,9 +65,10 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - `.coff/src/coff-dullmify/templates/`：workflow.pl の頭（use 群と runtime の読み込み）と尻（`run_workflow` の呼び出し）、start / resume だけを案内する薄い SKILL.md の定型
 - `.coff/src/coff-dullmify/t/`：runtime、既存 workflow の受け渡し、雛形の一致、`perl -c` の門を検証
 - `.coff/src/coff-dullmify.skill.md`：手順、`workflow` / `topics` の判断基準、組み立て規則を持つ太いソース
-- `.coff/src/coff-dullmify/scripts/dullmify.pl`：削除。生成した workflow.pl が処理を担う
 - `.coff/src/coff-compile.skill.md`：staging、topic `dullmify`、英訳、フッタ、ファイル単位の公開を定義
-- `.claude/skills/coff-compile/`、`.claude/skills/coff-dullmify/`：ブートストラップで生成した英語の薄い skill、workflow、runtime
+- `.coff/src/compile.skill.md`：配布ミラーの同期を skill ディレクトリ単位にする（0501 の方針 4 を先に実施）
+- `.gitignore`：staging 用の `.coff/tmp/` を無視する
+- `.claude/skills/coff-compile/`、`.claude/skills/coff-dullmify/`：ブートストラップで生成した英語の薄い skill、workflow、runtime（coff-dullmify は雛形も同梱）
 - `skills/coff-compile/`、`skills/coff-dullmify/`：正本とディレクトリ単位で一致する配布ミラー
 
 後で効く制約:
@@ -87,7 +88,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 1. `prove -I .coff/src/coff-dullmify/scripts/lib .coff/src/coff-dullmify/t/`
 2. 一時 dir に古い `scripts/workflow.pl` を置いて `/coff-dullmify .coff/src/coff-compile.skill.md -o <一時dir>` を実行し、最初の問いの `existing` にそれが入ること、完走後に `ls` で 3 ファイル、`cmp` で `Workflow.pm`、`diff` で workflow.pl の頭と尻と SKILL.md の定型段落を確かめる
 3. 組み立てをテストで叩く（壊れた workflow 本文で失敗が返り、`<dir>` に何も書かれないこと）。1 に含める
-4. `head -12 .coff/src/coff-dullmify.skill.md` に手順が書かれていること。`/compile --force coff-dullmify` を通し、`.claude/skills/coff-dullmify/scripts/workflow.pl` のフッタ md5 がソースと一致すること
+4. `.coff/src/coff-dullmify.skill.md` に `## 手順` 節があり Perl の呼び出しで始まっていないこと。`/compile --force coff-dullmify` を通し、`.claude/skills/coff-dullmify/scripts/workflow.pl` のフッタ md5 がソースと一致すること
 5. 8 の実行中に topic `dullmify` の問いの後に `translate` が続き、完走後に `tail -n1` で両フッタの md5 が `md5sum` と一致すること
 6. `head` で frontmatter を見る。`grep -c '```'` が 0 で、読んで制御の手順が無いこと
 7. `grep -c '^\s*#' ` で各 Perl のコメント行を数え、`sub` ごとに一言以上あることを読んで確かめる
@@ -104,6 +105,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
    - 採らない Perl の手段: source filter（文字列の書き換えで corner case を背負う）、`Keyword::Simple` / `XS::Parse::Keyword`（experimental、XS 依存は配布と逆方向）、Coro（最終リリース 2020 年）、`Future::AsyncAwait`（同一プロセス内の中断にしか効かず、プロセスをまたぐなら結局 replay が要る）。
    - runtime に最低限持たせる 3 点: 再開の検証（run と effect の索引、現在の工程を照合し、LLM に次の工程を指定させない）、重複への対処（同じ答えの再送で二重に進めない。外部への書き込みは冪等にする）、バージョンの固定（開始時の workflow を特定し、更新後の別コードで古い状態を再開しない）。
    - プロセスの終了と workflow の終了を分ける。前者で一時領域を消さない。後者は done / failed / cancelled の終端処理として記録し、`cancel` と `gc` を持つ。
+   - 上の 3 点のうち再送の冪等とバージョンの固定、および `cancel` と `gc` は、実装が膨らんだため初版では採らなかった（決めたこと参照）。
    - Claude Code の Dynamic workflows（Workflow ツール）は近いが、スクリプト自身がファイル操作とシェル実行をできず、外部操作を agent に戻す設計なので採らない。
    - 配布は Perl 同梱の Linux / macOS を前提にし、PAR::Packer による単体実行ファイル化は採らない。
 3. 試作（2026-09-17、scratchpad、約 40 行の Perl 5.34）: `die` による中断、journal への保存、`resume` での答えの差し込み、journal のキー改変による非決定の検出が成立した。
