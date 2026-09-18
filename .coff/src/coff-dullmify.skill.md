@@ -28,7 +28,7 @@ workflow.pl は雛形の頭（use 群と runtime の読み込み）、`sub workf
    ソースは1個の `*.skill.md`、出力先は1個の `-o <dir>` とする。
    ソースが存在しない場合、空の場合、引数が余る場合は失敗する。
 2. ソース全文を UTF-8 で読む。
-   `<dir>/scripts/workflow.pl` が存在すれば UTF-8 で読み、末尾の生成フッタ、雛形の頭、雛形の尻を除いたものを既存 workflow とする（答えに含めてはいけないものを LLM に渡さない）。
+   `<dir>/scripts/workflow.pl` が存在すれば UTF-8 で読み、末尾の生成フッタ、雛形の頭、雛形の尻を除いたものを既存 workflow とする。 <!-- 答えに含めてはいけないものを LLM に渡さない -->
 3. topic `workflow` を問い、入力に `{source, existing}` を渡す。
 4. topic `topics` を問い、入力に `{source}` を渡す。
 5. workflow の答えを検査する。
@@ -40,7 +40,7 @@ workflow.pl は雛形の頭（use 群と runtime の読み込み）、`sub workf
    ソースの frontmatter から `coff-*` と `allowed-tools` を除き、`allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` を加える。
 9. SKILL.md の本文を `templates/skill-prefix.md`、topics の答え、`templates/skill-suffix.md` の順に組み立てる。
    定型は変更せずに差し込む。
-10. workflow.pl を一時ファイルへ書き、同梱の runtime の `lib` を `-I` で渡して `perl -c` を通す（一時ファイルの場所では雛形の `use lib` が runtime を見つけられない）。
+10. workflow.pl を一時ファイルへ書き、同梱の runtime の `lib` を `-I` で渡して `perl -c` を通す。 <!-- 一時ファイルの場所では雛形の `use lib` が runtime を見つけられない -->
     構文検査に失敗した場合は `<dir>` へ何も書かない。
 11. 構文検査後に3ファイルを書く。
     各ファイルを出力先と同じディレクトリの一時ファイルへ書き、rename で置き換える。

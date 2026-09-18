@@ -226,4 +226,4 @@ sub _write_file {
 # ここから下も土台。skill 名は親ディレクトリ名で、runtime に workflow と引数を渡して終了コードを返す。
 exit run_workflow(name => basename(dirname($FindBin::Bin)),
     workflow => \&workflow, argv => \@ARGV);
-# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"1d1171a459de54721268b1611cedce5e"} -->
+# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"e6fb6e48d02934906e84c7220f5f1e0d"} -->

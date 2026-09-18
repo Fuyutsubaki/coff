@@ -44,4 +44,4 @@ Write tersely in the same language as the source.
 
 When the response becomes `done: true`, present `report`.
 Do not present an empty report.
-<!--{"src":".coff/src/coff-dullmify.skill.md","md5":"1d1171a459de54721268b1611cedce5e"} -->
+<!--{"src":".coff/src/coff-dullmify.skill.md","md5":"e6fb6e48d02934906e84c7220f5f1e0d"} -->
