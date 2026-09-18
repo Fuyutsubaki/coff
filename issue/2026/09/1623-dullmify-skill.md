@@ -35,7 +35,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - 言語は一旦 Perl。Go は採らない（元は skill とプロセスが標準入出力で処理する想定だったが、それには生きているプロセスと会話する必要があり、skill はそれには不十分だった。その前提では Go はわざわざインストールを要求するほど便利ではなかった）
 - dullmify は独立した skill にし、その上で coff-compile の選択肢にする
 - 全 skill で同じになる部分は毎回 LLM で作らず、あらかじめ作った雛形を差し込む（初回実装の生成コードがあまりにも読みづらい）
-- coff-compile から dullmify へは LLM 経由（topic `dullmify` で `/coff-dullmify` を実行）で呼ぶ。Perl 同士の依存は作らない
+- coff-compile から dullmify へは skill の呼び出し（`/coff-dullmify <source> -o <staging>`）で行う。Perl 同士の依存は作らない
 - coff-dullmify のインターフェースは clang などの現実のコンパイラに寄せる。ソースと出力先を指定し、既定は持たない
 - md5 系は runtime から捨て、coff-compile でカバーする
 - dullmify は一時ディレクトリに書き、それを coff-compile に弄らせる（dullmify は複雑かつ汎用的なのでシンプルにしたい）
@@ -66,7 +66,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - `.coff/src/coff-dullmify/templates/`：workflow.pl の頭（use 群と runtime の読み込み）と尻（`run_workflow` の呼び出し）、start / resume だけを案内する薄い SKILL.md の定型
 - `.coff/src/coff-dullmify/t/`：runtime、既存 workflow の受け渡し、雛形の一致、`perl -c` の門を検証
 - `.coff/src/coff-dullmify.skill.md`：手順、`workflow` / `topics` の判断基準、組み立て規則を持つ太いソース
-- `.coff/src/coff-compile.skill.md`：staging、topic `dullmify`、英訳、フッタ、ファイル単位の公開を定義
+- `.coff/src/coff-compile.skill.md`：staging、`/coff-dullmify` の実行、英訳、フッタ、ファイル単位の公開を定義
 - `.coff/src/compile.skill.md`：配布ミラーの同期を skill ディレクトリ単位にする（0501 の方針 4 を先に実施）
 - `.gitignore`：staging 用の `.coff/tmp/` を無視する
 - `.claude/skills/coff-dullmify/`：ブートストラップで生成した英語の薄い skill、workflow、runtime、雛形
@@ -80,7 +80,8 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - 問いは `{"run":…,"index":…,"ask":{"topic":…,"input":…}}`、終了は `{"run":…,"done":true,"report":…}`、失敗は `{"run":…,"done":true,"failed":"<理由>"}`。
 - `resume` の stdin は UTF-8 の文字列として保存し、JSON を要求する topic だけを workflow 側で decode する。
 - journal に入れる値と workflow に返す値は JSON の往復で切り離す（同じ参照を共有すると workflow 側の書き換えが記録に混ざり、replay が非決定として止まる）。run のディレクトリは done と failed で消す。
-- topic `dullmify` の入力は `{source, out}`、答えは `ok` か失敗の理由。一時ディレクトリの中身を LLM に運ばない。
+- coff-compile は `/coff-dullmify <source> -o <staging>` を実行し、staging の 3 ファイルを読んで英訳とフッタを施し公開する。`perl -c` は coff-dullmify が通しているので coff-compile では再検査しない。
+- `step` の識別は実行順だけで、同じ位置の step の中身が変わっても検出しない（ソースが変われば md5 で workflow.pl ごと再生成されるので受容）。3 ファイルの書き出しはファイルごとの temp + rename で、途中で失敗すると先行ファイルだけが更新される（多ファイルのトランザクションを落とした帰結として受容）。
 - 薄い SKILL.md はソースの frontmatter から `coff-*` と `allowed-tools` を落とし、`allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` を加える。
 - `perl -c` の門には runtime の `lib` を `-I` で渡す（一時ファイルの場所では雛形の `use lib` が runtime を見つけられない。テストは prove の PERL5LIB が子プロセスに継承されるので、この欠落を検出できなかった）。
 
