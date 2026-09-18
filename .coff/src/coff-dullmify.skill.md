@@ -1,6 +1,6 @@
 ---
 name: coff-dullmify
-description: `.coff/src/<name>.skill.md` を決定論的な Perl workflow と薄い SKILL.md に分ける。`<name> [--out <dir>]` を受け取り、既定では `.claude/skills/<name>/` へ出力する。
+description: skill ソースを決定論的な Perl workflow と薄い SKILL.md に分ける。`<source>.skill.md -o <dir>` でソースと出力先を指定する。既定はない。
 license: MIT
 coff-dist: true
 coff-bundle: [scripts, templates]
@@ -21,7 +21,7 @@ run の終了には `--workflow dullmify.pl cancel <run>`、7 日より古い ru
 ## topic `workflow`
 
 入力の `source` を読み、`sub workflow` とその skill に固有の補助関数だけを Perl で返す。
-既存の `workflow.pl` が `existing` にあれば、必要な変更に限る。
+既存の `workflow.pl`（出力先に置かれていたもの）が `existing` にあれば、必要な変更に限る。
 Markdown フェンス、shebang、`use` 宣言、`run_workflow` の呼び出し、生成フッタを含めない。
 
 副作用を引数なしの `step { ... }` に置き、失敗は `die` で表す。
