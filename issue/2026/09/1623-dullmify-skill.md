@@ -52,10 +52,10 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - [x] `/coff-dullmify .coff/src/coff-compile.skill.md -o <dir>` が 3 ファイルを書き、workflow.pl の頭と尻、runtime、SKILL.md の定型は同梱の雛形とバイト一致する。`<dir>/scripts/workflow.pl` があれば `workflow` の問いに `existing` として渡る
 - [x] `workflow` の答えが `perl -c` を通らないときは `failed` になり、`<dir>` に書かれない
 - [x] `.coff/src/coff-dullmify.skill.md` が太いソースで、その `workflow.pl` は `/compile` で自分から生成される
-- [ ] coff-compile が `coff-dullmify: true` のソースで一時ディレクトリに前の `workflow.pl` を置き、`/coff-dullmify` の後に SKILL.md を英訳し、SKILL.md と workflow.pl にフッタを付けて公開する
+- [x] coff-compile が `coff-dullmify: true` のソースで一時ディレクトリに前の `workflow.pl` を置き、`/coff-dullmify` の後に SKILL.md を英訳し、SKILL.md と workflow.pl にフッタを付けて公開する
 - [x] 薄い SKILL.md は `allowed-tools` が `workflow.pl` の呼び出しだけで `coff-*` キーが残らず、本文に bash スニペットと制御の手順が無い
 - [x] 手書きの Perl（runtime、雛形）と生成した workflow.pl に意図のコメントがある
-- [ ] `/compile --force coff-dullmify` が、coff-dullmify の薄い成果物の呼び出しで承認プロンプトを出さずに完走できる
+- [x] `/compile --force coff-dullmify` が、coff-dullmify の薄い成果物の呼び出しで承認プロンプトを出さずに完走できる
 - [x] 配布ミラー `skills/coff-compile/` と `skills/coff-dullmify/` が正本とディレクトリ単位で一致する
 
 ## 実装メモ
