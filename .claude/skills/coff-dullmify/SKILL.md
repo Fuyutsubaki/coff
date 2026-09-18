@@ -1,6 +1,6 @@
 ---
 name: coff-dullmify
-description: Split `.coff/src/<name>.skill.md` into a deterministic Perl workflow and a thin SKILL.md. Accept `<name> [--out <dir>]`; the default output is `.claude/skills/<name>/`.
+description: Split a skill source into a deterministic Perl workflow and a thin SKILL.md. Specify the source and the output directory with `<source>.skill.md -o <dir>`. There are no defaults.
 license: MIT
 allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)
 ---
@@ -9,38 +9,38 @@ allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/run.pl *)
 
 Run `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl --workflow dullmify.pl start $ARGUMENTS` and read the JSON response.
 
-When the response contains `ask`, prepare an answer according to `kind` and `topic`. Pass only the answer through standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl --workflow dullmify.pl resume <run> <index>`.
-Pass the answer unchanged with a single-quoted heredoc.
+When the response has `ask`, compose the answer according to `kind` and `topic`, and pass only the answer on standard input to `perl ${CLAUDE_SKILL_DIR}/scripts/run.pl --workflow dullmify.pl resume <run> <index>`.
+Pass the answer verbatim with a single-quoted heredoc.
 Repeat until `done: true`.
 
-If conversational context is lost, retrieve the pending question with `--workflow dullmify.pl status <run>`.
+After losing conversation context, retrieve the unanswered question with `--workflow dullmify.pl status <run>`.
 Use `--workflow dullmify.pl cancel <run>` to end a run and `--workflow dullmify.pl gc` to remove runs older than seven days.
 
 ## Topic `workflow`
 
-Read `source` and return only `sub workflow` and helper functions specific to that skill in Perl.
-When `existing` contains a `workflow.pl`, limit the response to necessary changes.
+Read `source` and return, in Perl, only `sub workflow` and the helper functions specific to that skill.
+When `existing` holds an existing `workflow.pl` (the one placed in the output directory), limit the answer to the necessary changes.
 Do not include Markdown fences, a shebang, `use` declarations, a `run_workflow` call, or a generated footer.
 
 Put side effects in argument-free `step { ... }` blocks and express failures with `die`.
-Use `attempt { ... }` to turn per-target failures into reports while continuing.
-Pass only a topic and input to `llm` and `user`.
-Do not use clocks or randomness. Sort hash keys before iterating.
-Do not wrap effects in a raw `eval`.
+Use `attempt { ... }` to turn per-target failures into reports that let the run continue.
+Pass only a topic and an input to `llm` and `user`.
+Do not use clocks or randomness, and sort hash keys before iterating.
+Do not wrap an effect in a raw `eval`.
 
-Use syntax supported by Perl 5.30 and core modules only.
-`run.pl` loads `Digest::MD5`, `Encode`, `File::Basename`, `File::Find`, `File::Path`, `File::Spec`, `JSON::PP`, and `llm`, `user`, `step`, `attempt`, and `publish_files` from `Coff::Workflow`.
-The assembler adds `use utf8`; do not include it in the answer.
+Use only syntax that runs on Perl 5.30 and core modules.
+Use `Digest::MD5`, `Encode`, `File::Basename`, `File::Find`, `File::Path`, `File::Spec`, and `JSON::PP`, which `run.pl` loads, and `llm`, `user`, `step`, `attempt`, and `publish_files` from `Coff::Workflow`.
+`use utf8` is added at generation time, so do not write it in the answer.
 
 ## Topic `topics`
 
-From `source`, return concise Markdown criteria for each `llm` and `user` topic used by the workflow.
-Describe only the input, answer format, and judgment criteria.
+From `source`, return in Markdown the judgment criteria for each `llm` and `user` topic the workflow uses.
+Write only the inputs included in the question, the answer format, and the judgment criteria.
 Do not include frontmatter, the common request-response procedure, the completion report, or Markdown fences.
-Use the same language as the source.
+Write tersely in the same language as the source.
 
 ## Completion report
 
 When the response becomes `done: true`, present `report`.
 Do not present an empty report.
-<!--{"src":".coff/src/coff-dullmify.skill.md","md5":"3e5d5ed91be60508073f8fd030563030"} -->
+<!--{"src":".coff/src/coff-dullmify.skill.md","md5":"2510a9cf99c73128fcfb531491fe940b"} -->

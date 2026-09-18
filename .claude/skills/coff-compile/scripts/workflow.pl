@@ -84,9 +84,9 @@ sub _compile_item {
 sub _compile_dullmified {
     my ($item) = @_;
     my $staging = _staging_path($item);
+    step { _seed_staging($item, $staging) };
     my $answer = llm('dullmify', {
-        source => $item->{content},
-        name   => $item->{name},
+        source => $item->{source},
         out    => $staging,
     });
     $answer =~ s/\A\s+|\s+\z//g;
@@ -463,6 +463,24 @@ sub _staging_path {
     );
 }
 
+# coff-dullmify は出力先にある既存 workflow だけを見るので、前の成果物を staging に置いてから呼ぶ
+sub _seed_staging {
+    my ($item, $staging) = @_;
+    my ($body_output) = grep { $_->{mode} eq 'body' } @{ $item->{outputs} };
+    return 0 unless $body_output;
+    my $existing = File::Spec->catfile(dirname($body_output->{path}), 'scripts', 'workflow.pl');
+    return 0 unless -f $existing;
+    my $target = File::Spec->catfile($staging, 'scripts', 'workflow.pl');
+    make_path(dirname($target));
+    open my $in, '<:raw', $existing or die "cannot read $existing: $!\n";
+    open my $out, '>:raw', $target or die "cannot write $target: $!\n";
+    local $/;
+    print {$out} scalar <$in>;
+    close $in;
+    close $out or die "cannot close $target: $!\n";
+    return 1;
+}
+
 sub _read_dullmify_output {
     my ($root) = @_;
     die "dullmify output is missing: $root\n" unless -d $root && !-l $root;
@@ -694,4 +712,4 @@ sub _error_text {
     $error =~ s/\s+\z//;
     return length $error ? $error : 'unknown error';
 }
-# <!--{"src":".coff/src/coff-compile.skill.md","md5":"0cefd543890cac41e72374fc14ce522b"} -->
+# <!--{"src":".coff/src/coff-compile.skill.md","md5":"783915131dbea57c086fd5535ba78d53"} -->

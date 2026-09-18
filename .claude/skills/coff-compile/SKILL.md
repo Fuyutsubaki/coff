@@ -40,8 +40,8 @@ Show `message` with AskUserQuestion and return `yes` only when approved, otherwi
 
 ### `dullmify` (`kind: llm`)
 
-Use `name` and `out` to run `/coff-dullmify <name> --out <out>`.
-Return only `ok` when it finishes successfully with all four artifacts written. On failure, return only the reason. Do not include `source` or the staging contents in the answer.
+Use `source` and `out` to run `/coff-dullmify <source> -o <out>`.
+Return only `ok` when it finishes successfully with all four artifacts written. On failure, return only the reason. Do not include the staging contents in the answer.
 
 ### `translate` (`kind: llm`)
 
@@ -54,4 +54,4 @@ When uncertain, keep the original.
 
 When the response becomes `done: true`, present `report`.
 Do not present an empty report.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"0cefd543890cac41e72374fc14ce522b"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"783915131dbea57c086fd5535ba78d53"} -->

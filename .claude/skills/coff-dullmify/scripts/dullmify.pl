@@ -19,29 +19,33 @@ sub workflow {
 sub _dull_plan {
     my ($args) = @_;
     my @args = @$args;
-    my $name = shift @args;
-    die "usage: <name> [--out <dir>]\n"
-        unless defined $name && $name =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/;
-
-    my $out = File::Spec->catdir('.claude', 'skills', $name);
+    my ($source, $out);
     while (@args) {
-        my $option = shift @args;
-        die "unknown option: $option\n" unless $option eq '--out';
-        die "--out requires a directory\n" unless @args;
-        $out = shift @args;
+        my $arg = shift @args;
+        if ($arg eq '-o') {
+            die "-o requires a directory\n" unless @args;
+            $out = shift @args;
+        }
+        elsif ($arg =~ /\A-/) {
+            die "unknown option: $arg\n";
+        }
+        elsif (defined $source) {
+            die "only one source is accepted\n";
+        }
+        else {
+            $source = $arg;
+        }
     }
-
-    my $source = File::Spec->catfile('.coff', 'src', "$name.skill.md");
+    die "usage: <source>.skill.md -o <dir>\n" unless defined $source && defined $out;
+    my ($name) = basename($source) =~ /\A([A-Za-z0-9][A-Za-z0-9._-]*)\.skill\.md\z/
+        or die "source must be named <name>.skill.md: $source\n";
     die "source not found: $source\n" unless -f $source;
     my $source_content = coff_read_text($source);
     die "empty source: $source\n" unless length $source_content;
 
-    # 既存の workflow は出力先、無ければ既定の成果物から取る（staging 経由でも「必要な変更に限る」を効かせる）
-    my ($existing_path) = grep { -f $_ } (
-        File::Spec->catfile($out, 'scripts', 'workflow.pl'),
-        File::Spec->catfile('.claude', 'skills', $name, 'scripts', 'workflow.pl'),
-    );
-    my $existing = $existing_path ? coff_read_text($existing_path) : '';
+    # 既存の workflow は出力先にあるものだけを見る（呼び出し側が前の成果物を置いておく）
+    my $existing_path = File::Spec->catfile($out, 'scripts', 'workflow.pl');
+    my $existing = -f $existing_path ? coff_read_text($existing_path) : '';
     $existing =~ s/\n?# <!--\{"src":.*?"md5":"[a-f0-9]{32}"\} -->\s*\z//s;
     $existing =~ s/\Ause utf8;\n\n?//;
 
