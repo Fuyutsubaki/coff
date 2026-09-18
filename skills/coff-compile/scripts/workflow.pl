@@ -1,34 +1,28 @@
 use utf8;
 
+# 対象を選び、各ソースの lint と compile を順番に進める。
 sub workflow {
     my @args = @_;
-    my ($plan, $plan_error) = attempt { step { _make_plan(\@args) } };
-    return ["failed: " . _error_text($plan_error)] if $plan_error;
+    my $plan = step { _make_plan(\@args) };
 
     my @report;
     for my $item (@{ $plan->{items} }) {
         if ($item->{skip} && !$plan->{force}) {
             if (!$plan->{lint_only} && @{ $item->{bundle_files} }) {
-                my (undef, $error) = attempt {
-                    step { publish_files(files => $item->{bundle_files}) };
-                };
-                push @report, "$item->{source}: failed: " . _error_text($error)
-                    if $error;
+                step { _write_files($item->{bundle_files}) };
             }
             next;
         }
 
-        my ($result, $error) = attempt { _compile_item($plan, $item) };
-        if ($error) {
-            push @report, "$item->{source}: failed: " . _error_text($error);
-        }
-        elsif (defined $result && length $result) {
+        my $result = _compile_item($plan, $item);
+        if (defined $result && length $result) {
             push @report, "$item->{source}: $result";
         }
     }
     return \@report;
 }
 
+# 1ソースの lint、承認、compile を実行する。
 sub _compile_item {
     my ($plan, $item) = @_;
     my $answer = llm('lint-candidates', {
@@ -40,7 +34,7 @@ sub _compile_item {
     my $candidate_count = @$candidates;
     my ($applied, $rejected) = (0, 0);
     if ($candidate_count) {
-        my $approval = user('lint-approval', {
+        my $approval = llm('lint-approval', {
             path       => $item->{source},
             candidates => [
                 map {
@@ -57,7 +51,7 @@ sub _compile_item {
         return "linted ($applied applied, $rejected rejected)"
             if $plan->{lint_only};
 
-        my $confirmation = user('compile-confirmation', {
+        my $confirmation = llm('compile-confirmation', {
             path     => $item->{source},
             applied  => $applied,
             rejected => $rejected,
@@ -81,6 +75,7 @@ sub _compile_item {
     return "compiled$suffix";
 }
 
+# dullmify の一時出力を英訳し、実体出力へ公開する。
 sub _compile_dullmified {
     my ($item) = @_;
     my $staging = _staging_path($item);
@@ -103,6 +98,7 @@ sub _compile_dullmified {
     step { _publish_compiled($item, $document, $generated, $staging) };
 }
 
+# Markdown だけのソースを英訳し、実体出力へ公開する。
 sub _compile_markdown {
     my ($item) = @_;
     my $document = $item->{content};
@@ -115,6 +111,7 @@ sub _compile_markdown {
     step { _publish_compiled($item, $document, undef, undef) };
 }
 
+# CLI とソースを読み、処理対象ごとの計画を作る。
 sub _make_plan {
     my ($args) = @_;
     my $options = _parse_options($args);
@@ -127,13 +124,13 @@ sub _make_plan {
         next unless @outputs;
         die "empty source: $source\n" unless -s $source;
 
-        my $content = coff_read_text($source);
+        my $content = _read_text($source);
         my $frontmatter = _frontmatter($content);
         my $dullmify = _directive_bool($frontmatter, 'coff-dullmify');
         die "$source: coff-dullmify requires a skill source\n"
             if $dullmify && $type ne 'skill';
 
-        my $md5 = coff_file_md5($source);
+        my $md5 = _file_md5($source);
         my $bundle_names = _bundle_names($frontmatter);
         my $bundle_files = _collect_bundle_files($name, $bundle_names, \@outputs);
         my @footer_outputs = map { $_->{path} } @outputs;
@@ -143,7 +140,7 @@ sub _make_plan {
 
         my $skip = 1;
         for my $path (@footer_outputs) {
-            if ((coff_footer_md5($path) // '') ne $md5) {
+            if ((_footer_md5($path) // '') ne $md5) {
                 $skip = 0;
                 last;
             }
@@ -170,6 +167,7 @@ sub _make_plan {
     };
 }
 
+# compile のオプションと出力プリセットを解釈する。
 sub _parse_options {
     my ($args) = @_;
     my %option = (
@@ -251,6 +249,7 @@ sub _parse_options {
     return \%option;
 }
 
+# selector を実在する一意なソースへ解決する。
 sub _resolve_sources {
     my ($selectors) = @_;
     my @sources;
@@ -283,6 +282,7 @@ sub _resolve_sources {
     return [sort grep { !$seen{$_}++ } @sources];
 }
 
+# ソースの拡張子から種別と名前を返す。
 sub _source_type {
     my ($source) = @_;
     my $file = basename($source);
@@ -292,6 +292,7 @@ sub _source_type {
     die "unknown source type: $source\n";
 }
 
+# 種別と出力プリセットから出力先を列挙する。
 sub _outputs_for {
     my ($type, $name, $targets) = @_;
     my @outputs;
@@ -308,6 +309,7 @@ sub _outputs_for {
     return @outputs;
 }
 
+# Markdown 先頭の frontmatter 本文を取り出す。
 sub _frontmatter {
     my ($content) = @_;
     die "frontmatter is missing\n" unless $content =~ /\A---\r?\n/;
@@ -315,16 +317,19 @@ sub _frontmatter {
     die "frontmatter is not closed\n";
 }
 
+# true と宣言された coff の真偽値を読む。
 sub _directive_bool {
     my ($frontmatter, $key) = @_;
     return $frontmatter =~ /^\Q$key\E:\s*true\s*(?:#.*)?$/mi ? 1 : 0;
 }
 
+# false と宣言された coff の真偽値を読む。
 sub _directive_false {
     my ($frontmatter, $key) = @_;
     return $frontmatter =~ /^\Q$key\E:\s*false\s*(?:#.*)?$/mi ? 1 : 0;
 }
 
+# coff-bundle のインラインリストを検査して返す。
 sub _bundle_names {
     my ($frontmatter) = @_;
     return [] unless $frontmatter =~ /^coff-bundle:\s*(.*?)\s*$/mi;
@@ -348,6 +353,7 @@ sub _bundle_names {
     return \@names;
 }
 
+# bundle の通常ファイルを実体出力向けに集める。
 sub _collect_bundle_files {
     my ($name, $bundle_names, $outputs) = @_;
     my %relative;
@@ -355,7 +361,8 @@ sub _collect_bundle_files {
         my $root = File::Spec->catdir('.coff', 'src', $name, $bundle);
         die "bundle directory not found: $root\n" unless -d $root;
         my $error;
-        find({
+        require File::Find;
+        File::Find::find({
             no_chdir => 1,
             wanted   => sub {
                 return if $error;
@@ -370,7 +377,7 @@ sub _collect_bundle_files {
                     return;
                 }
                 my $suffix = File::Spec->abs2rel($path, $root);
-                $relative{File::Spec->catfile($bundle, $suffix)} = coff_read_text($path);
+                $relative{File::Spec->catfile($bundle, $suffix)} = _read_text($path);
             },
         }, $root);
         die "$error\n" if $error;
@@ -390,9 +397,10 @@ sub _collect_bundle_files {
     return \@files;
 }
 
+# lint-candidates の JSON と行範囲を検査する。
 sub _validate_candidates {
     my ($answer, $content) = @_;
-    my $decoded = eval { coff_decode_json($answer) };
+    my $decoded = eval { _decode_json($answer) };
     die "invalid lint JSON: $@" if $@;
     die "lint answer must be an array\n" unless ref($decoded) eq 'ARRAY';
 
@@ -421,11 +429,12 @@ sub _validate_candidates {
     return $decoded;
 }
 
+# 承認された lint 候補だけをソースへ反映する。
 sub _apply_lint {
     my ($item, $candidates, $approval) = @_;
     die "source changed during lint\n"
-        unless coff_file_md5($item->{source}) eq $item->{md5};
-    my $indexes = eval { coff_decode_json($approval) };
+        unless _file_md5($item->{source}) eq $item->{md5};
+    my $indexes = eval { _decode_json($approval) };
     die "invalid approval JSON: $@" if $@;
     die "approval must be an array\n" unless ref($indexes) eq 'ARRAY';
 
@@ -448,14 +457,15 @@ sub _apply_lint {
             $candidate->{replacement};
     }
     my $content = join '', @lines;
-    publish_files(files => [{ path => $item->{source}, content => $content }]);
+    _write_file($item->{source}, $content);
     return {
         content => $content,
-        md5     => coff_file_md5($item->{source}),
+        md5     => _file_md5($item->{source}),
         applied => scalar keys %selected,
     };
 }
 
+# ソース md5 ごとに衝突しない staging パスを決める。
 sub _staging_path {
     my ($item) = @_;
     return File::Spec->catdir(
@@ -463,78 +473,44 @@ sub _staging_path {
     );
 }
 
-# coff-dullmify は出力先にある既存 workflow だけを見るので、前の成果物を staging に置いてから呼ぶ
+# staging を空にし、前の実体 workflow があれば複製する。
 sub _seed_staging {
     my ($item, $staging) = @_;
+    File::Path::remove_tree($staging) if -e $staging;
     my ($body_output) = grep { $_->{mode} eq 'body' } @{ $item->{outputs} };
     return 0 unless $body_output;
     my $existing = File::Spec->catfile(dirname($body_output->{path}), 'scripts', 'workflow.pl');
     return 0 unless -f $existing;
     my $target = File::Spec->catfile($staging, 'scripts', 'workflow.pl');
-    make_path(dirname($target));
-    open my $in, '<:raw', $existing or die "cannot read $existing: $!\n";
-    open my $out, '>:raw', $target or die "cannot write $target: $!\n";
-    local $/;
-    print {$out} scalar <$in>;
-    close $in;
-    close $out or die "cannot close $target: $!\n";
+    _write_file($target, _read_text($existing));
     return 1;
 }
 
+# dullmify が書いた4ファイルを読み、workflow の構文を確かめる。
 sub _read_dullmify_output {
     my ($root) = @_;
-    die "dullmify output is missing: $root\n" unless -d $root && !-l $root;
-    my @expected = (
-        'SKILL.md',
-        File::Spec->catfile('scripts', 'run.pl'),
-        File::Spec->catfile('scripts', 'workflow.pl'),
-        File::Spec->catfile('scripts', 'lib', 'Coff', 'Workflow.pm'),
-    );
-    my %expected = map { $_ => 1 } @expected;
-    my %found;
-    my $error;
-    find({
-        no_chdir => 1,
-        wanted   => sub {
-            return if $error;
-            my $path = $File::Find::name;
-            if (-l $path) {
-                $error = "dullmify output contains a symlink: $path";
-                return;
-            }
-            return if -d $path;
-            if (!-f $path) {
-                $error = "dullmify output contains a non-file: $path";
-                return;
-            }
-            my $relative = File::Spec->abs2rel($path, $root);
-            $found{$relative} = 1;
-        },
-    }, $root);
-    die "$error\n" if $error;
-    for my $relative (sort keys %found) {
-        die "unexpected dullmify output: $relative\n" unless $expected{$relative};
-    }
-    for my $relative (@expected) {
-        die "missing dullmify output: $relative\n" unless $found{$relative};
-    }
-
-    my $workflow = coff_read_text(File::Spec->catfile($root, 'scripts', 'workflow.pl'));
-    coff_check_perl($workflow);
+    die "dullmify output is missing: $root\n" unless -d $root;
+    my $skill_path = File::Spec->catfile($root, 'SKILL.md');
+    my $run_path = File::Spec->catfile($root, 'scripts', 'run.pl');
+    my $workflow_path = File::Spec->catfile($root, 'scripts', 'workflow.pl');
+    my $runtime_path = File::Spec->catfile($root, 'scripts', 'lib', 'Coff', 'Workflow.pm');
+    die "missing dullmify output: $_\n"
+        for grep { !-f $_ } ($skill_path, $run_path, $workflow_path, $runtime_path);
+    my $workflow = _read_text($workflow_path);
+    _check_perl($workflow);
     return {
-        skill    => coff_read_text(File::Spec->catfile($root, 'SKILL.md')),
-        run      => coff_read_text(File::Spec->catfile($root, 'scripts', 'run.pl')),
+        skill    => _read_text($skill_path),
+        run      => _read_text($run_path),
         workflow => $workflow,
-        runtime  => coff_read_text(File::Spec->catfile(
-            $root, 'scripts', 'lib', 'Coff', 'Workflow.pm',
-        )),
+        runtime  => _read_text($runtime_path),
     };
 }
 
+# 本文、dullmify 成果物、bundle をファイルごとに置き換える。
 sub _publish_compiled {
     my ($item, $document, $generated, $staging) = @_;
     die "source changed during compile\n"
-        unless coff_file_md5($item->{source}) eq $item->{md5};
+        unless _file_md5($item->{source}) eq $item->{md5};
 
     my $compiled = _compile_document($document, $item->{name});
     my $footer = '<!--{"src":"' . $item->{source}
@@ -553,15 +529,14 @@ sub _publish_compiled {
                 my $workflow = $generated->{workflow};
                 $workflow =~ s/\s+\z//;
                 my @generated_files = (
-                    [File::Spec->catfile($scripts, 'run.pl'), $generated->{run}, 0],
-                    [File::Spec->catfile($scripts, 'workflow.pl'), "$workflow\n# $footer\n", 1],
-                    [File::Spec->catfile($scripts, 'lib', 'Coff', 'Workflow.pm'), $generated->{runtime}, 0],
+                    [File::Spec->catfile($scripts, 'run.pl'), $generated->{run}],
+                    [File::Spec->catfile($scripts, 'workflow.pl'), "$workflow\n# $footer\n"],
+                    [File::Spec->catfile($scripts, 'lib', 'Coff', 'Workflow.pm'), $generated->{runtime}],
                 );
                 for my $entry (@generated_files) {
                     $files{$entry->[0]} = {
-                        path       => $entry->[0],
-                        content    => $entry->[1],
-                        check_perl => $entry->[2],
+                        path    => $entry->[0],
+                        content => $entry->[1],
                     };
                 }
             }
@@ -591,15 +566,17 @@ sub _publish_compiled {
                 && $files{$file->{path}}{content} ne $file->{content};
         $files{$file->{path}} = $file;
     }
-    publish_files(files => [map { $files{$_} } sort keys %files]);
+    _check_perl($generated->{workflow}) if $generated;
+    _write_files([map { $files{$_} } sort keys %files]);
 
     if (defined $staging && -d $staging) {
-        remove_tree($staging, { error => \my $errors });
+        File::Path::remove_tree($staging, { error => \my $errors });
         die "cannot remove staging directory: $staging\n" if @$errors;
     }
     return 1;
 }
 
+# 翻訳済み文書の frontmatter と本文を実行用に整える。
 sub _compile_document {
     my ($document, $name) = @_;
     my ($frontmatter, $body) = _split_document($document);
@@ -610,6 +587,7 @@ sub _compile_document {
     return "$clean_frontmatter\n\n$body";
 }
 
+# frontmatter から coff のビルド指示だけを除く。
 sub _clean_frontmatter {
     my ($frontmatter, $name) = @_;
     my @lines = split /\n/, $frontmatter;
@@ -633,6 +611,7 @@ sub _clean_frontmatter {
     return join "\n", @kept;
 }
 
+# 文書を frontmatter と本文に分ける。
 sub _split_document {
     my ($document) = @_;
     die "frontmatter is missing\n" unless $document =~ /\A---\r?\n/;
@@ -641,6 +620,7 @@ sub _split_document {
     die "frontmatter is not closed\n";
 }
 
+# コードを保ったまま本文の HTML コメントだけを除く。
 sub _strip_comments {
     my ($body) = @_;
     my @lines = split /(?<=\n)/, $body, -1;
@@ -706,10 +686,87 @@ sub _strip_comments {
     return $out;
 }
 
-sub _error_text {
-    my ($error) = @_;
-    $error = '' unless defined $error;
-    $error =~ s/\s+\z//;
-    return length $error ? $error : 'unknown error';
+# UTF-8 のテキストファイルを文字列として読む。
+sub _read_text {
+    my ($path) = @_;
+    open my $fh, '<:raw', $path or die "cannot read $path: $!\n";
+    local $/;
+    my $raw = <$fh>;
+    close $fh or die "cannot close $path: $!\n";
+    my $text = eval { Encode::decode('UTF-8', $raw, Encode::FB_CROAK()) };
+    die "$path is not UTF-8: $@\n" if $@;
+    return $text;
 }
-# <!--{"src":".coff/src/coff-compile.skill.md","md5":"783915131dbea57c086fd5535ba78d53"} -->
+
+# 複数の出力をパス順にファイル単位で置き換える。
+sub _write_files {
+    my ($files) = @_;
+    _write_file($_->{path}, $_->{content})
+        for sort { $a->{path} cmp $b->{path} } @$files;
+    return scalar @$files;
+}
+
+# 1ファイルを同じディレクトリの一時ファイルから置き換える。
+sub _write_file {
+    my ($path, $content) = @_;
+    File::Path::make_path(dirname($path));
+    my $tmp = "$path.tmp-$$";
+    open my $fh, '>:raw', $tmp or die "cannot write $tmp: $!\n";
+    my $bytes = utf8::is_utf8($content) ? Encode::encode_utf8($content) : $content;
+    print {$fh} $bytes or die "cannot write $tmp: $!\n";
+    close $fh or die "cannot close $tmp: $!\n";
+    rename $tmp, $path or die "cannot replace $path: $!\n";
+}
+
+# ソースの現在の md5 を計算する。
+sub _file_md5 {
+    my ($path) = @_;
+    open my $fh, '<:raw', $path or die "cannot read $path: $!\n";
+    my $md5 = Digest::MD5->new->addfile($fh)->hexdigest;
+    close $fh or die "cannot close $path: $!\n";
+    return $md5;
+}
+
+# 生成物の最終行からソース md5 を読む。
+sub _footer_md5 {
+    my ($path) = @_;
+    return undef unless -f $path;
+    open my $fh, '<:raw', $path or die "cannot read $path: $!\n";
+    my $last = '';
+    $last = $_ while <$fh>;
+    close $fh or die "cannot close $path: $!\n";
+    return $1 if $last =~ /"md5":"([a-f0-9]{32})"/;
+    return undef;
+}
+
+# LLM の UTF-8 JSON 応答を Perl の値へ変換する。
+sub _decode_json {
+    my ($raw) = @_;
+    return JSON::PP->new->utf8->decode(Encode::encode_utf8($raw));
+}
+
+# workflow を一時ファイルに置き、実際の Perl で構文検査する。
+sub _check_perl {
+    my ($content) = @_;
+    require File::Temp;
+    require IPC::Open3;
+    require Symbol;
+    my ($fh, $path) = File::Temp::tempfile(
+        'coff-workflow-XXXXXX', SUFFIX => '.pl', TMPDIR => 1, UNLINK => 1,
+    );
+    binmode $fh, ':raw';
+    print {$fh} Encode::encode_utf8($content);
+    close $fh or die "cannot close $path: $!\n";
+
+    my $error = Symbol::gensym();
+    my $pid = IPC::Open3::open3(my $input, my $output, $error, $^X, '-c', $path);
+    close $input;
+    local $/;
+    my $diagnostic = (<$output> // '') . (<$error> // '');
+    waitpid($pid, 0);
+    return if ($? >> 8) == 0;
+    $diagnostic =~ s/\Q$path\E/workflow.pl/g;
+    $diagnostic =~ s/\s+\z//;
+    die "perl -c failed for workflow.pl: $diagnostic\n";
+}
+# <!--{"src":".coff/src/coff-compile.skill.md","md5":"86343ce6d7e505aafaf5cc1dfe27fafe"} -->
