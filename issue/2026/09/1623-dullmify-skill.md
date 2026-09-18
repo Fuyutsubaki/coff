@@ -22,7 +22,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 
 ## 設計方針
 
-**1. dullmify は独立 skill `coff-dullmify` とする。** `/coff-dullmify <name> [--out <dir>]` はソースを読み、薄い `SKILL.md`、`scripts/run.pl`、`scripts/workflow.pl`、runtime を出力する。coff-compile は topic `dullmify` を介して呼び、staging の4成果物を Perl で読み、英訳、コメント除去、フッタ追加後に公開する。
+**1. dullmify は独立 skill `coff-dullmify` とする。** `/coff-dullmify <source>.skill.md -o <dir>` はソースと出力先を受け取り（既定はない）、薄い `SKILL.md`、`scripts/run.pl`、`scripts/workflow.pl`、runtime を出力する。coff-compile は topic `dullmify` を介して呼び、staging の4成果物を Perl で読み、英訳、コメント除去、フッタ追加後に公開する。
 
 **2. LLM は workflow 本体と topic 節だけを書く。** `workflow` の答えは `sub workflow` と固有の補助関数、`topics` の答えは判断基準の Markdown に限る。driver、runtime、薄い SKILL.md の共通段落は同梱物を差し込み、組み立て、`perl -c`、書き出しは手書きの `dullmify.pl` が担う。
 
@@ -42,11 +42,12 @@ coff-compile への生成規則の埋め込み、Perl 同士の直接呼び出�
 - coff-compile から dullmify へは LLM 経由（topic `dullmify` で `/coff-dullmify` を実行）で呼ぶ。Perl 同士の依存は作らない
 - 権限は「プログラム呼び出しの事前承認と書き出しの移譲」まで。強制はしない
 - 最初の適用先は coff-compile 自身
+- coff-dullmify のインターフェースは clang などの現実のコンパイラに寄せる。ソースと出力先を指定し、既定は持たない
 
 ## 完了条件
 
 - [x] `Coff::Workflow` が block だけの `step`、`die` による失敗、`attempt`、start / resume / status / cancel / gc、非決定の検出、バージョンの固定、再送への冪等を持ち、テストが通る
-- [x] `/coff-dullmify coff-compile --out <dir>` が `scripts/run.pl`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm`、薄い `SKILL.md` を出力し、`run.pl` と runtime と SKILL.md の定型部分は同梱の雛形とバイト一致する
+- [x] `/coff-dullmify .coff/src/coff-compile.skill.md -o <dir>` が `scripts/run.pl`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm`、薄い `SKILL.md` を出力し、`run.pl` と runtime と SKILL.md の定型部分は同梱の雛形とバイト一致する
 - [x] `workflow.pl` が `perl -c` を通らないときは `failed` になり、出力先が変わらない
 - [x] coff-compile が `coff-dullmify: true` のソースで topic `dullmify` を問い、staging の出力に英訳・コメント除去・フッタを施して bundle と共に公開する
 - [x] 薄い SKILL.md は `allowed-tools` が `run.pl` の呼び出しだけで `coff-*` キーが残らず、本文に bash スニペットと制御の手順が無い
@@ -86,7 +87,7 @@ coff-compile への生成規則の埋め込み、Perl 同士の直接呼び出�
 ### 完了条件の確認手段
 
 1. `prove -I .coff/src/coff-dullmify/scripts/lib .coff/src/coff-dullmify/t/`
-2. `/coff-dullmify coff-compile --out <一時dir>` の後、`ls` で 4 ファイルを確認し、`cmp` で `run.pl` と `Workflow.pm` を同梱元と比べ、SKILL.md の定型段落を `diff` で雛形と比べる
+2. `/coff-dullmify .coff/src/coff-compile.skill.md -o <一時dir>` の後、`ls` で 4 ファイルを確認し、`cmp` で `run.pl` と `Workflow.pm` を同梱元と比べ、SKILL.md の定型段落を `diff` で雛形と比べる
 3. 組み立て関数をテストで叩く（壊れた workflow 本文を渡すと失敗が返り、出力先が作られず、既存があれば変わらないこと）。1 のテストに含める
 4. 5 の実行中に topic `dullmify` の問いが出て、`/coff-dullmify` の実行後に `translate` の問いが続くことを見る。完走後に `tail -n1` でフッタ md5 が `md5sum .coff/src/coff-compile.skill.md` と一致する
 5. `head` で frontmatter を見る。本文は `grep -c '```' .claude/skills/coff-compile/SKILL.md` が 0 で、定型の往復以外のビルド制御が無いこと
