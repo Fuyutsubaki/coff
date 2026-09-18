@@ -33,9 +33,17 @@ like(decode_output($stdout)->{failed}, qr/perl -c failed/, 'invalid workflow rep
 ok(!-e $new_out, 'invalid workflow does not create a new output directory');
 
 my $old_out = File::Spec->catdir($tmp, 'invalid-existing');
+# 本文にフッタ形式の行があっても、落ちるのは末尾のフッタだけであること
+my $old_body = "sub workflow { return ['old']; }\n# <!--{\"src\":\"inner\",\"md5\":\"" . ('a' x 32) . "\"} --> stays in the body\nsub _keep { 1 }";
+our $EXPECTED_EXISTING = $old_body;
 my %old = (
     'SKILL.md'                     => "old skill\n",
-    'scripts/workflow.pl'          => "use utf8;\n\nsub workflow { return ['old']; }\n",
+    'scripts/workflow.pl'          => join('',
+        read_file(File::Spec->catfile($source_root, 'templates', 'workflow-head.pl')),
+        $old_body, "\n",
+        read_file(File::Spec->catfile($source_root, 'templates', 'workflow-tail.pl')),
+        '# <!--{"src":".coff/src/old.skill.md","md5":"', 'b' x 32, "\"} -->\n",
+    ),
     'scripts/lib/Coff/Workflow.pm' => "old runtime\n",
 );
 for my $relative (sort keys %old) {
@@ -55,6 +63,7 @@ for my $relative (sort keys %old) {
     );
 }
 
+$EXPECTED_EXISTING = undef;
 my $valid_out = File::Spec->catdir($tmp, 'valid');
 my $topics = "### topic `sample`\n\nReturn a short text answer.";
 ($status, $stdout, $stderr) = run_dullmify(
@@ -109,7 +118,7 @@ sub run_dullmify {
     if (-f $existing_path) {
         is(
             $question->{ask}{input}{existing},
-            strip_generated(read_file($existing_path)),
+            $EXPECTED_EXISTING // strip_generated(read_file($existing_path)),
             'existing workflow is passed without the templates and the footer',
         );
     }
@@ -168,7 +177,7 @@ sub strip_generated {
     my ($text) = @_;
     my $head = read_file(File::Spec->catfile($source_root, 'templates', 'workflow-head.pl'));
     my $tail = read_file(File::Spec->catfile($source_root, 'templates', 'workflow-tail.pl'));
-    $text =~ s/\n?# <!--\{"src":.*?"md5":"[a-f0-9]{32}"\} -->\s*\z//s;
+    $text =~ s/\n?# <!--\{"src":[^\n]*"md5":"[a-f0-9]{32}"\} -->[ \t]*\n?\z//;
     $text = substr($text, length $head) if index($text, $head) == 0;
     $text =~ s/\s+\z//;
     (my $trimmed_tail = $tail) =~ s/\s+\z//;

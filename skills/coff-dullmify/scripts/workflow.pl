@@ -58,7 +58,7 @@ sub _plan {
     my $existing_path = File::Spec->catfile($out, 'scripts', 'workflow.pl');
     my $existing = -f $existing_path ? _read_text($existing_path) : '';
     # coff-compile のフッタと雛形の頭と尻は、答えに含めてはいけないので渡す前に落とす。
-    $existing =~ s/\n?# <!--\{"src":.*?"md5":"[a-f0-9]{32}"\} -->\s*\z//s;
+    $existing =~ s/\n?# <!--\{"src":[^\n]*"md5":"[a-f0-9]{32}"\} -->[ \t]*\n?\z//;
     $existing = _strip_templates($existing);
     return {
         name              => $name,

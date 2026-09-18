@@ -27,10 +27,10 @@ sub run_workflow {
 
     my @argv = @{ $opt{argv} // \@ARGV };
     my $command = shift(@argv) // '';
-    my $root = $opt{state_root} // _default_state_root();
+    my $root = _default_state_root();
     my $workflow_root = File::Spec->catdir($root, 'coff', $name);
-    my $emit = $opt{emit} // sub { print $_[0], "\n" };
-    my $read_answer = $opt{read_answer} // sub {
+    my $emit = sub { print $_[0], "\n" };
+    my $read_answer = sub {
         local $/;
         return decode('UTF-8', scalar(<STDIN>) // '', FB_CROAK);
     };
