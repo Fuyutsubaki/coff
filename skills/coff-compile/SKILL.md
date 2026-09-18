@@ -51,4 +51,4 @@ When uncertain, keep the original.
 
 When the response becomes `done: true`, present `report`.
 Do not present an empty report.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"86343ce6d7e505aafaf5cc1dfe27fafe"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"2c6e4921b8e27759d0221960755130f1"} -->

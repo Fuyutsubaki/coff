@@ -14,6 +14,7 @@ Pass the answer verbatim with a single-quoted heredoc.
 Repeat until `done: true`.
 
 ## Judgment per topic
+
 ### `workflow`
 
 Read `source` and return, in Perl, only `sub workflow` and the helper functions specific to that skill.
@@ -29,7 +30,7 @@ Do not wrap an effect in `eval {}`.
 Use only syntax that runs on Perl 5.30 and core modules.
 `require` any additional core module inside the helper function and call it by its fully qualified name.
 Write at least one line of Japanese comment stating the purpose immediately before each helper function.
-`use utf8` is added at generation time, so do not write it in the answer.
+The `use` declarations and the `run_workflow` call belong to the templates, so do not write them in the answer.
 
 ### `topics`
 
@@ -43,4 +44,4 @@ Write tersely in the same language as the source.
 
 When the response becomes `done: true`, present `report`.
 Do not present an empty report.
-<!--{"src":".coff/src/coff-dullmify.skill.md","md5":"4176c73106f733dcc6eab37f06c55f31"} -->
+<!--{"src":".coff/src/coff-dullmify.skill.md","md5":"1d1171a459de54721268b1611cedce5e"} -->

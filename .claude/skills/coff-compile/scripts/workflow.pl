@@ -508,7 +508,7 @@ sub _read_dullmify_output {
     die "missing dullmify output: $_\n"
         for grep { !-f $_ } ($skill_path, $workflow_path, $runtime_path);
     my $workflow = _read_text($workflow_path);
-    _check_perl($workflow);
+    _check_perl($workflow, File::Spec->catdir($root, 'scripts', 'lib'));
     return {
         skill    => _read_text($skill_path),
         workflow => $workflow,
@@ -575,7 +575,7 @@ sub _publish_compiled {
                 && $files{$file->{path}}{content} ne $file->{content};
         $files{$file->{path}} = $file;
     }
-    _check_perl($generated->{workflow}) if $generated;
+    _check_perl($generated->{workflow}, File::Spec->catdir($staging, 'scripts', 'lib')) if $generated;
     _write_files([map { $files{$_} } sort keys %files]);
 
     if (defined $staging && -d $staging) {
@@ -756,7 +756,7 @@ sub _decode_json {
 
 # workflow を一時ファイルに置き、実際の Perl で構文検査する。
 sub _check_perl {
-    my ($content) = @_;
+    my ($content, $lib) = @_;
     require File::Temp;
     require IPC::Open3;
     require Symbol;
@@ -768,7 +768,8 @@ sub _check_perl {
     close $fh or die "cannot close $path: $!\n";
 
     my $error = Symbol::gensym();
-    my $pid = IPC::Open3::open3(my $input, my $output, $error, $^X, '-c', $path);
+    # 一時ファイルの場所では雛形の use lib が runtime を見つけられないので、staging の lib を -I で渡す。
+    my $pid = IPC::Open3::open3(my $input, my $output, $error, $^X, '-I', $lib, '-c', $path);
     close $input;
     local $/;
     my $diagnostic = (<$output> // '') . (<$error> // '');
@@ -782,4 +783,4 @@ sub _check_perl {
 # ここから下も土台。skill 名は親ディレクトリ名で、runtime に workflow と引数を渡して終了コードを返す。
 exit run_workflow(name => basename(dirname($FindBin::Bin)),
     workflow => \&workflow, argv => \@ARGV);
-# <!--{"src":".coff/src/coff-compile.skill.md","md5":"86343ce6d7e505aafaf5cc1dfe27fafe"} -->
+# <!--{"src":".coff/src/coff-compile.skill.md","md5":"2c6e4921b8e27759d0221960755130f1"} -->

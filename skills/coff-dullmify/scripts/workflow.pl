@@ -199,7 +199,9 @@ sub _check_perl {
     close $fh or die "cannot close $path: $!\n";
 
     my $error = Symbol::gensym();
-    my $pid = IPC::Open3::open3(my $input, my $output, $error, $^X, '-c', $path);
+    # 一時ファイルの場所では雛形の use lib が runtime を見つけられないので、同梱の lib を -I で渡す。
+    my $lib = File::Spec->catdir(dirname(__FILE__), 'lib');
+    my $pid = IPC::Open3::open3(my $input, my $output, $error, $^X, '-I', $lib, '-c', $path);
     close $input;
     local $/;
     my $diagnostic = (<$output> // '') . (<$error> // '');
@@ -224,4 +226,4 @@ sub _write_file {
 # ここから下も土台。skill 名は親ディレクトリ名で、runtime に workflow と引数を渡して終了コードを返す。
 exit run_workflow(name => basename(dirname($FindBin::Bin)),
     workflow => \&workflow, argv => \@ARGV);
-# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"4176c73106f733dcc6eab37f06c55f31"} -->
+# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"1d1171a459de54721268b1611cedce5e"} -->
