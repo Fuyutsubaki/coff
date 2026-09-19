@@ -23,7 +23,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 ## 設計方針
 
 1. `coff-dullmify` は独立 skill とし、`<source>.skill.md -o <dir>` から `SKILL.md`、`scripts/workflow.pl`、runtime の 3 ファイルを一時出力する。既存 workflow は雛形の頭と尻とフッタを除いて `workflow` の問いへ渡し、md5、フッタ、英訳、最終出力は扱わない。
-2. `.coff/src/coff-dullmify.skill.md` は手順と判断基準を持つ太いソースとする。runtime、workflow.pl の頭と尻の雛形、SKILL.md の定型だけを手書きし、workflow.pl はソースから生成する。
+2. `.coff/src/coff-dullmify.skill.md` は手順と判断基準を持つ太いソースとする。runtime、workflow.pl の頭と尻の雛形、SKILL.md の定型だけを手書きし、workflow.pl はソースから生成する。手書き分は frontmatter の `coff-bundle: [scripts, templates]` で coff-compile が成果物へ複製する。
 3. runtime は `llm(topic, input)`、`step { ... }`、`die`、実行順の journal、非決定の検出、JSON による値の切り離し、`start` / `resume` だけを持つ。done と failed で run を削除する。
 4. coff-compile は Markdown の skill のまま、`coff-dullmify: true` のソースで staging に既存 workflow を置き、`/coff-dullmify` に一時出力を書かせる。SKILL.md の英訳とコメント除去、SKILL.md と workflow.pl のフッタ、md5 と skip、実体出力への書き出しは coff-compile が担う。
 5. 薄い skill の `allowed-tools` は `Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` だけとする。runtime と雛形は節ごと、生成 workflow は補助関数ごとに日本語のコメントを書く。
@@ -66,7 +66,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - `.coff/src/coff-dullmify/templates/`：workflow.pl の頭（use 群と runtime の読み込み）と尻（`run_workflow` の呼び出し）、start / resume だけを案内する薄い SKILL.md の定型
 - `.coff/src/coff-dullmify/t/`：runtime、既存 workflow の受け渡し、雛形の一致、`perl -c` の門を検証
 - `.coff/src/coff-dullmify.skill.md`：手順、`workflow` / `topics` の判断基準、組み立て規則を持つ太いソース
-- `.coff/src/coff-compile.skill.md`：staging、`/coff-dullmify` の実行、英訳、フッタ、ファイル単位の公開を定義
+- `.coff/src/coff-compile.skill.md`：staging、`/coff-dullmify` の実行、英訳、フッタ、ファイル単位の公開、`coff-bundle` の同期を定義
 - `.coff/src/compile.skill.md`：配布ミラーの同期を skill ディレクトリ単位にする（0501 の方針 4 を先に実施）
 - `.gitignore`：staging 用の `.coff/tmp/` を無視する
 - `.claude/skills/coff-dullmify/`：ブートストラップで生成した英語の薄い skill、workflow、runtime、雛形
@@ -83,11 +83,13 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - coff-compile は `/coff-dullmify <source> -o <staging>` を実行し、staging の 3 ファイルを読んで英訳とフッタを施し公開する。`perl -c` は coff-dullmify が通しているので coff-compile では再検査しない。
 - `step` の識別は実行順だけで、同じ位置の step の中身が変わっても検出しない（ソースが変われば md5 で workflow.pl ごと再生成されるので受容）。3 ファイルの書き出しはファイルごとの temp + rename で、途中で失敗すると先行ファイルだけが更新される（多ファイルのトランザクションを落とした帰結として受容）。
 - 薄い SKILL.md はソースの frontmatter から `coff-*` と `allowed-tools` を落とし、`allowed-tools: Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` を加える。
-- `perl -c` の門には runtime の `lib` を `-I` で渡す（一時ファイルの場所では雛形の `use lib` が runtime を見つけられない。テストは prove の PERL5LIB が子プロセスに継承されるので、この欠落を検出できなかった）。
+- `perl -c` の門には runtime の `lib` を `-I` で渡す（一時ファイルの場所では雛形の `use lib` が runtime を見つけられない。prove の PERL5LIB が孫プロセスまで継承されると欠落を隠すので、テストは起動時に PERL5LIB を消す）。
+- 生成した workflow.pl は実行時に同梱の `templates/` と `scripts/lib/` を読む。`coff-bundle` の同期は skip でも行い、dullmify が staging に書いた `Workflow.pm` より後に複製して同梱の runtime を正とする。
+- run の状態は `${XDG_STATE_HOME:-$HOME/.local/state}/coff/<name>/<run>/journal.json` に置く。skip 判定は SKILL.md と workflow.pl の両方のフッタで行い、workflow.pl のフッタは `# <!--…-->` の行コメントにする。
 
 ### 完了条件の確認手段
 
-1. `prove -I .coff/src/coff-dullmify/scripts/lib .coff/src/coff-dullmify/t/`
+1. `prove -I .coff/src/coff-dullmify/scripts/lib .coff/src/coff-dullmify/t/`（`t/dullmify.t` は成果物 `.claude/skills/coff-dullmify/scripts/workflow.pl` を起動するので、ソースを変えたら先に `/compile --force coff-dullmify` を通す）
 2. 一時 dir に古い `scripts/workflow.pl` を置いて `/coff-dullmify .coff/src/coff-compile.skill.md -o <一時dir>` を実行し、最初の問いの `existing` にそれが入ること、完走後に `ls` で 3 ファイル、`cmp` で `Workflow.pm`、`diff` で workflow.pl の頭と尻と SKILL.md の定型段落を確かめる
 3. 組み立てをテストで叩く（壊れた workflow 本文で失敗が返り、`<dir>` に何も書かれないこと）。1 に含める
 4. `.coff/src/coff-dullmify.skill.md` に `## 手順` 節があり Perl の呼び出しで始まっていないこと。`/compile --force coff-dullmify` を通し、`.claude/skills/coff-dullmify/scripts/workflow.pl` のフッタ md5 がソースと一致すること
