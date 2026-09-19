@@ -23,7 +23,7 @@ my $source_root = File::Spec->rel2abs(
 
 my $new_out = File::Spec->catdir($tmp, 'invalid-new');
 my ($status, $stdout, $stderr) = run_dullmify(
-    $new_out,
+    $new_out, '',
     "sub workflow {\n",
     "### topic `sample`\n\nReturn text.",
 );
@@ -35,7 +35,6 @@ ok(!-e $new_out, 'invalid workflow does not create a new output directory');
 my $old_out = File::Spec->catdir($tmp, 'invalid-existing');
 # 本文にフッタ形式の行があっても、落ちるのは末尾のフッタだけであること
 my $old_body = "sub workflow { return ['old']; }\n# <!--{\"src\":\"inner\",\"md5\":\"" . ('a' x 32) . "\"} --> stays in the body\nsub _keep { 1 }";
-our $EXPECTED_EXISTING = $old_body;
 my %old = (
     'SKILL.md'                     => "old skill\n",
     'scripts/workflow.pl'          => join('',
@@ -50,7 +49,7 @@ for my $relative (sort keys %old) {
     write_file(File::Spec->catfile($old_out, split m{/}, $relative), $old{$relative});
 }
 ($status, $stdout, $stderr) = run_dullmify(
-    $old_out,
+    $old_out, $old_body,
     "sub workflow {\n",
     "### topic `sample`\n\nReturn text.",
 );
@@ -63,11 +62,30 @@ for my $relative (sort keys %old) {
     );
 }
 
-$EXPECTED_EXISTING = undef;
+# 答えの検査。どれも出力先を作らずに失敗すること
+my @rejected = (
+    ['workflow', "```perl\nsub workflow { return []; }\n```", qr/Markdown fence/],
+    ['workflow', "use POSIX;\nsub workflow { return []; }", qr/use declarations/],
+    ['workflow', "sub helper { 1 }", qr/must contain sub workflow/],
+    ['topics',   "", qr/topics answer is empty/],
+    ['topics',   "---\nname: x\n---\n### topic `sample`", qr/frontmatter/],
+);
+my $rejected_count = 0;
+for my $case (@rejected) {
+    my ($topic, $answer, $expected) = @$case;
+    my $out = File::Spec->catdir($tmp, 'rejected-' . ++$rejected_count);
+    my $workflow_answer = $topic eq 'workflow' ? $answer : "sub workflow {\n    return [];\n}";
+    my $topics_answer = $topic eq 'topics' ? $answer : "### topic `sample`\n\nReturn text.";
+    ($status, $stdout, $stderr) = run_dullmify($out, '', $workflow_answer, $topics_answer);
+    isnt($status, 0, "$topic answer is rejected: $expected");
+    like(decode_output($stdout)->{failed}, $expected, "$topic rejection names the reason");
+    ok(!-e $out, "$topic rejection writes nothing");
+}
+
 my $valid_out = File::Spec->catdir($tmp, 'valid');
 my $topics = "### topic `sample`\n\nReturn a short text answer.";
 ($status, $stdout, $stderr) = run_dullmify(
-    $valid_out,
+    $valid_out, '',
     "sub workflow {\n    return [];\n}",
     $topics,
 );
@@ -107,24 +125,17 @@ like($generated_workflow, qr/\nsub workflow\b/, 'workflow.pl contains the genera
 done_testing();
 
 sub run_dullmify {
-    my ($out, $workflow_body, $topics) = @_;
+    my ($out, $expected_existing, $workflow_body, $topics) = @_;
     my ($status, $stdout, $stderr) = run_process(
         '', 'start', '.coff/src/coff-compile.skill.md', '-o', $out,
     );
     return ($status, $stdout, $stderr) if $status;
     my $question = decode_output($stdout);
     is($question->{ask}{topic}, 'workflow', 'first dullmify question is workflow');
-    my $existing_path = File::Spec->catfile($out, 'scripts', 'workflow.pl');
-    if (-f $existing_path) {
-        is(
-            $question->{ask}{input}{existing},
-            $EXPECTED_EXISTING // strip_generated(read_file($existing_path)),
-            'existing workflow is passed without the templates and the footer',
-        );
-    }
-    else {
-        is($question->{ask}{input}{existing}, '', 'existing is empty without an output workflow');
-    }
+    is(
+        $question->{ask}{input}{existing}, $expected_existing,
+        'existing workflow is passed without the templates and the footer',
+    );
     my $run = $question->{run};
 
     ($status, $stdout, $stderr) = run_process(
@@ -141,6 +152,8 @@ sub run_process {
     my ($input, @args) = @_;
     my $error = gensym;
     local %ENV = (%ENV, XDG_STATE_HOME => $state);
+    # prove の PERL5LIB が孫プロセスの perl -c まで届くと、-I の欠落を隠す。
+    delete @ENV{qw(PERL5LIB PERL5OPT)};
     my $pid = open3(my $in, my $out, $error, $^X, $workflow_pl, @args);
     print {$in} $input;
     close $in;
@@ -170,19 +183,4 @@ sub write_file {
     open my $fh, '>:raw', $path or die "cannot write $path: $!";
     print {$fh} $content;
     close $fh;
-}
-
-# 雛形の頭と尻と coff-compile のフッタを除いた形（dullmify が LLM に渡す形）
-sub strip_generated {
-    my ($text) = @_;
-    my $head = read_file(File::Spec->catfile($source_root, 'templates', 'workflow-head.pl'));
-    my $tail = read_file(File::Spec->catfile($source_root, 'templates', 'workflow-tail.pl'));
-    $text =~ s/\n?# <!--\{"src":[^\n]*"md5":"[a-f0-9]{32}"\} -->[ \t]*\n?\z//;
-    $text = substr($text, length $head) if index($text, $head) == 0;
-    $text =~ s/\s+\z//;
-    (my $trimmed_tail = $tail) =~ s/\s+\z//;
-    $text = substr($text, 0, length($text) - length($trimmed_tail))
-        if length($text) >= length($trimmed_tail) && substr($text, -length($trimmed_tail)) eq $trimmed_tail;
-    $text =~ s/\s+\z//;
-    return $text;
 }

@@ -39,14 +39,14 @@ is($first->{ask}{input}{snapshot}, 'workflow value', 'workflow receives a detach
 is($status, 0, 'resume succeeds');
 my $second = decode_output($stdout);
 is($second->{ask}{topic}, 'second', 'resume advances to the next llm topic');
-is($second->{index}, 2, 'second question has the next index');
+is($second->{index}, 3, 'second question follows the counter step');
 
-($status, $stdout, $stderr) = run_script_with_input('two', 'resume', $run, 2);
+($status, $stdout, $stderr) = run_script_with_input('two', 'resume', $run, $second->{index});
 is($status, 0, 'second resume succeeds');
 my $done = decode_output($stdout);
 ok($done->{done}, 'workflow reaches done');
 is_deeply($done->{report}, ['one:two'], 'answers reach the report');
-is(read_file($counter), "1\n", 'block-only step runs once');
+is(read_file($counter), "1\n", 'a step before the last question runs once across resumes');
 ok(!-e run_dir($run), 'done removes the run directory');
 
 ($status, $stdout, $stderr) = run_script('start', 'failure');
@@ -63,12 +63,12 @@ ok(!-e run_dir($failure_question->{run}), 'failure removes the run directory');
 ($status, $stdout, $stderr) = run_script('start', 'stable');
 my $non_deterministic = decode_output($stdout);
 $journal = $JSON->decode(read_file(journal_path($non_deterministic->{run})));
-$journal->{effects}[1]{input_hash} = '0' x 32;
+$journal->{effects}[1]{ask}{input}{mode} = 'changed';
 write_file(journal_path($non_deterministic->{run}), $JSON->canonical->encode($journal) . "\n");
 ($status, $stdout, $stderr) = run_script_with_input(
     'answer', 'resume', $non_deterministic->{run}, $non_deterministic->{index},
 );
-isnt($status, 0, 'changed llm input hash stops replay');
+isnt($status, 0, 'changed llm input stops replay');
 like(decode_output($stdout)->{failed}, qr/non-deterministic/, 'non-determinism is reported');
 ok(!-e run_dir($non_deterministic->{run}), 'non-determinism removes the run directory');
 
@@ -88,6 +88,7 @@ use lib '$quoted_lib';
 use Coff::Workflow qw(run_workflow llm step);
 exit run_workflow(
     name => 'sample',
+    argv => \\\@ARGV,
     workflow => sub {
         my (\$mode) = \@_;
         my \$snapshot = step { return { value => 'journal value' } };
@@ -97,7 +98,7 @@ exit run_workflow(
             snapshot => \$snapshot->{value},
         });
         die "requested failure\n" if \$mode eq 'failure';
-        my \$second = llm('second', { first => \$first });
+        # 最後の問いより前に置き、二度目の resume で再実行されないことを数える。
         step {
             my \$count = -e '$quoted_counter' ? 0 + read_counter('$quoted_counter') : 0;
             open my \$fh, '>', '$quoted_counter' or die \$!;
@@ -105,6 +106,7 @@ exit run_workflow(
             close \$fh or die \$!;
             return 1;
         };
+        my \$second = llm('second', { first => \$first });
         return ["\$first:\$second"];
     },
 );

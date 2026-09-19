@@ -30,9 +30,9 @@ workflow.pl は雛形の頭（use 群と runtime の読み込み）、`sub workf
 2. ソース全文を UTF-8 で読む。
    `<dir>/scripts/workflow.pl` が存在すれば UTF-8 で読み、末尾の生成フッタ、雛形の頭、雛形の尻を除いたものを既存 workflow とする。 <!-- 答えに含めてはいけないものを LLM に渡さない -->
 3. topic `workflow` を問い、入力に `{source, existing}` を渡す。
-4. topic `topics` を問い、入力に `{source}` を渡す。
-5. workflow の答えを検査する。
+4. workflow の答えを検査する。 <!-- 問いの直後に検査し、次の問いを出す前に失敗を返す -->
    空、`sub workflow` がない、Markdown フェンス、shebang、`use` 宣言、`run_workflow`、生成フッタを含む答えは失敗とする。
+5. topic `topics` を問い、入力に `{source}` を渡す。
 6. topics の答えを検査する。
    空、frontmatter、Markdown フェンスを含む答えは失敗とする。
 7. workflow.pl を `templates/workflow-head.pl`、workflow の答え、`templates/workflow-tail.pl` の順に組み立てる。
@@ -73,7 +73,5 @@ frontmatter、共通の往復手順、完了報告、Markdown フェンスを含
 
 ## ルール
 
-- md5、フッタ、翻訳、最終出力先を扱わない。
+- md5、翻訳、最終出力先を扱わず、フッタを付けない。
 - ソースと既存 workflow の内容を変更しない。
-- workflow と topics の答えをファイル操作に使う前に検査する。
-- 構文検査より前に出力先を変更しない。

@@ -43,5 +43,6 @@ Write tersely in the same language as the source.
 ## Completion report
 
 When the response becomes `done: true`, present `report`.
+If it has `failed`, present the reason and stop.
 Do not present an empty report.
-<!--{"src":".coff/src/coff-dullmify.skill.md","md5":"e6fb6e48d02934906e84c7220f5f1e0d"} -->
+<!--{"src":".coff/src/coff-dullmify.skill.md","md5":"e08f2ccd9b3082b21800ea3cee747e73"} -->

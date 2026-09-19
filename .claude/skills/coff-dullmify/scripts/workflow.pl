@@ -19,9 +19,12 @@ sub workflow {
         source   => $plan->{source_content},
         existing => $plan->{existing_workflow},
     });
+    # 問いの直後に検査し、次の問いを出す前に失敗を返す。
+    $workflow_body = step { _workflow_body($workflow_body) };
     my $topics = llm('topics', {
         source => $plan->{source_content},
     });
+    $topics = step { _topics($topics) };
     step { _publish($plan, $workflow_body, $topics) };
     return ["dullmified: $plan->{source} -> $plan->{out}"];
 }
@@ -34,7 +37,8 @@ sub _plan {
     while (@args) {
         my $arg = shift @args;
         if ($arg eq '-o') {
-            die "-o requires a directory\n" unless @args && !defined $out;
+            die "-o is given twice\n" if defined $out;
+            die "-o requires a directory\n" unless @args;
             $out = shift @args;
         }
         elsif ($arg =~ /\A-/) {
@@ -69,11 +73,9 @@ sub _plan {
     };
 }
 
-# LLM の答えと雛形を組み立て、構文検査後に3ファイルを書く。
+# 検査済みの答えと雛形を組み立て、構文検査後に3ファイルを書く。
 sub _publish {
     my ($plan, $workflow_body, $topics) = @_;
-    $workflow_body = _workflow_body($workflow_body);
-    $topics = _topics($topics);
     my $scripts = dirname(__FILE__);
     my $skill_root = dirname($scripts);
     my ($head, $tail) = _templates();
@@ -95,7 +97,7 @@ sub _publish {
     return 1;
 }
 
-# workflow の答えに土台や Markdown が混ざっていないことを確かめる。
+# workflow の答えに土台や Markdown が混ざっていないことを確かめ、前後の空白を除いて返す。
 sub _workflow_body {
     my ($body) = @_;
     $body =~ s/\A\s+|\s+\z//g;
@@ -113,7 +115,7 @@ sub _workflow_body {
     return $body;
 }
 
-# topic 節が薄い SKILL.md の本文として使えることを確かめる。
+# topic 節が薄い SKILL.md の本文として使えることを確かめ、前後の空白を除いて返す。
 sub _topics {
     my ($topics) = @_;
     $topics =~ s/\A\s+|\s+\z//g;
@@ -127,8 +129,7 @@ sub _topics {
 # ソースの frontmatter から実行時に不要なビルド指示を除く。
 sub _frontmatter {
     my ($document, $name) = @_;
-    die "frontmatter is missing\n" unless $document =~ /\A---\r?\n/;
-    die "frontmatter is not closed\n"
+    die "frontmatter is missing or not closed\n"
         unless $document =~ /\A---\r?\n(.*?)\r?\n---\r?\n/s;
     my @kept;
     my $skip = 0;
@@ -176,6 +177,7 @@ sub _strip_templates {
 # UTF-8 のテキストファイルを文字列として読む。
 sub _read_text {
     my ($path) = @_;
+    require Encode;
     open my $fh, '<:raw', $path or die "cannot read $path: $!\n";
     local $/;
     my $raw = <$fh>;
@@ -188,9 +190,9 @@ sub _read_text {
 # workflow を一時ファイルに置き、実際の Perl で構文検査する。
 sub _check_perl {
     my ($content) = @_;
+    require Encode;
     require File::Temp;
     require IPC::Open3;
-    require Symbol;
     my ($fh, $path) = File::Temp::tempfile(
         'coff-workflow-XXXXXX', SUFFIX => '.pl', TMPDIR => 1, UNLINK => 1,
     );
@@ -198,13 +200,13 @@ sub _check_perl {
     print {$fh} Encode::encode_utf8($content);
     close $fh or die "cannot close $path: $!\n";
 
-    my $error = Symbol::gensym();
     # 一時ファイルの場所では雛形の use lib が runtime を見つけられないので、同梱の lib を -I で渡す。
     my $lib = File::Spec->catdir(dirname(__FILE__), 'lib');
-    my $pid = IPC::Open3::open3(my $input, my $output, $error, $^X, '-I', $lib, '-c', $path);
+    # 標準エラーを標準出力にまとめて一本で読み、診断は文字列に戻してから失敗理由に載せる。
+    my $pid = IPC::Open3::open3(my $input, my $output, undef, $^X, '-I', $lib, '-c', $path);
     close $input;
     local $/;
-    my $diagnostic = (<$output> // '') . (<$error> // '');
+    my $diagnostic = Encode::decode_utf8(<$output> // '');
     waitpid($pid, 0);
     return if ($? >> 8) == 0;
     $diagnostic =~ s/\Q$path\E/workflow.pl/g;
@@ -215,6 +217,8 @@ sub _check_perl {
 # 1ファイルを同じディレクトリの一時ファイルから置き換える。
 sub _write_file {
     my ($path, $content) = @_;
+    require Encode;
+    require File::Path;
     File::Path::make_path(dirname($path));
     my $tmp = "$path.tmp-$$";
     open my $fh, '>:raw', $tmp or die "cannot write $tmp: $!\n";
@@ -226,4 +230,4 @@ sub _write_file {
 # ここから下も土台。skill 名は親ディレクトリ名で、runtime に workflow と引数を渡して終了コードを返す。
 exit run_workflow(name => basename(dirname($FindBin::Bin)),
     workflow => \&workflow, argv => \@ARGV);
-# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"e6fb6e48d02934906e84c7220f5f1e0d"} -->
+# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"e08f2ccd9b3082b21800ea3cee747e73"} -->

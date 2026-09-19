@@ -4,8 +4,7 @@ use strict;
 use warnings;
 use 5.030;
 
-use Digest::MD5 qw(md5_hex);
-use Encode qw(decode encode_utf8 FB_CROAK);
+use Encode qw(decode FB_CROAK);
 use Exporter qw(import);
 use File::Basename qw(dirname);
 use File::Path qw(make_path remove_tree);
@@ -14,113 +13,77 @@ use JSON::PP;
 
 our @EXPORT_OK = qw(run_workflow llm step);
 
-my $JSON = JSON::PP->new->canonical->utf8->allow_nonref;
+my $JSON = JSON::PP->new->canonical->utf8;
 our $CURRENT;
 
 # CLI を解釈し、run の作成または回答後の replay を始める。
 sub run_workflow {
     my (%opt) = @_;
-    my $name = $opt{name};
-    die "workflow name is required\n"
-        unless defined $name && $name =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/;
-    die "workflow callback is required\n" unless ref($opt{workflow}) eq 'CODE';
-
-    my @argv = @{ $opt{argv} // \@ARGV };
+    my @argv = @{ $opt{argv} };
     my $command = shift(@argv) // '';
-    my $root = _default_state_root();
-    my $workflow_root = File::Spec->catdir($root, 'coff', $name);
-    my $emit = sub { print $_[0], "\n" };
-    my $read_answer = sub {
-        local $/;
-        return decode('UTF-8', scalar(<STDIN>) // '', FB_CROAK);
-    };
+    my $workflow_root = File::Spec->catdir(_default_state_root(), 'coff', $opt{name});
 
     if ($command eq 'start') {
-        make_path($workflow_root);
-        my $run = _new_run_id($workflow_root);
+        my $run = sprintf('%x-%x', time, $$);
         my $run_dir = File::Spec->catdir($workflow_root, $run);
         make_path($run_dir);
-        my $journal = {
-            schema  => 1,
-            name    => $name,
-            run     => $run,
-            args    => \@argv,
-            effects => [],
-        };
+        my $journal = { run => $run, args => \@argv, effects => [] };
         _write_json(_journal_path($run_dir), $journal);
-        return _replay($journal, $run_dir, \%opt, $emit);
+        return _replay($journal, $run_dir, $opt{workflow});
     }
 
     die "usage: $0 start [args...] | resume <run> <index>\n"
-        unless $command eq 'resume';
-    die "resume requires a run and an effect index\n" unless @argv == 2;
+        unless $command eq 'resume' && @argv == 2;
     my ($run, $index) = @argv;
-    die "invalid run\n"
-        unless $run =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/;
-    die "effect index must be a non-negative integer\n"
-        unless $index =~ /\A(?:0|[1-9][0-9]*)\z/;
-
+    die "invalid run\n" unless $run =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/;
     my $run_dir = File::Spec->catdir($workflow_root, $run);
     my $journal = _read_json(_journal_path($run_dir));
     my $error;
     eval {
-        my $effect = $journal->{effects}[$index]
-            or die "unknown effect index: $index\n";
-        die "effect $index does not accept an answer\n"
-            unless $effect->{kind} eq 'llm';
-        die "effect $index was already answered\n" if exists $effect->{answer};
+        # pending は未回答の llm effect にしか付かないので、この照合だけで答えの宛先が確かめられる。
         die "effect $index is not the pending question\n"
-            unless defined $journal->{pending} && $journal->{pending} == $index;
-        $effect->{answer} = $read_answer->();
+            unless defined $journal->{pending} && $journal->{pending} eq $index;
+        local $/;
+        $journal->{effects}[$index]{answer} = decode('UTF-8', scalar(<STDIN>) // '', FB_CROAK);
         delete $journal->{pending};
         _write_json(_journal_path($run_dir), $journal);
         1;
     } or $error = $@ || 'resume failed';
-    return _finish($run_dir, $run, undef, $error, $emit) if $error;
-    return _replay($journal, $run_dir, \%opt, $emit);
+    return _finish($run_dir, $run, undef, $error) if $error;
+    return _replay($journal, $run_dir, $opt{workflow});
 }
 
 # LLM への問いを journal に記録し、未回答なら workflow を中断する。
 sub llm {
     my ($topic, $input) = @_;
     die "llm topic is required\n" unless defined $topic && length $topic;
-    return _effect('llm', $topic, $input, undef);
+    return _effect('llm', { topic => $topic, input => $input }, undef);
 }
 
 # 決定論的な副作用を一度だけ実行し、結果を journal に記録する。
 sub step (&) {
     my ($code) = @_;
-    return _effect('step', undef, undef, $code);
+    return _effect('step', undef, $code);
 }
 
 # effect を実行順で照合し、記録済みなら保存した値を返す。
 sub _effect {
-    my ($kind, $topic, $input, $code) = @_;
+    my ($kind, $ask, $code) = @_;
     die "effect called outside a workflow\n" unless $CURRENT;
     my $index = $CURRENT->{cursor}++;
     my $journal = $CURRENT->{journal};
     my $effect = $journal->{effects}[$index];
-    my $hash;
-
-    if ($kind eq 'llm') {
-        $input = _snapshot($input);
-        $hash = md5_hex(_encode({ topic => $topic, input => $input }));
-    }
+    $ask = _snapshot($ask) if $ask;
 
     if ($effect) {
+        # 問いは topic と input を含む JSON 全体で比べる。
         my $same = $effect->{kind} eq $kind;
-        $same &&= $effect->{topic} eq $topic && $effect->{input_hash} eq $hash
-            if $kind eq 'llm';
+        $same &&= _encode($effect->{ask}) eq _encode($ask) if $kind eq 'llm';
         _non_deterministic($index) unless $same;
     }
     else {
         _non_deterministic($index) unless $index == @{ $journal->{effects} };
-        $effect = { index => $index, kind => $kind };
-        if ($kind eq 'llm') {
-            $effect->{topic} = $topic;
-            $effect->{input} = $input;
-            $effect->{input_hash} = $hash;
-        }
+        $effect = { kind => $kind, ($ask ? (ask => $ask) : ()) };
         push @{ $journal->{effects} }, $effect;
         _write_json(_journal_path($CURRENT->{run_dir}), $journal);
     }
@@ -135,12 +98,15 @@ sub _effect {
     return _snapshot($effect->{answer}) if exists $effect->{answer};
     $journal->{pending} = $index;
     _write_json(_journal_path($CURRENT->{run_dir}), $journal);
-    die bless({ payload => _ask_payload($journal, $effect) }, 'Coff::Workflow::Suspend');
+    die bless(
+        { payload => { run => $journal->{run}, index => $index, ask => $effect->{ask} } },
+        'Coff::Workflow::Suspend',
+    );
 }
 
 # workflow を先頭から再生し、問い、完了、失敗の JSON を返す。
 sub _replay {
-    my ($journal, $run_dir, $opt, $emit) = @_;
+    my ($journal, $run_dir, $workflow) = @_;
     my $context = {
         journal => $journal,
         run_dir => $run_dir,
@@ -149,30 +115,25 @@ sub _replay {
     my ($report, $error);
     {
         local $CURRENT = $context;
-        eval { $report = $opt->{workflow}->(@{ $journal->{args} }); 1 }
+        eval { $report = $workflow->(@{ $journal->{args} }); 1 }
             or $error = $@ || 'workflow failed';
     }
 
     if (ref($error) eq 'Coff::Workflow::Suspend') {
-        $emit->(_encode($error->{payload}));
+        say _encode($error->{payload});
         return 0;
     }
-    return _finish($run_dir, $journal->{run}, undef, $error, $emit) if $error;
-    if ($context->{cursor} != @{ $journal->{effects} }) {
-        return _finish(
-            $run_dir,
-            $journal->{run},
-            undef,
-            'non-deterministic workflow: replay ended before recorded effects',
-            $emit,
-        );
-    }
-    return _finish($run_dir, $journal->{run}, $report, undef, $emit);
+    return _finish($run_dir, $journal->{run}, undef, $error) if $error;
+    return _finish(
+        $run_dir, $journal->{run}, undef,
+        'non-deterministic workflow: replay ended before recorded effects',
+    ) if $context->{cursor} != @{ $journal->{effects} };
+    return _finish($run_dir, $journal->{run}, $report, undef);
 }
 
 # 終端結果を出力し、完了した run のディレクトリを削除する。
 sub _finish {
-    my ($run_dir, $run, $report, $error, $emit) = @_;
+    my ($run_dir, $run, $report, $error) = @_;
     my $payload = { run => $run, done => JSON::PP::true };
     if (defined $error) {
         $error = "$error";
@@ -183,34 +144,9 @@ sub _finish {
         $payload->{report} = $report;
     }
 
-    remove_tree($run_dir, { error => \my $errors });
-    die "cannot remove completed run: $run_dir\n" if @$errors;
-    $emit->(_encode($payload));
+    remove_tree($run_dir);
+    say _encode($payload);
     return defined($error) ? 1 : 0;
-}
-
-# 未回答の問いを runtime の応答形式に整える。
-sub _ask_payload {
-    my ($journal, $effect) = @_;
-    return {
-        run   => $journal->{run},
-        index => $effect->{index},
-        ask   => {
-            topic => $effect->{topic},
-            input => $effect->{input},
-        },
-    };
-}
-
-# 同時実行と衝突しない短い run ID を作る。
-sub _new_run_id {
-    my ($root) = @_;
-    my $base = sprintf('%x-%x', time, $$);
-    my $run = $base;
-    my $counter = 0;
-    $run = $base . '-' . ++$counter
-        while -e File::Spec->catdir($root, $run);
-    return $run;
 }
 
 # XDG の state 位置を優先し、なければ HOME 配下を使う。
