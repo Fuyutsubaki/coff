@@ -35,7 +35,6 @@ lint:
   通常ファイルとディレクトリだけを扱い、シンボリックリンクはエラーにする。
 - bundle はソース md5 による skip の有無にかかわらず同期し、既存内容と一致するファイルは書き換えない。
 - `coff-dullmify: true` は skill 型だけに指定する。
-  ビルド時は staging に既存の `scripts/workflow.pl` を置いたうえで `/coff-dullmify <source> -o <staging>` を実行し、staging の生成物を読み込む。
 
 ## オプション
 
@@ -104,6 +103,7 @@ echo $verdict
 スキップは全出力先の md5 が一致するときに限る。
 `coff-dullmify: true` の実体出力では `SKILL.md` と `scripts/workflow.pl` の両方を判定する。
 `scripts/workflow.pl` のフッタは最終行の `# <!--{"src":"<src>","md5":"<src md5>"} -->` とする。
+スキップしたソースでも `coff-bundle` の同期（5 の f）は行う。
 
 `--out` / `--agent` があるときは、この導出に出力ルートの置換と参照出力の追加を適用する。参照出力も `dsts` に加え、skip 判定は全出力先に同じフッタ規則で行う。
 
@@ -159,7 +159,16 @@ lint で候補が 1 件でも提示されていれば（実際に適用したか
 
 lint がソースを書き換えた場合は、フッタを書く前に md5 を取り直す。 <!-- §1 で取った md5 は lint で書き換えると古くなる --> 各対象ファイルについて:
 
-a. **日本語を英語に訳す。** 散文・見出し・箇条書き、および frontmatter の `description` 値を簡潔な英語に書き直す。 <!-- 出力のトークン削減のため --> ソースの frontmatter に `coff-translate: false` があれば、この工程は丸ごと行わない（本文も `description` も原文のまま出力する）。 <!-- 日本語の書き方そのものが内容のスキルは、英訳すると価値が壊れるため -->
+a. **dullmify する。** `coff-dullmify: true` の skill ソースだけで行い、以降の段は staging の `SKILL.md` を入力にする。
+
+   - source md5 を含む `.coff/tmp/coff-compile/<name>-<md5>/` を staging にする。
+   - 実体出力に既存の `scripts/workflow.pl` があれば staging に複製しておく（coff-dullmify は出力先にある既存 workflow だけを見る）。
+   - `/coff-dullmify <source> -o <staging>` を実行する。失敗したらこのソースを `failed` にする。
+   - staging から `SKILL.md`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。3ファイルのいずれかがなければエラーにする。
+   - `scripts/workflow.pl` にはソース md5 のフッタだけを加え、runtime は変更しない。
+   - staging は公開の成功後に削除する。失敗時は診断のために残す。
+
+b. **日本語を英語に訳す。** 散文・見出し・箇条書き、および frontmatter の `description` 値を簡潔な英語に書き直す。 <!-- 出力のトークン削減のため --> ソースの frontmatter に `coff-translate: false` があれば、この工程は丸ごと行わない（本文も `description` も原文のまま出力する）。 <!-- 日本語の書き方そのものが内容のスキルは、英訳すると価値が壊れるため -->
 
    ただし以下は訳さない（バイト単位でそのまま残す）:
    - モデルが照合や逐語出力に使う引用符付きリテラル。例: `ファイル名が "注文" から始まるファイル` の `"注文"` は日本語のまま。周囲の文だけを訳す → `files whose name starts with "注文"`。
@@ -171,22 +180,14 @@ a. **日本語を英語に訳す。** 散文・見出し・箇条書き、およ
 
    迷ったら原文のまま残す。
 
-b. **dullmify する。** `coff-dullmify: true` の skill ソースだけで行う。
-
-   - source md5 を含む `.coff/tmp/coff-compile/<name>-<md5>/` を staging にする。
-   - 実体出力に既存の `scripts/workflow.pl` があれば staging に複製しておく（coff-dullmify は出力先にある既存 workflow だけを見る）。
-   - `/coff-dullmify <source> -o <staging>` を実行する。失敗したらこのソースを `failed` にする。
-   - staging から `SKILL.md`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を読む。3ファイルのいずれかがなければエラーにする。
-   - staging の `SKILL.md` に a の翻訳を適用する。`coff-translate: false` の扱いも同じとする。
-   - c と d は staging の `SKILL.md` に適用する。`scripts/workflow.pl` にはソース md5 のフッタだけを加え、runtime は変更しない。
-   - staging は公開の成功後に削除する。失敗時は診断のために残す。
-
-c. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!-- ... -->` をすべて除去する。フェンスコードブロックやインラインコードの中にあるコメントは触らない。フロントマターも触らない。
+c. **本文中の HTML/markdown コメントを取り除く。** 本文の `<!-- ... -->` を、直前の空白ごとすべて除去する。フェンスコードブロックやインラインコードの中にあるコメントは触らない。フロントマターも触らない。
 
 d. **フロントマターの構造を保つ。** 先頭の `---` … `---` ブロックは出力でも有効な YAML フロントマターであり続けること。ソースにフロントマターがなければエラーで中断する。`coff-` で始まるキーは出力の frontmatter からすべて取り除く。 <!-- ビルド指示（ラッパー skill が拡張するものを含む）の名前空間であって、実行時情報ではないため -->
 
-e. **検査してからファイルごとに書く。** フッタは最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。
-   検査後に各ファイルを出力先と同じディレクトリの一時ファイルへ書き、rename で置き換える。
+e. **検査してからファイルごとに書く。** Markdown の出力にはフッタ `<!--{"src":"<src>","md5":"<src md5>"} -->` を最終行に置き、本文の後、コードブロックの外に書く。output-style ファイルにもフッタを付ける。参照モードの出力先には、本文の代わりに「agent プリセットと参照出力」の stub を書く。
+   出力先のディレクトリがなければ作る。検査後に各ファイルを出力先と同じディレクトリの一時ファイルへ書き、rename で置き換える。
+
+f. **同梱ディレクトリを同期する。** `coff-bundle` の各 `<dir>` について `.coff/src/<name>/<dir>/` を実体出力の `<dir>/` へ再帰的に複製する。既存内容と一致するファイルは書き換えず、ソース側にないファイルは実体出力から消す。 <!-- a で書いた `scripts/lib/Coff/Workflow.pm` より後に行い、同梱の runtime を正とする -->
 
 ## 6. レポート
 
@@ -201,7 +202,7 @@ e. **検査してからファイルごとに書く。** フッタは最終行に
 
 - ソースを書き換えるのは lint で承認されたものだけ。
 - frontmatter の `name` 値、出力パスを構成する識別子は lint でも触らない。
-- lint も compile も、途中で失敗したら中途半端な書き込みを残さない。
+- lint も compile も、途中で失敗したら書きかけのファイルを残さない（ファイルごとに一時ファイルから rename で置き換える）。
 
 <!--
 実装メモ:
