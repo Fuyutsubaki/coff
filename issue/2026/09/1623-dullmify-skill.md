@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 ---
 # skill をワークフロー部分と LLM 部分に分ける skill dullmify を作り、coff-compile から呼べるようにする
 
