@@ -122,6 +122,17 @@ unlike($skill, qr/^coff-/m, 'SKILL.md has no coff build keys');
 unlike($skill, qr/<!--\{"src":/, 'raw SKILL.md has no footer');
 like($generated_workflow, qr/\nsub workflow\b/, 'workflow.pl contains the generated workflow');
 
+# 非 ASCII の出力先。パスは文字列として報告に入り、ファイルはその場所にできる
+my $unicode_out = File::Spec->catdir($tmp, "valid-\xe3\x81\x82");
+($status, $stdout, $stderr) = run_dullmify(
+    $unicode_out, '',
+    "sub workflow {\n    return [];\n}",
+    $topics,
+);
+is($status, 0, 'a non-ASCII output directory is accepted') or diag($stderr);
+like(decode_output($stdout)->{report}[0], qr/valid-\x{3042}\z/, 'the report shows the path as characters');
+ok(-f File::Spec->catfile($unicode_out, 'SKILL.md'), 'files land in the non-ASCII directory');
+
 done_testing();
 
 sub run_dullmify {

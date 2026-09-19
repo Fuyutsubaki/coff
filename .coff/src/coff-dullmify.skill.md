@@ -9,24 +9,16 @@ coff-bundle: [scripts, templates]
 
 ## 入出力
 
-`<source>.skill.md -o <dir>` を受け取る。
-引数の既定値は設けない。
-
-`<dir>` に次の3ファイルを書く。
-
-- `SKILL.md`
-- `scripts/workflow.pl`
-- `scripts/lib/Coff/Workflow.pm`
-
-SKILL.md はソースの言語を保ち、フッタを付けない。
-workflow.pl は雛形の頭（use 群と runtime の読み込み）、`sub workflow` と固有の補助関数、雛形の尻（`run_workflow` の呼び出し）で構成し、それ自体が実行ファイルになる。
-雛形と runtime は同梱物をバイト単位で複製する。
+`<source>.skill.md -o <dir>` を受け取り、既定値は設けない。
+`<dir>` に `SKILL.md`、`scripts/workflow.pl`、`scripts/lib/Coff/Workflow.pm` を書く。
+SKILL.md はソースの言語を保ち、workflow.pl はそれ自体が実行ファイルになる。
 
 ## 手順
 
 1. 引数を検査する。
    ソースは1個の `*.skill.md`、出力先は1個の `-o <dir>` とする。
    ソースが存在しない場合、空の場合、引数が余る場合は失敗する。
+   引数は runtime が UTF-8 の文字列に戻して渡すので、ファイル操作に使うパスはバイト列に戻す。
 2. ソース全文を UTF-8 で読む。
    `<dir>/scripts/workflow.pl` が存在すれば UTF-8 で読み、末尾の生成フッタ、雛形の頭、雛形の尻を除いたものを既存 workflow とする。 <!-- 答えに含めてはいけないものを LLM に渡さない -->
 3. topic `workflow` を問い、入力に `{source, existing}` を渡す。
@@ -57,6 +49,7 @@ LLM の判断とユーザーへの問いは `llm(topic, input)` で表す。
 ユーザーへの問いかどうかは topic の判断基準に書く。
 時計と乱数を使わず、hash のキーを sort してから処理する。
 effect を `eval {}` で囲まない。
+引数と `llm` の答えは UTF-8 から戻した文字列で届く。ファイルは UTF-8 で読み書きし、パスは `Encode::encode_utf8` でバイト列にしてからファイル操作に渡す。
 
 Perl 5.30 で動く構文と core モジュールだけを使う。
 追加の core モジュールは補助関数内で `require` し、完全修飾名で呼ぶ。

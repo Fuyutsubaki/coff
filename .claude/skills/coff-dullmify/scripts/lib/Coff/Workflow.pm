@@ -17,6 +17,7 @@ my $JSON = JSON::PP->new->canonical->utf8;
 our $CURRENT;
 
 # CLI を解釈し、run の作成または回答後の replay を始める。
+# 呼び出しの誤り（引数、run、index、stdin の符号化）は JSON を出さず stderr へ返し、run を残す。
 sub run_workflow {
     my (%opt) = @_;
     my @argv = @{ $opt{argv} };
@@ -24,6 +25,8 @@ sub run_workflow {
     my $workflow_root = File::Spec->catdir(_default_state_root(), 'coff', $opt{name});
 
     if ($command eq 'start') {
+        # 引数は境界で文字列に戻し、journal と workflow には decode 済みの値を渡す。
+        @argv = map { _decode_utf8($_, 'argument') } @argv;
         my $run = sprintf('%x-%x', time, $$);
         my $run_dir = File::Spec->catdir($workflow_root, $run);
         make_path($run_dir);
@@ -38,18 +41,13 @@ sub run_workflow {
     die "invalid run\n" unless $run =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/;
     my $run_dir = File::Spec->catdir($workflow_root, $run);
     my $journal = _read_json(_journal_path($run_dir));
-    my $error;
-    eval {
-        # pending は未回答の llm effect にしか付かないので、この照合だけで答えの宛先が確かめられる。
-        die "effect $index is not the pending question\n"
-            unless defined $journal->{pending} && $journal->{pending} eq $index;
-        local $/;
-        $journal->{effects}[$index]{answer} = decode('UTF-8', scalar(<STDIN>) // '', FB_CROAK);
-        delete $journal->{pending};
-        _write_json(_journal_path($run_dir), $journal);
-        1;
-    } or $error = $@ || 'resume failed';
-    return _finish($run_dir, $run, undef, $error) if $error;
+    # pending は未回答の llm effect にしか付かないので、この照合だけで答えの宛先が確かめられる。
+    die "effect $index is not the pending question of run $run\n"
+        unless defined $journal->{pending} && $journal->{pending} eq $index;
+    my $answer = do { local $/; _decode_utf8(scalar(<STDIN>) // '', 'answer') };
+    $journal->{effects}[$index]{answer} = $answer;
+    delete $journal->{pending};
+    _write_json(_journal_path($run_dir), $journal);
     return _replay($journal, $run_dir, $opt{workflow});
 }
 
@@ -147,6 +145,14 @@ sub _finish {
     remove_tree($run_dir);
     say _encode($payload);
     return defined($error) ? 1 : 0;
+}
+
+# バイト列を UTF-8 の文字列に戻す。壊れていれば何の値かを添えて失敗する。
+sub _decode_utf8 {
+    my ($bytes, $what) = @_;
+    my $text = eval { decode('UTF-8', $bytes, FB_CROAK) };
+    die "$what is not UTF-8\n" if $@;
+    return $text;
 }
 
 # XDG の state 位置を優先し、なければ HOME 配下を使う。

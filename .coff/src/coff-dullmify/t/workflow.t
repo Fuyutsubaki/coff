@@ -35,8 +35,19 @@ my $journal = $JSON->decode(read_file(journal_path($run)));
 is($journal->{effects}[0]{result}{value}, 'journal value', 'journal keeps the step snapshot');
 is($first->{ask}{input}{snapshot}, 'workflow value', 'workflow receives a detached step value');
 
+# 呼び出しの誤りは JSON を出さず、run を残す
+($status, $stdout, $stderr) = run_script_with_input('one', 'resume', $run, 99);
+isnt($status, 0, 'resume with a wrong index fails');
+is($stdout, '', 'a caller mistake emits no JSON');
+like($stderr, qr/not the pending question/, 'the mistake is explained on stderr');
+ok(-e run_dir($run), 'a wrong index keeps the run');
+($status, $stdout, $stderr) = run_script_with_input("\xff", 'resume', $run, 1);
+isnt($status, 0, 'resume with a non-UTF-8 answer fails');
+like($stderr, qr/answer is not UTF-8/, 'the encoding problem is explained on stderr');
+ok(-e run_dir($run), 'a bad answer keeps the run');
+
 ($status, $stdout, $stderr) = run_script_with_input('one', 'resume', $run, 1);
-is($status, 0, 'resume succeeds');
+is($status, 0, 'resume succeeds after the mistakes');
 my $second = decode_output($stdout);
 is($second->{ask}{topic}, 'second', 'resume advances to the next llm topic');
 is($second->{index}, 3, 'second question follows the counter step');
@@ -71,6 +82,15 @@ write_file(journal_path($non_deterministic->{run}), $JSON->canonical->encode($jo
 isnt($status, 0, 'changed llm input stops replay');
 like(decode_output($stdout)->{failed}, qr/non-deterministic/, 'non-determinism is reported');
 ok(!-e run_dir($non_deterministic->{run}), 'non-determinism removes the run directory');
+
+# 引数は UTF-8 として decode され、文字列のまま問いに入る
+($status, $stdout, $stderr) = run_script('start', "\xe3\x81\x82");
+is($status, 0, 'start accepts a UTF-8 argument');
+my $unicode = decode_output($stdout);
+is($unicode->{ask}{input}{mode}, "\x{3042}", 'the argument reaches the workflow as characters');
+($status, $stdout, $stderr) = run_script('start', "\xff");
+isnt($status, 0, 'start rejects a non-UTF-8 argument');
+like($stderr, qr/argument is not UTF-8/, 'the argument problem is explained on stderr');
 
 done_testing();
 

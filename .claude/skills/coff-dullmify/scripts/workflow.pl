@@ -55,12 +55,12 @@ sub _plan {
         unless defined $source && defined $out;
     my ($name) = basename($source) =~ /\A([A-Za-z0-9][A-Za-z0-9._-]*)\.skill\.md\z/
         or die "source must be named <name>.skill.md: $source\n";
-    die "source not found: $source\n" unless -f $source;
+    die "source not found: $source\n" unless -f _native($source);
     my $source_content = _read_text($source);
     die "empty source: $source\n" unless length $source_content;
 
     my $existing_path = File::Spec->catfile($out, 'scripts', 'workflow.pl');
-    my $existing = -f $existing_path ? _read_text($existing_path) : '';
+    my $existing = -f _native($existing_path) ? _read_text($existing_path) : '';
     # coff-compile のフッタと雛形の頭と尻は、答えに含めてはいけないので渡す前に落とす。
     $existing =~ s/\n?# <!--\{"src":[^\n]*"md5":"[a-f0-9]{32}"\} -->[ \t]*\n?\z//;
     $existing = _strip_templates($existing);
@@ -76,7 +76,7 @@ sub _plan {
 # 検査済みの答えと雛形を組み立て、構文検査後に3ファイルを書く。
 sub _publish {
     my ($plan, $workflow_body, $topics) = @_;
-    my $scripts = dirname(__FILE__);
+    my $scripts = _scripts_dir();
     my $skill_root = dirname($scripts);
     my ($head, $tail) = _templates();
     my $workflow_content = "$head$workflow_body\n$tail";
@@ -153,7 +153,7 @@ sub _frontmatter {
 
 # 雛形の頭と尻を読む。
 sub _templates {
-    my $templates = File::Spec->catdir(dirname(dirname(__FILE__)), 'templates');
+    my $templates = File::Spec->catdir(dirname(_scripts_dir()), 'templates');
     return (
         _read_text(File::Spec->catfile($templates, 'workflow-head.pl')),
         _read_text(File::Spec->catfile($templates, 'workflow-tail.pl')),
@@ -174,11 +174,24 @@ sub _strip_templates {
     return $text;
 }
 
+# この workflow.pl のあるディレクトリを、引数と同じ文字列のパスで返す。
+sub _scripts_dir {
+    require Encode;
+    return Encode::decode_utf8(dirname(__FILE__));
+}
+
+# 文字列のパスを、OS に渡すバイト列にする。
+sub _native {
+    my ($path) = @_;
+    require Encode;
+    return Encode::encode_utf8($path);
+}
+
 # UTF-8 のテキストファイルを文字列として読む。
 sub _read_text {
     my ($path) = @_;
     require Encode;
-    open my $fh, '<:raw', $path or die "cannot read $path: $!\n";
+    open my $fh, '<:raw', _native($path) or die "cannot read $path: $!\n";
     local $/;
     my $raw = <$fh>;
     close $fh or die "cannot close $path: $!\n";
@@ -201,7 +214,7 @@ sub _check_perl {
     close $fh or die "cannot close $path: $!\n";
 
     # 一時ファイルの場所では雛形の use lib が runtime を見つけられないので、同梱の lib を -I で渡す。
-    my $lib = File::Spec->catdir(dirname(__FILE__), 'lib');
+    my $lib = _native(File::Spec->catdir(_scripts_dir(), 'lib'));
     # 標準エラーを標準出力にまとめて一本で読み、診断は文字列に戻してから失敗理由に載せる。
     my $pid = IPC::Open3::open3(my $input, my $output, undef, $^X, '-I', $lib, '-c', $path);
     close $input;
@@ -219,15 +232,15 @@ sub _write_file {
     my ($path, $content) = @_;
     require Encode;
     require File::Path;
-    File::Path::make_path(dirname($path));
+    File::Path::make_path(_native(dirname($path)));
     my $tmp = "$path.tmp-$$";
-    open my $fh, '>:raw', $tmp or die "cannot write $tmp: $!\n";
+    open my $fh, '>:raw', _native($tmp) or die "cannot write $tmp: $!\n";
     print {$fh} Encode::encode_utf8($content) or die "cannot write $tmp: $!\n";
     close $fh or die "cannot close $tmp: $!\n";
-    rename $tmp, $path or die "cannot replace $path: $!\n";
+    rename _native($tmp), _native($path) or die "cannot replace $path: $!\n";
 }
 
 # ここから下も土台。skill 名は親ディレクトリ名で、runtime に workflow と引数を渡して終了コードを返す。
 exit run_workflow(name => basename(dirname($FindBin::Bin)),
     workflow => \&workflow, argv => \@ARGV);
-# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"e08f2ccd9b3082b21800ea3cee747e73"} -->
+# <!--{"src":".coff/src/coff-dullmify.skill.md","md5":"e284ee2ba35a6e694543aa46f8c79e14"} -->
