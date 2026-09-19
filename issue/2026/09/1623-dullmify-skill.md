@@ -24,7 +24,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 
 1. `coff-dullmify` は独立 skill とし、`<source>.skill.md -o <dir>` から `SKILL.md`、`scripts/workflow.pl`、runtime の 3 ファイルを一時出力する。既存 workflow は雛形の頭と尻とフッタを除いて `workflow` の問いへ渡し、md5、フッタ、英訳、最終出力は扱わない。
 2. `.coff/src/coff-dullmify.skill.md` は手順と判断基準を持つ太いソースとする。runtime、workflow.pl の頭と尻の雛形、SKILL.md の定型だけを手書きし、workflow.pl はソースから生成する。手書き分は frontmatter の `coff-bundle: [scripts, templates]` で coff-compile が成果物へ複製する。
-3. runtime は `llm(topic, input)`、`step { ... }`、`die`、実行順の journal、非決定の検出、JSON による値の切り離し、`start` / `resume` だけを持つ。done と failed で run を削除する。
+3. runtime は `llm(topic, input)`、`step { ... }`、`die`、実行順の journal、非決定の検出、JSON による値の切り離し、`start` / `resume` だけを持つ。done と failed で run を削除する。呼び出しの誤り（run や index の指定違い、UTF-8 でない引数や stdin）は JSON を出さず stderr へ返し、run を残す。引数と答えは runtime が UTF-8 の文字列に戻す。
 4. coff-compile は Markdown の skill のまま、`coff-dullmify: true` のソースで staging に既存 workflow を置き、`/coff-dullmify` に一時出力を書かせる。SKILL.md の英訳とコメント除去、SKILL.md と workflow.pl のフッタ、md5 と skip、実体出力への書き出しは coff-compile が担う。
 5. 薄い skill の `allowed-tools` は `Bash(perl ${CLAUDE_SKILL_DIR}/scripts/workflow.pl *)` だけとする。runtime と雛形は節ごと、生成 workflow は補助関数ごとに日本語のコメントを書く。
 
@@ -45,6 +45,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - 削った機能が無いことを確かめるテストは持たない
 - coff-compile はまだ dullmify しない（Markdown の skill のまま、dullmify の段を手順として持つ）
 - 権限は「プログラム呼び出しの事前承認と書き出しの移譲」まで。強制はしない
+- runtime と雛形は汎用ライブラリなので、常に品質と安定を優先する。呼び出しの誤りで run を消さず、境界で UTF-8 を decode する（coff では起きないことを理由に見送らない）
 
 ## 完了条件
 
@@ -78,7 +79,8 @@ coff の skill は、手順の制御と LLM にしかできない判断（文の
 - Perl は 5.30 以上の構文と core モジュールだけ。生成する `workflow.pl` は `use utf8` を宣言する（非 ASCII の文字列リテラルが JSON 出力で二重にエンコードされる）。`use` 群、`FindBin`、`run_workflow` は雛形の頭と尻にあり、生成しない。既存 workflow を LLM に渡すときはフッタと雛形の頭と尻を除く。
 - 副作用は `step` に置き、時計と乱数を使わず、hash のキーを sort する。effect を `eval {}` で囲まない（中断の例外が握りつぶされる）。
 - 問いは `{"run":…,"index":…,"ask":{"topic":…,"input":…}}`、終了は `{"run":…,"done":true,"report":…}`、失敗は `{"run":…,"done":true,"failed":"<理由>"}`。
-- `resume` の stdin は UTF-8 の文字列として保存し、JSON を要求する topic だけを workflow 側で decode する。
+- `resume` の stdin と `start` の引数は runtime が UTF-8 の文字列に戻して保存し、workflow には文字列で渡す。JSON を要求する topic だけを workflow 側で decode する。パスをファイル操作に渡すときは workflow 側で `Encode::encode_utf8` する。
+- run を消すのは workflow 自身の done と failed だけ。呼び出しの誤りは journal を書く前に stderr へ返し、run を残す。薄い SKILL.md の定型は「JSON でない応答は呼び出しの誤りなので同じ run に再送する」と案内する。
 - journal に入れる値と workflow に返す値は JSON の往復で切り離す（同じ参照を共有すると workflow 側の書き換えが記録に混ざり、replay が非決定として止まる）。run のディレクトリは done と failed で消す。
 - coff-compile は `/coff-dullmify <source> -o <staging>` を実行し、staging の 3 ファイルを読んで英訳とフッタを施し公開する。`perl -c` は coff-dullmify が通しているので coff-compile では再検査しない。
 - `step` の識別は実行順だけで、同じ位置の step の中身が変わっても検出しない（ソースが変われば md5 で workflow.pl ごと再生成されるので受容）。3 ファイルの書き出しはファイルごとの temp + rename で、途中で失敗すると先行ファイルだけが更新される（多ファイルのトランザクションを落とした帰結として受容）。
