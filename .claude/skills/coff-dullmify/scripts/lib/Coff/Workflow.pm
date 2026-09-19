@@ -1,5 +1,66 @@
 package Coff::Workflow;
 
+# =====================================================================
+# README: dullmify の runtime と、生成物のレビューの仕方
+# =====================================================================
+#
+# 何か
+#   coff-dullmify が生成した skill の実行基盤。skill の制御は Perl の
+#   `sub workflow` が持ち、LLM は `llm(topic, input)` で問われた判断に
+#   答えるだけになる。LLM との往復はプロセスをまたぐので、workflow を
+#   毎回先頭から再生し、記録済みの effect は保存した値を返す（replay 方式）。
+#
+# 1 回の run の流れ
+#   start [args]    run を作り、workflow を先頭から走らせる
+#   llm(...)        journal に答えがなければ Suspend 例外で workflow から脱出し、
+#                   {"run","index","ask":{"topic","input"}} を stdout に出して止まる
+#   resume run idx  stdin の答えを journal に書き、また先頭から再生する。
+#                   記録済みの step は再実行せず保存した結果を返し、答え済みの llm は
+#                   答えを返すので、前回止まった場所まで一瞬で進む
+#   終端            {"run","done":true,"report":...} または {"failed":"<理由>"} を出し、
+#                   run のディレクトリを消す
+#
+# 仕掛け（読むときに引っかかる所）
+#   - 例外を継続の代用にする。`llm` は `die bless(..., 'Coff::Workflow::Suspend')` で
+#     workflow 全体から抜ける。だから生成コードは effect を `eval {}` で囲んではいけない
+#   - effect の同一性は実行順だけ。journal の effects[i] と i 番目の呼び出しを突き合わせ、
+#     種類（llm / step）と問いの JSON が違えば非決定として failed にする。
+#     replay が記録より手前で終わっても failed。時計、乱数、hash の順序依存が禁止なのはこのため
+#   - journal に入れる値と workflow に返す値は `_snapshot`（JSON の往復）で切り離す。
+#     同じ参照を共有すると workflow 側の書き換えが記録に混ざり、次の replay が非決定になる
+#   - 文脈は `local $CURRENT` の動的スコープで渡す。深い補助関数からも引数なしで届く
+#   - `step (&)` の prototype でブロック構文にしている。step の中身が変わっても検出しない
+#     （ソースが変われば workflow.pl ごと再生成される前提）
+#   - 境界で decode する。start の引数と resume の答えは UTF-8 の文字列に戻して journal と
+#     workflow に渡す。生成コードはパスを `Encode::encode_utf8` してからファイル操作に渡す
+#   - 呼び出しの誤り（run / index 違い、UTF-8 でない入力）は JSON を出さず stderr へ返し、
+#     run を残す。run を消すのは workflow 自身の done と failed だけ
+#   - run の置き場は ${XDG_STATE_HOME:-$HOME/.local/state}/coff/<skill名>/<run>/journal.json。
+#     途中の状態を見たいときはここを読む
+#
+# 生成物のレビューの仕方
+#   1. scripts/workflow.pl は「雛形の頭 + LLM の本文 + 雛形の尻 + フッタ」。頭と尻は
+#      templates/workflow-head.pl と workflow-tail.pl にバイト一致するはずなので、
+#      LLM が書いたのは `sub workflow` と補助関数だけ。そこだけ読む
+#   2. 本文で見る点: 副作用（ファイル、コマンド）が全部 `step { }` の中にあるか。
+#      `llm` / `step` を `eval` で囲んでいないか。時計、乱数、sort なしの keys がないか。
+#      `use` を書かず補助関数内で `require` しているか。失敗が `die` か。
+#      パスを `Encode::encode_utf8` してから open / -f / rename に渡しているか。
+#      補助関数ごとに日本語のコメントがあるか。答えの検査が `llm` の直後にあるか
+#   3. SKILL.md で見る点: frontmatter の allowed-tools が workflow.pl の呼び出しだけか。
+#      定型（templates/skill-prefix.md と skill-suffix.md）がそのまま入っているか。
+#      topic ごとに入力、答えの形式、判断基準が書かれ、ユーザーへの問いは
+#      AskUserQuestion で出すよう指示しているか
+#   4. 手で回す:
+#        perl scripts/workflow.pl start <引数>            # ask の JSON を読む
+#        perl scripts/workflow.pl resume <run> <index> <<'EOF'
+#        <答え>
+#        EOF
+#      途中で journal.json を開くと、effect の並びと保存された値が見える
+#   5. runtime を変えたら prove -I scripts/lib t/ を通す。t/dullmify.t は
+#      成果物の workflow.pl を起動するので、先に /compile --force coff-dullmify を通す
+# =====================================================================
+
 use strict;
 use warnings;
 use 5.030;
