@@ -14,6 +14,17 @@ Each source type determines its output path. `<name>` is the source filename wit
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
 
+Skill-type sources with `coff-dullmify: true` output `scripts/workflow.pl` and `scripts/lib/Coff/Workflow.pm` in addition to `SKILL.md`.
+Reference outputs do not get `scripts/`.
+
+## Build directives
+
+- `coff-bundle: [<dir>, ...]` copies `.coff/src/<name>/<dir>/` recursively into `<dir>/` of the body output.
+  Values are limited to subdirectory names directly under the source directory.
+  Only regular files and directories are handled; a symlink is an error.
+- Bundles are synced regardless of the md5 skip, and files whose content already matches are not rewritten.
+- `coff-dullmify: true` applies only to skill-type sources.
+
 ## Options
 
 Args (any order, combinable):
@@ -77,6 +88,9 @@ echo $verdict
 ```
 
 Skip only when every output's md5 matches.
+For body outputs of `coff-dullmify: true`, check both `SKILL.md` and `scripts/workflow.pl`.
+The footer of `scripts/workflow.pl` is the last line `# <!--{"src":"<src>","md5":"<src md5>"} -->`.
+Even for skipped sources, sync `coff-bundle` (5 f).
 
 With `--out` / `--agent`, apply the root replacement and reference additions to this derivation. Reference outputs also join `dsts`; skip detection applies the same footer rule to every output.
 
@@ -132,7 +146,16 @@ If rejected, abort. If approved, proceed to 5.
 
 If lint modified the source, recompute the md5 before writing the footer. For each build target:
 
-a. **Translate Japanese to English.** Rewrite prose, headings, list items, and the frontmatter `description` value into concise English. If the source frontmatter has `coff-translate: false`, skip this step entirely (output the body and `description` untranslated).
+a. **Dullmify.** Only for skill sources with `coff-dullmify: true`; the following steps take the staged `SKILL.md` as their input.
+
+   - Use `.coff/tmp/coff-compile/<name>-<md5>/` (with the source md5) as the staging directory.
+   - If the body output already has `scripts/workflow.pl`, copy it into staging first (coff-dullmify only looks at the existing workflow in its output directory).
+   - Run `/coff-dullmify <source> -o <staging>`. If it fails, mark this source `failed`.
+   - Read `SKILL.md`, `scripts/workflow.pl`, and `scripts/lib/Coff/Workflow.pm` from staging. Error if any of the three is missing.
+   - Add only the source-md5 footer to `scripts/workflow.pl`, and leave the runtime unchanged.
+   - Delete staging after a successful publish. Keep it on failure for diagnosis.
+
+b. **Translate Japanese to English.** Rewrite prose, headings, list items, and the frontmatter `description` value into concise English. If the source frontmatter has `coff-translate: false`, skip this step entirely (output the body and `description` untranslated).
 
    But do not translate (preserve byte-for-byte):
    - Quoted string literals the model uses for matching or verbatim emission. Example: in `ファイル名が "注文" から始まるファイル`, `"注文"` stays in Japanese; only the surrounding sentence is translated → `files whose name starts with "注文"`.
@@ -144,18 +167,14 @@ a. **Translate Japanese to English.** Rewrite prose, headings, list items, and t
 
    When in doubt, leave the original.
 
-b. **Strip HTML/markdown comments from the body.** Remove every `<!-- ... -->` block in the body. Do not strip comments inside fenced code blocks or inline code spans. Do not touch the frontmatter block.
+c. **Strip HTML/markdown comments from the body.** Remove every `<!-- ... -->` block in the body together with the whitespace right before it. Do not strip comments inside fenced code blocks or inline code spans. Do not touch the frontmatter block.
 
-c. **Preserve frontmatter structure.** The leading `---` … `---` block must remain valid YAML frontmatter in the output. If the source has no frontmatter, abort with an error. Remove every key starting with `coff-` from the output frontmatter.
+d. **Preserve frontmatter structure.** The leading `---` … `---` block must remain valid YAML frontmatter in the output. If the source has no frontmatter, abort with an error. Remove every key starting with `coff-` from the output frontmatter.
 
-d. **Write the output and append the footer.** Footer goes on the last line, after the body, outside any code block. Output-style files also get the footer; it is a plain markdown file, so the trailing HTML comment is harmless and is also used for skip detection. For reference-mode outputs, write the stub from "Agent presets and reference output" instead of the body. `$content` in the snippet is the body for a body output, or the stub content for a reference output (both up to the footer).
+e. **Check, then write file by file.** Markdown outputs get the footer `<!--{"src":"<src>","md5":"<src md5>"} -->` on the last line, after the body, outside any code block. Output-style files also get the footer. For reference-mode outputs, write the stub from "Agent presets and reference output" instead of the body.
+   Create the destination directory if it does not exist. After the checks, write each file to a temporary file in the destination directory and replace it with rename.
 
-   ```bash
-   for dst in $dsts; do
-     mkdir -p "$(dirname "$dst")"
-     printf '%s\n<!--{"src":"%s","md5":"%s"} -->\n' "$content" "$src" "$src_md5" > "$dst"
-   done
-   ```
+f. **Sync bundled directories.** For each `<dir>` in `coff-bundle`, copy `.coff/src/<name>/<dir>/` recursively into `<dir>/` of the body output. Do not rewrite files whose content already matches, and delete files from the body output that are absent on the source side.
 
 ## 6. Report
 
@@ -170,5 +189,5 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
-- Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"1497ce715eac28ee5775bb1e1368313c"} -->
+- Neither lint nor compile leaves a half-written file when a step fails mid-way (each file is replaced by rename from a temporary file).
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"b8c55c44cb5fee8cd26991474454667d"} -->
