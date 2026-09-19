@@ -28,6 +28,6 @@ description: Build entry point for the coff repo. A wrapper around `/coff-compil
 
 ## Rules
 
-- `coff-dist` is the coff repo's distribution declaration, and this wrapper is its only interpreter. 
+- `coff-dist` is the coff repo's distribution declaration, and this wrapper is its only interpreter.
 - Removing the mirror of a source that dropped the declaration is done by hand.
 <!--{"src":".coff/src/compile.skill.md","md5":"754ee9f5b52592aed0c85a06160495ea"} -->
