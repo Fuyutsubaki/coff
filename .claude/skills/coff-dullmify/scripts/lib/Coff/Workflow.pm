@@ -1,87 +1,43 @@
 package Coff::Workflow;
 
-# ===== README: runtime の仕組みと生成物のレビュー =====
+# README
 #
-# runtime の役割
-# この runtime は、coff-dullmify が生成する skill の実行を支える。
-# scripts/workflow.pl が手順を制御し、LLM は SKILL.md の判断基準に従って
-# 問われた判断にだけ答える。ファイル操作などの副作用はプログラムが実行する。
-# 回答は別プロセスの呼び出しで受け取るため、実行記録を journal.json に保存し、
-# workflow を毎回先頭から実行する replay 方式を採る。
-# 副作用の step と問いの llm を effect と呼び、呼び出した順に記録する。
+# 生成された skill の scripts/workflow.pl は、この runtime の上で動く。
+# 読むのは sub workflow と補助関数だけでよい。前後は雛形の複製である。
 #
-# run の開始から終了まで
-# start [args...] は run と journal を作り、sub workflow に引数を渡す。
-# 未回答の llm に達すると、次の JSON を標準出力へ返してプロセスを終える。
-#   {"run":...,"index":...,"ask":{"topic":...,"input":...}}
-# index は step も数えた 0 始まりの通し番号である。
-# resume <run> <index> は標準入力の答えを文字列として記録し、再生を始める。
-# 結果が保存済みの step はその値を、回答済みの llm は答えを返す。
-# それ以外のコードは再実行し、次の問いか workflow の終わりまで進む。
-# 正常終了では {"run":...,"done":true,"report":...} を返す。
-# workflow 内の失敗では {"run":...,"done":true,"failed":"理由"} を返す。
-# どちらも run ディレクトリを削除する。問いを返した時点では削除しない。
+# トリック: 毎回先頭から実行し直す
 #
-# replay を支える仕組み
-# - Suspend は、未回答の llm から workflow 全体を抜けるための例外である。
-#   例外を継続の代用にし、_replay が問いを返す。
-#   effect を eval で囲むと中断が runtime に届かなくなるため、本文では囲まない。
-# - effect は実行順の index だけで識別し、種類と llm の問いの JSON を照合する。
-#   種類や問いが違えば、別の処理に保存値を返さないよう failed にする。
-#   記録済みの effect をすべて通る前に workflow が終わった場合も同様である。
-#   同じ位置の step の中身の変更は検出しない。
-#   ソース変更時には coff-compile が workflow.pl を再生成する前提である。
-# - _snapshot は JSON の往復で参照を複製し、保存時と返却時に切り離す。
-#   workflow が値を書き換えても、後の replay で使う記録を変えないためである。
-# - local $CURRENT で実行中の文脈を動的スコープに置く。
-#   深い補助関数内の llm や step にも、引数で文脈を渡さず journal を共有できる。
-# - step (&) の prototype により、step { ... } のブロックをコード参照で渡せる。
-#   runtime が実行を制御し、保存済みの結果があればブロックを実行せずに返せる。
-# - 引数と回答は受け取り時に UTF-8 から decode し、文字列として扱う。
-#   バイト列のまま JSON に入れる二重エンコードを避けるためである。
-#   パスをファイル操作に渡す際は workflow 側で Encode::encode_utf8 する。
-# - run / index の誤りや不正な UTF-8 は、JSON を返さず標準エラーで知らせる。
-#   回答を正しく再送できるよう、既存の run と journal は残す。
-# - journal はプロセス間で引き継ぐため、次の state ディレクトリに保存する。
-#   ${XDG_STATE_HOME:-$HOME/.local/state}/coff/<name>/<run>/journal.json
-#   <name> は skill ディレクトリ名である。
+#   sub workflow {
+#       my $files = step { list_files() };     # (0) 副作用
+#       my $pick  = llm('choose', $files);     # (1) LLM への問い
+#       step { delete_file($pick) };           # (2) 副作用
+#   }
 #
-# 生成物のレビュー
-# .claude/skills/<name>/scripts/workflow.pl は雛形の頭、LLM の本文、雛形の尻、
-# coff-compile が付けるフッタの順に並ぶ。
-# LLM が書くのは sub workflow と補助関数だけである。
-# 頭と尻を templates/workflow-head.pl、workflow-tail.pl と照合し、本文を読む。
-# scripts/lib/Coff/Workflow.pm は runtime の複製である。
-# - 本文では、副作用がすべて step 内にあり、失敗を die で表すかを確かめる。
-#   時計と乱数を使わず、hash のキーを sort して処理しているかも見る。
-#   effect を eval で囲まず、llm の直後で答えを検査しているかを確かめる。
-#   Perl 5.30 と core モジュールだけを使い、本文に use 宣言を加えない。
-#   追加モジュールは補助関数内で require し、完全修飾名で呼ぶかを確かめる。
-#   パスの符号化と補助関数の日本語コメントも確認する。
-# - SKILL.md は allowed-tools が workflow.pl の呼び出しだけで、coff-* が
-#   残っていないかを見る。
-#   共通手順と完了報告は templates/skill-prefix.md と skill-suffix.md に照らす。
-#   公開時に coff-compile が英訳する点に注意する。
-#   各 topic の入力、答えの形式、判断基準が workflow の問いと合うか、
-#   ユーザーへの問いを AskUserQuestion で提示する指示があるかを確かめる。
+#   start         (0) を実行し、結果を journal に保存する。(1) は答えがないので
+#                 die で workflow を抜け、問いの JSON を出してプロセスを終える。
+#   resume <run> 1
+#                 stdin の答えを journal に書き、また先頭から実行する。
+#                 (0) は保存した結果を返すだけで実行しない。(1) は答えを返す。
+#                 (2) を実行して done になる。
 #
-# 手動確認とテスト
-# 対象の skill ディレクトリで start し、ask の topic に沿って答えを作る。
-#   perl scripts/workflow.pl start <引数>
-# 応答の <run> と <index> を使い、引用した heredoc で答えをそのまま渡す。
-#   perl scripts/workflow.pl resume <run> <index> <<'EOF'
-#   <答え>
-#   EOF
-# 次の ask または done を確認する。
-# journal は run 終了時に消えるため、待機中に上記のパスを cat して
-# effects の並びと result / answer を読む。
-# runtime を変えたら、リポジトリのルートで次の順に確認する。
-#   1. prove -I .coff/src/coff-dullmify/scripts/lib \
-#        .coff/src/coff-dullmify/t/workflow.t
-#   2. /compile --force coff-dullmify
-#   3. prove -I .coff/src/coff-dullmify/scripts/lib .coff/src/coff-dullmify/t/
-# t/dullmify.t は成果物を起動するため、先に再生成して runtime を反映させる。
-# =====
+# こうして llm は、プロセスをまたぐ関数呼び出しに見える。成り立つ条件は 3 つ。
+#   - 副作用は step の中に置く。外に置くと resume のたびに再実行される。
+#   - 何度実行しても同じ順で同じ問いに着く。時計、乱数、sort なしの keys を
+#     使わない。journal と順序や問いが食い違うと failed になる。
+#   - llm と step を eval で囲まない。中断の die を握りつぶしてしまう。
+#
+# レビューの仕方
+#   1. sub workflow を読み、元の skill ソースの手順と突き合わせる。
+#   2. 上の 3 条件を確かめる。
+#   3. SKILL.md の topic 節が、llm の topic ごとに入力、答えの形式、判断基準を
+#      持つか見る。
+#   4. 手で回す。
+#        perl scripts/workflow.pl start <引数>
+#        perl scripts/workflow.pl resume <run> <index> <<'EOF'
+#        <答え>
+#        EOF
+#      途中の状態は ~/.local/state/coff/<skill名>/<run>/journal.json で読める。
+#      done か failed で消える。JSON でない応答は呼び出しの誤りで、run は残る。
 
 use strict;
 use warnings;
