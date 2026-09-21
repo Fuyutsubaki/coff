@@ -13,7 +13,7 @@ license: MIT
    - If the 「未決」 section still has items, hold and list them. Point out that settled ones go under 「決めたこと」 and 設計方針, and unsettled ones go to a separate issue. The old template's 「リスク・未解決」 section is not a hold criterion; if it still has items, only warn.
    - Check for obvious discrepancies between the body (現状 / 設計方針 / 実装メモ) and the actual repository. If any, hold and point them out (bringing the body in line with what was built is the implementer's job, per detail's quality bar).
    - If the issue has none of 「完了条件」 / 「検証」 / 「受け入れ条件」, or the section is empty, warn about it and pass the verification.
-   - If the issue involves an implementation and a multi-perspective review appears not to have been done, point to the coff-review-diff-code skill (the pointer does not affect the gate's verdict).
+   - If the issue involves an implementation and a post-implementation multi-perspective review of the diff appears not to have been done, point to the coff-review-diff-code skill (the pointer does not affect the gate's verdict).
 4. Once verification passes, set `done` depending on whether frontmatter and `status` exist.
    - If frontmatter exists and has `status`, rewrite its value to `done`.
    - If frontmatter exists but has no `status`, add `status: done` to the frontmatter.
@@ -24,4 +24,4 @@ license: MIT
 ## Scope
 
 - Updates go in the `done` direction only. Reverting (`done` → `open`) is done by hand.
-<!--{"src":".coff/src/coff-issue-done.skill.md","md5":"c2f7298ba80cd0c723c54fabec961b2f"} -->
+<!--{"src":".coff/src/coff-issue-done.skill.md","md5":"78ef05a9da25d9b1eed66cca16f8f72d"} -->

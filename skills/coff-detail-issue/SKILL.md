@@ -134,7 +134,7 @@ Ownership and empty sections: create writes only 要約, 目的, and 現状 (plu
 
 The fold: `## 実装メモ` is the fold; everything below it is for the implementer, the user need not read it, and no preamble is needed under the heading. Keep everything above the fold within one screen (about 50 lines). If it overflows, raise the level of summary; if there are multiple intents, split.
 
-決めたこと: record the conclusions the user explicitly chose, one decision per line as `<decision>（<gist of the reason>）`. Write only reasons the user actually gave, in the user's own vocabulary, and leave the reason out if the user gave none; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). Do not record exchanges ("agreed", "replied OK") or dates. This section is the list of decisions currently in force, not a log in the order they were made. Rewrite a line that a later decision replaced, and delete a line whose subject no longer exists. Merge decisions on the same topic into one line, and order lines by topic. 設計方針 elaborates the decisions recorded here; overlap is fine. No section may contradict 決めたこと or 設計方針.
+決めたこと: record the conclusions the user explicitly chose, one decision per line as `<decision>（<gist of the reason>）`. Write only reasons the user actually gave, in the user's own vocabulary, and leave the reason out if the user gave none; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). Do not record exchanges ("agreed", "replied OK") or dates. This section is the list of decisions currently in force, not a log in the order they were made. Rewrite a line that a later decision replaced, and delete a line whose subject no longer exists. If one topic is split across several lines, merge them into one decision, and order lines by topic. 設計方針 elaborates the decisions recorded here; overlap is fine. No section may contradict 決めたこと or 設計方針.
 
 未決: only points awaiting the user's decision. Do not write other concerns (an immovable fact may go under 現状 as one sentence). When empty, omit the section.
 
@@ -158,4 +158,4 @@ The bar splits in three:
 - done's exit: every 完了条件 is ticked, 未決 is empty, and the body matches what was built.
 
 Before invoking done, the implementer rewrites 設計方針 and 実装メモ to match what was actually built. Remaining work goes to a separate issue or is dropped.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"822602363a0e730e0367649e4bdd6268"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"829095104aa4c4ea69012f4c549115c0"} -->
