@@ -72,7 +72,7 @@ An issue is built in two stages: framing the problem, then working out the solut
 
 - The problem space (要約 / 目的 / 現状) is framed by coff-issue-create.
 - The solution space (設計方針 / 完了条件 / 実装メモ) is worked out by coff-issue-polish.
-- The cross-cutting sections (決めたこと / 未決) are added by both stages.
+- The cross-cutting sections (決めたこと / 未決) are written by both stages.
 
 ### Problem validity
 
@@ -134,7 +134,7 @@ Ownership and empty sections: create writes only 要約, 目的, and 現状 (plu
 
 The fold: `## 実装メモ` is the fold; everything below it is for the implementer, the user need not read it, and no preamble is needed under the heading. Keep everything above the fold within one screen (about 50 lines). If it overflows, raise the level of summary; if there are multiple intents, split.
 
-決めたこと: record the conclusions the user explicitly chose, one decision per line as `<decision>（<gist of the reason>）`. Write only reasons the user actually gave, in the user's own vocabulary, and leave the reason out if the user gave none; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). Do not record exchanges ("agreed", "replied OK") or dates. 設計方針 elaborates the decisions recorded here: overlap is fine, contradiction is not.
+決めたこと: record the conclusions the user explicitly chose, one decision per line as `<decision>（<gist of the reason>）`. Write only reasons the user actually gave, in the user's own vocabulary, and leave the reason out if the user gave none; do not swap in a different reason (a better-sounding one such as risk avoidance or erring on the safe side). Do not record exchanges ("agreed", "replied OK") or dates. This section is the list of decisions currently in force, not a log in the order they were made. Rewrite a line that a later decision replaced, and delete a line whose subject no longer exists. If one topic is split across several lines, merge them into one decision, and order lines by topic. 設計方針 elaborates the decisions recorded here; overlap is fine. No section may contradict 決めたこと or 設計方針.
 
 未決: only points awaiting the user's decision. Do not write other concerns (an immovable fact may go under 現状 as one sentence). When empty, omit the section.
 
@@ -147,15 +147,15 @@ Reference format: anywhere in the body, refer to issues and past records as "pat
 Keep information valuable to a later reader, and don't accumulate scaffolding needed only at authoring time.
 
 - Keep: the chosen approach and its rationale, rejected alternatives and why, constraints that matter later (key types / state transitions / protocols, constraints found via a trial implementation), and representative entry-point files needed to understand the existing design.
-- Don't accumulate: verbatim copies or drafts of a skill's or code's procedure (procedure outlines, draft wording, code sketches — the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, session narrative, and notes that duplicate other sections (overlap between 決めたこと and 設計方針 excepted).
+- Don't accumulate: verbatim copies or drafts of a skill's or code's procedure (procedure outlines, draft wording, code sketches — the real thing lives there, so a copy is double-maintained and goes stale), broad file-path enumerations, history (what happened in the session, what was changed from an earlier implementation or polish), and notes that duplicate other sections (overlap between 決めたこと and 設計方針 excepted).
 
 ## Quality bar
 
 The bar splits in three:
 
 - create's exit: the problem is correctly framed (meets the four problem-validity angles).
-- polish's exit: the issue alone is enough to start implementation, and 未決 is empty.
+- polish's exit: the issue alone is enough to start implementation, 未決 is empty, and everything above the fold fits the line guideline.
 - done's exit: every 完了条件 is ticked, 未決 is empty, and the body matches what was built.
 
 Before invoking done, the implementer rewrites 設計方針 and 実装メモ to match what was actually built. Remaining work goes to a separate issue or is dropped.
-<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"1001219fce272cc1ac650b320130e365"} -->
+<!--{"src":".coff/src/coff-detail-issue.skill.md","md5":"829095104aa4c4ea69012f4c549115c0"} -->
