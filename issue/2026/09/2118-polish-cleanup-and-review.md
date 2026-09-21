@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 ---
 # polish に、清掃の手順と実装前のレビューを加える
 
