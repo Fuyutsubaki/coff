@@ -36,10 +36,10 @@ license: MIT
     4. Does the plan include the user entry point (skill / CLI / UI) the issue calls for? Is that entry point bloated with a copy of the spec?
     5. Quality as a record (history narration, contradictions between sections, stale premises). Have this lens's subagent read the same detail file as step 1 as its criteria
 
-    Handle findings with step 5's sorting. Discard off-target findings, fix those needing no decision, and settle those needing the user's decision by asking on the spot. Fixes may land above or below the fold. If 設計方針 or 完了条件 changed, rerun step 10's simulation exactly once (counted separately from the two-round cap).
+    Handle findings with step 5's sorting. Discard off-target findings, fix those needing no decision, and settle those needing the user's decision by asking on the spot. Fixes may land above or below the fold. If 設計方針 or 完了条件 changed, rerun step 10's simulation exactly once (counted separately from the two-round cap). Finally, recheck anything fixed after the cleanup against step 9's items.
 12. Report the changes applied and remaining tasks.
 
 ## Finish criteria
 
 - Meets detail's exit bar for polish.
-<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"c8fe0e2f76d5eec471733225c51f45b6"} -->
+<!--{"src":".coff/src/coff-issue-polish.skill.md","md5":"508ad81476bbc658f9e4e8e04eb6255a"} -->
