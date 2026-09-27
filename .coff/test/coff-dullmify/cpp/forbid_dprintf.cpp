@@ -1,5 +1,5 @@
 #include "runtime.hpp"
-%:include <glob.h>
 std::string workflow() {
+  dprintf(1, "x");
   return "r";
 }

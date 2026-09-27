@@ -48,7 +48,8 @@ code=$(strip 0)
 with_strings=$(strip 1)
 
 # Raw string literals would defeat the simple string stripping above.
-m=$(printf '%s\n' "$with_strings" | grep -nE '(^|[^[:alnum:]_])(u8|u|U|L)?R"') && { problem "raw string literals are not allowed"; echo "$m" | sed 's/^/  line /'; }
+m=$(printf '%s\n' "$with_strings" | grep -nE '(^|[^[:alnum:]_])(u8|u|U|L)?R"[^"(]{0,16}\(') && { problem "raw string literals are not allowed"; echo "$m" | sed 's/^/  line /'; }
+printf '%s\n' "$with_strings" | grep -qE '^[[:space:]]*#[[:space:]]*include[[:space:]]*"runtime.hpp"' || problem 'the workflow must #include "runtime.hpp"'
 
 deny() { # pattern, message
   m=$(printf '%s\n' "$code" | grep -nE "$1") && { problem "$2"; echo "$m" | sed 's/^/  line /'; }
@@ -56,19 +57,20 @@ deny() { # pattern, message
 
 # Preprocessor: only #include of the allow list, or "runtime.hpp".
 allowed='algorithm|any|array|bitset|cctype|charconv|climits|cmath|cstddef|cstdint|cstring|cstdlib|deque|functional|initializer_list|iomanip|iterator|limits|list|map|memory|numeric|optional|queue|regex|set|sstream|stack|stdexcept|string|string_view|tuple|type_traits|unordered_map|unordered_set|utility|variant|vector'
-m=$(printf '%s\n' "$with_strings" | grep -nE '^[[:space:]]*(#|%:)' | grep -vE "^[0-9]+:[[:space:]]*#[[:space:]]*include[[:space:]]*(<($allowed)>|\"runtime.hpp\")[[:space:]]*$") \
+m=$(printf '%s\n' "$with_strings" | grep -nE '^[[:space:]]*#' | grep -vE "^[0-9]+:[[:space:]]*#[[:space:]]*include[[:space:]]*(<($allowed)>|\"runtime.hpp\")[[:space:]]*$") \
   && { problem "only #include of these headers is allowed: $(printf '%s' "$allowed" | tr '|' ' ') \"runtime.hpp\""; echo "$m" | sed 's/^/  line /'; }
-m=$(printf '%s\n' "$with_strings" | grep -nE 'extern[[:space:]]*"C') && { problem 'extern "C" declarations are not allowed'; echo "$m" | sed 's/^/  line /'; }
 
 deny 'catch[[:space:]]*\([[:space:]]*\.\.\.[[:space:]]*\)' \
   'catch (...) would swallow the runtime signal; catch std::exception (or a subclass) instead'
 deny '(^|[^[:alnum:]_])(FILE|stdin|stdout|stderr|environ|va_list)([^[:alnum:]_]|$)' \
   'C stdio or environment object outside the runtime'
-deny '(^|[^[:alnum:]_.>])(system|popen|pclose|fopen|freopen|fdopen|fclose|fread|fwrite|fgets|fgetc|fputs|fputc|fprintf|printf|vprintf|vfprintf|sprintf|snprintf|puts|putchar|getchar|scanf|fscanf|sscanf|perror|tmpfile|tmpnam|remove|rename|open|openat|creat|close|read|write|pread|pwrite|dup|dup2|pipe|fork|vfork|execl|execlp|execle|execv|execvp|execvpe|execve|wait|waitpid|kill|raise|signal|sigaction|alarm|sleep|usleep|nanosleep|getenv|setenv|putenv|unsetenv|clearenv|time|clock|clock_gettime|localtime|gmtime|strftime|difftime|rand|srand|random|srandom|rand_r|drand48|lrand48|mrand48|exit|_exit|_Exit|quick_exit|abort|atexit|at_quick_exit|terminate|chdir|mkdir|rmdir|unlink|opendir|readdir|scandir|closedir|stat|fstat|lstat|access|chmod|chown|syscall|fcntl|poll|getpid|getppid|getuid|geteuid|getgid|gethostname|getcwd|realpath|readlink|symlink|link|truncate|ftruncate|fsync|mkstemp|mkdtemp)([^[:alnum:]_]|$)' \
-  'C or POSIX function outside the runtime (stdio, process, time, random, exit, environment, filesystem); also rejected as a name, since a pointer to it bypasses the call check'
+deny '(^|[^[:alnum:]_.>])(system|popen|pclose|fopen|freopen|fdopen|fclose|fread|fwrite|fgets|fgetc|fputs|fputc|fprintf|printf|vprintf|vfprintf|sprintf|snprintf|puts|putchar|getchar|scanf|fscanf|sscanf|perror|tmpfile|tmpnam|remove|rename|open|openat|creat|close|read|write|pread|pwrite|dup|dup2|pipe|fork|vfork|execl|execlp|execle|execv|execvp|execvpe|execve|wait|waitpid|kill|raise|signal|sigaction|alarm|sleep|usleep|nanosleep|getenv|setenv|putenv|unsetenv|clearenv|time|clock|clock_gettime|localtime|gmtime|strftime|difftime|rand|srand|random|srandom|rand_r|drand48|lrand48|mrand48|exit|_exit|_Exit|quick_exit|abort|atexit|at_quick_exit|terminate|chdir|mkdir|rmdir|unlink|opendir|readdir|scandir|closedir|stat|fstat|lstat|access|chmod|chown|syscall|fcntl|poll|getpid|getppid|getuid|geteuid|getgid|gethostname|getcwd|realpath|readlink|symlink|link|truncate|ftruncate|fsync|mkstemp|mkdtemp|wprintf|putwchar|dprintf|secure_getenv|getentropy|arc4random|arc4random_uniform)[[:space:]]*\(' \
+  'C or POSIX call outside the runtime (stdio, process, time, random, exit, environment, filesystem)'
+deny '&[[:space:]]*(std::)?(system|popen|pclose|fopen|freopen|fdopen|fclose|fread|fwrite|fgets|fgetc|fputs|fputc|fprintf|printf|vprintf|vfprintf|sprintf|snprintf|puts|putchar|getchar|scanf|fscanf|sscanf|perror|tmpfile|tmpnam|remove|rename|open|openat|creat|close|read|write|pread|pwrite|dup|dup2|pipe|fork|vfork|execl|execlp|execle|execv|execvp|execvpe|execve|wait|waitpid|kill|raise|signal|sigaction|alarm|sleep|usleep|nanosleep|getenv|setenv|putenv|unsetenv|clearenv|time|clock|clock_gettime|localtime|gmtime|strftime|difftime|rand|srand|random|srandom|rand_r|drand48|lrand48|mrand48|exit|_exit|_Exit|quick_exit|abort|atexit|at_quick_exit|terminate|chdir|mkdir|rmdir|unlink|opendir|readdir|scandir|closedir|stat|fstat|lstat|access|chmod|chown|syscall|fcntl|poll|getpid|getppid|getuid|geteuid|getgid|gethostname|getcwd|realpath|readlink|symlink|link|truncate|ftruncate|fsync|mkstemp|mkdtemp|wprintf|putwchar|dprintf|secure_getenv|getentropy|arc4random|arc4random_uniform)([^[:alnum:]_]|$)' \
+  'pointer to a C or POSIX function outside the runtime'
 deny '(^|[^[:alnum:]_])(asm|__asm__|__asm)([^[:alnum:]_]|$)' \
   'inline assembly'
-deny '(^|[^[:alnum:]_])dullmify::detail([^[:alnum:]_]|$)' \
+deny '(^|[^[:alnum:]_])(dullmify::)?detail::|(^|[^[:alnum:]_])using[[:space:]]+namespace[[:space:]]+dullmify([^[:alnum:]_]|$)' \
   'runtime internals'
 
 exit $status

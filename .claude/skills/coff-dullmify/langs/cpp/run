@@ -17,6 +17,7 @@ if [ ! -x "$bin" ]; then
     rm -f "$tmp"
     esc=$(printf '%s' "$log" | awk 'BEGIN { ORS = "" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); if (NR > 1) printf "\\n"; printf "%s", $0 }')
     printf '{"failed":"C++ build failed: %s"}\n' "$esc"
+    [ "$1" = continue ] && [ -f "$2/.dullmify-run" ] && rm -rf "$2"
     exit 0
   fi
   mv -f "$tmp" "$bin"

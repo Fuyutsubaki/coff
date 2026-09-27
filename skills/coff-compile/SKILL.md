@@ -20,7 +20,7 @@ How to write a directory source `.coff/src/<name>.skill/`:
 - `SKILL.md` is the skill source; lint and compile it under the same rules as a single-file source. A directory without `SKILL.md` is not a source.
 - Every other file (including `.md`) is a bundled file: copy it into the output directory as-is, with no translation and no comment stripping.
 - Never name a bundled file `SKILL.md`.
-- If the same `<name>` exists in both forms (`<name>.skill.md` and `<name>.skill/`), it is an error.
+- If the same `<name>` exists in both forms (`<name>.skill.md` and `<name>.skill/`), it is an error. This check comes before the bare-name ambiguity check.
 
 A skill source whose frontmatter has `coff-dullmify: <lang>` is converted by the procedure in the "dullmify build" section.
 
@@ -29,7 +29,7 @@ A skill source whose frontmatter has `coff-dullmify: <lang>` is converted by the
 Args (any order, combinable):
 
 - `--lint-only`: run lint only and stop. The pre-compile confirmation is also skipped.
-- `--force`: ignore md5-match skip and process all targets.
+- `--force`: ignore md5-match skip and process all targets (`force=1` in the snippets below).
 - `--out <root>`: replace the default output root `.claude`. The per-type sublayout (`skills/<name>/` etc.) stays the same under the new root.
 - `--ref`: use together with `--out`; write a reference stub pointing at the canonical file instead of a copy of the compiled body. `--ref` without `--out` is an error; abort.
 - `--agent <name>`: preset that derives `--out` and `--ref` from the agent name (table below). Multiple `--agent` flags aggregate each preset's outputs. Combining with explicit `--out` / `--ref` is an error; abort.
@@ -72,10 +72,10 @@ A source whose frontmatter has `coff-dullmify: <lang>` is not translated; instea
 
 - §1 selection and skip detection apply as-is. Skip the lint of §2–§4.
 - In §5, do the following instead of a–d.
-  1. Create a temporary directory outside the repository with `mktemp -d`. Read `.claude/skills/coff-dullmify/SKILL.md` and follow its procedure to run `/coff-dullmify <src> -o <temp dir> --lang <lang>`. Read it from this location even with `--out`. If that SKILL.md is missing, or dullmify fails, report `failed: <reason>` and leave the output untouched.
+  1. Create a temporary directory outside the repository with `mktemp -d`. Invoke `/coff-dullmify <src> -o <temp dir> --lang <lang>` with the Skill tool. If the coff-dullmify skill is missing, or dullmify fails, report `failed: <reason>` and leave the output untouched.
   2. In the frontmatter of the temp dir's `SKILL.md`, translate only `description` (not when `coff-translate: false`), remove every key starting with `coff-`, and append the footer. Do not translate the body and do not strip comments.
-  3. Delete the body output directory (`.claude/skills/<name>/` by default; under the given root with `--out`) and replace it with the temp dir's contents (`SKILL.md` and `scripts/`). Reference-stub outputs get the stub only, as before.
-- Unchanged sources are skipped. When only coff-dullmify's bundled files (the runtime etc.) changed, rebuild with `--force`.
+  3. Delete the body output directory (`.claude/skills/<name>/` by default; under the given root with `--out`) and replace it with the temp dir's contents (`SKILL.md` and `scripts/`).
+- Unchanged sources are skipped. When only coff-dullmify's bundled files (the runtime etc.) changed, the user rebuilds with `--force`.
 - Report `compiled`.
 
 ## 1. Identify build targets
@@ -202,7 +202,7 @@ e. **Sync the bundled files.** For a directory source, make everything except `S
 ## 6. Report
 
 Report each source as one of:
-- `compiled` (with the applied lint count if any; the same when only the bundled files were synced)
+- `compiled` (with the applied lint count if any)
 - `linted (N applied, M rejected)` — under `--lint-only`, or when the pre-compile confirmation was rejected
 - `failed: <reason>`
 
@@ -214,4 +214,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way. Bundled-file sync is the one exception: if it stops midway, the next run finds the difference and repairs it.
 - When a directory source is turned back into a single-file source, remove the bundled files left in the output by hand.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"029bd0ef934da10d4bad0990a039c18f"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"1c818e2b6cf53203f98be6b7d6dc9428"} -->

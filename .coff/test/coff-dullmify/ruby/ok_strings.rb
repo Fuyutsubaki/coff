@@ -6,5 +6,6 @@ def workflow
   TEXT
   words = %w[puts print IO]
   keys = { method: 1, open: 2, p: 3 }
+  @open = keys[:open]
   "#{note.size}#{doc.size}#{words.size}#{keys[:send]}#{?p}"
 end

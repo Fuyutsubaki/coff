@@ -286,10 +286,6 @@ inline void emit_ask(const Suspend& q) {
 
 inline CommandResult exec_command(const std::vector<std::string>& argv, const std::string& stdin_data) {
   CommandResult res{127, "", ""};
-  if (argv.empty()) {
-    res.err = "empty argv";
-    return res;
-  }
   // stdin goes through a temp file so writing it cannot deadlock against the
   // child's output.
   std::string tmpdir = std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp";
@@ -564,7 +560,8 @@ inline std::optional<std::string> read_file(const std::string& path) {
     return r->result.substr(1);
   }
   std::string content;
-  bool exists = detail::read_whole(path, content);
+  struct stat st;
+  bool exists = ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode) && detail::read_whole(path, content);
   detail::record("read", key, exists ? "1" + content : std::string("0"));
   if (!exists) return std::nullopt;
   return content;

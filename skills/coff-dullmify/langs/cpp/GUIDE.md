@@ -35,13 +35,12 @@ Relative paths are resolved from the directory where the run started.
 - Need the time, an environment variable, or randomness? Get it through `run_command`
   (for example `run_command({"date", "+%F"})`) so it is recorded and replayed.
 - No `catch (...)`. `catch (const std::exception&)` is fine.
-- `ask` and `fail` leave the workflow by throwing. A destructor that calls either must be
-  declared `noexcept(false)`, or the program terminates.
-- No raw string literals (`R"(...)"`), no `extern "C"`, no inline assembly.
-- Do not use denied C names as your own identifiers (`open`, `read`, `write`, `close`,
-  `time`, `remove`, `link`, `stat`, `wait`, `kill`, `raise`, ...); `check` rejects the name
-  wherever it appears, not only in calls. Member names after `.` or `->` are fine.
-  `std::remove` is rejected too (it is also the C file call); use `std::remove_if`.
+- Do not call helpers from destructors or other cleanup code. `ask` and `fail` leave the
+  workflow by throwing, and a throw from a destructor terminates the program.
+- No raw string literals (`R"(...)"`), no inline assembly.
+- Do not name your own functions after denied C calls (`open`, `read`, `write`, `close`,
+  `time`, `remove`, `link`, `stat`, `wait`, ...); `check` rejects the call by name.
+  `std::remove(` is rejected too (it is also the C file call); use `std::remove_if`.
 - Prefer `std::map` and `std::set` over the unordered containers so iteration order is
   obvious to a reviewer.
 

@@ -23,6 +23,7 @@ Relative paths are resolved from the directory where the run started.
 ## Rules
 
 - Never write to stdout or stderr (`puts`, `print`, `p`, `warn`, `$stdout`, ...).
+- Do not call helpers from cleanup code (`ensure`); a question may be propagating through it.
 - Never touch `File`, `Dir`, `IO`, `ENV`, `Time`, `rand`, `system`, backticks, `require`,
   `eval`, `send`, `exit`, or `rescue Exception`. `rescue => e` (StandardError) is fine.
 - Need the time, an environment variable, or randomness? Get it through `run_command`

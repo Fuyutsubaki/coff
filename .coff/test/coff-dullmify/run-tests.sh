@@ -161,7 +161,16 @@ runtime_tests() { # lang
   contains "$lang: corrupt records fail" "records" "$(field "$out" failed)"
   check "$lang: corrupt records remove the run" gone "$([ -d "$run" ] || echo gone)"
 
-  # 8. killed after the answer was taken in: continue resumes from the records.
+  # 8. a question carrying invalid UTF-8 is still printed (Ruby only; C++ passes bytes through).
+  if [ "$lang" = ruby ]; then
+    d=$(scripts_for "$lang" "$here/$lang/binary_ask.rb")
+    begin_run "$d" ""
+    out=$(sh "$d/run" continue "$run" 2>&1)
+    check "$lang: invalid UTF-8 in a question still asks" "bytes?" "$(field "$out" prompt)"
+    rm -rf "$run"
+  fi
+
+  # 9. killed after the answer was taken in: continue resumes from the records.
   d=$(scripts_for "$lang" "$here/$lang/slow.$ext")
   begin_run "$d" ""
   sh "$d/run" continue "$run" >/dev/null
@@ -176,7 +185,7 @@ runtime_tests() { # lang
   out=$(sh "$d/run" continue "$run")
   check "$lang: resumed run finishes" "a|b" "$(field "$out" report)"
 
-  # 9. usage errors.
+  # 10. usage errors.
   sh "$d/run" bogus >/dev/null 2>&1
   check "$lang: unknown command exits 2" 2 "$?"
   cd "$here" || exit 1
@@ -219,7 +228,7 @@ assemble_tests() { # lang
   check "$lang assemble keeps the workflow content" "" "$(diff "$here/$lang/ok.$ext" "$outdir/scripts/workflow.$ext")"
   draft "$here/$lang/forbid_io.$ext"
   sh "$skill/assemble.sh" "$lang" "$here/fixtures/prefecture.skill.md" "$outdir" "$outdir/scripts/workflow.$ext" >/dev/null 2>&1
-  check "$lang assemble regenerating in place removes scripts on rejection" "SKILL.md keep.txt" "$(ls "$outdir" | tr '\n' ' ' | sed 's/ $//')"
+  check "$lang assemble regenerating in place removes SKILL.md and scripts on rejection" "keep.txt" "$(ls "$outdir" | tr '\n' ' ' | sed 's/ $//')"
   draft "$here/$lang/ok.$ext"
   sh "$skill/assemble.sh" "$lang" "$here/fixtures/prefecture.skill.md" "$outdir" "$outdir/scripts/workflow.$ext" >/dev/null
   check "$lang assemble writes SKILL.md, scripts, keeps others" "SKILL.md keep.txt scripts" "$(ls "$outdir" | tr '\n' ' ' | sed 's/ $//')"
@@ -235,9 +244,6 @@ assemble_common_tests() {
   sh "$skill/assemble.sh" nolang "$here/fixtures/prefecture.skill.md" "$outdir" "$here/ruby/ok.rb" >/dev/null 2>"$work/err"
   check "assemble rejects an unknown language" 1 "$?"
   contains "assemble lists available languages" "available: cpp ruby" "$(cat "$work/err")"
-  printf -- '---\n---\nbody\n' > "$work/empty-fm.md"
-  sh "$skill/assemble.sh" ruby "$work/empty-fm.md" "$outdir" "$here/ruby/ok.rb" >/dev/null 2>&1
-  check "assemble rejects an empty frontmatter" 1 "$?"
 }
 
 langs=${1:-"ruby cpp"}

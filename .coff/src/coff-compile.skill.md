@@ -31,7 +31,7 @@ lint:
 - `SKILL.md` が skill のソースで、1 ファイルのソースと同じ規則で lint とコンパイルを行う。`SKILL.md` のないディレクトリはソースとして扱わない。
 - ほかのファイル（`.md` を含む）は同梱ファイルで、英訳もコメント除去もせず、そのまま成果物ディレクトリに写す。
 - 同梱ファイルに `SKILL.md` という名前を使わない。 <!-- `gh skill` は入れ子の SKILL.md を別の skill として見つけ、導入時に frontmatter を注入する -->
-- 同じ `<name>` が両方の形（`<name>.skill.md` と `<name>.skill/`）にあればエラー。
+- 同じ `<name>` が両方の形（`<name>.skill.md` と `<name>.skill/`）にあればエラー。ベース名の曖昧さの判定より先に見る。
 
 frontmatter に `coff-dullmify: <lang>` を持つ skill ソースは、「dullmify ビルド」の節の手順で変換する。
 
@@ -40,7 +40,7 @@ frontmatter に `coff-dullmify: <lang>` を持つ skill ソースは、「dullmi
 引数で以下を受け付ける:
 
 - `--lint-only`: lint だけ実行してそこで止める。コンパイル前の確認も行わない。
-- `--force`: md5 一致によるスキップを無視して、対象すべてを処理する。
+- `--force`: md5 一致によるスキップを無視して、対象すべてを処理する（以下のスニペットでは `force=1`）。
 - `--out <root>`: 出力ルート（既定 `.claude`）を置き換える。種別ごとのサブレイアウト（`skills/<name>/` など）はルート配下でそのまま使う。
 - `--ref`: `--out` と併用して、コンパイル済み本文の複製ではなく正本への参照 stub を出力する。`--out` なしで指定されたらエラーとして中断する。
 - `--agent <name>`: agent 名から `--out` と `--ref` を決めるプリセット（後述の表）。複数指定は各プリセットの出力を合算する。明示の `--out` / `--ref` と同時に指定されたらエラーとして中断する。
@@ -85,10 +85,10 @@ frontmatter に `coff-dullmify: <lang>` を持つソースは、本文を英訳�
 
 - §1 の選定と skip 判定はそのまま。§2〜§4 の lint は行わない。 <!-- 実行時にソースを読まない成果物には、「消しても完遂できるか」の基準が当たらない -->
 - §5 の a〜d の代わりに次を行う。
-  1. リポジトリの外に `mktemp -d` で一時ディレクトリを作る。`.claude/skills/coff-dullmify/SKILL.md` を読み、その手順で `/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を実行する。`--out` があっても、読むのはこの場所。この SKILL.md がないとき、または dullmify が失敗したときは `failed: <理由>` とし、成果物に触れない。
+  1. リポジトリの外に `mktemp -d` で一時ディレクトリを作る。`/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を Skill ツールで起動する。 <!-- SKILL.md を読んで手順を実行する形では coff-dullmify の allowed-tools が効かず、assemble.sh の呼び出しに承認が要る --> coff-dullmify skill がないとき、または dullmify が失敗したときは `failed: <理由>` とし、成果物に触れない。
   2. 一時ディレクトリの `SKILL.md` の frontmatter について、`description` だけを英訳し（`coff-translate: false` なら訳さない）、`coff-` で始まるキーを取り除き、フッタを付ける。本文は訳さず、コメントも除去しない。
-  3. 実体の出力先のディレクトリ（既定 `.claude/skills/<name>/`。`--out` があればそのルートの下）を消し、一時ディレクトリの内容（`SKILL.md` と `scripts/`）で置き換える。参照 stub の出力先には、これまでどおり stub だけを書く。
-- ソースが変わらなければ skip される。coff-dullmify の同梱ファイル（ランタイムなど）だけを直したときは `--force` で作り直す。 <!-- フッタの md5 はソースのものなので、ランタイムの変更では skip される。作り直すと workflow も生成し直される（受容） -->
+  3. 実体の出力先のディレクトリ（既定 `.claude/skills/<name>/`。`--out` があればそのルートの下）を消し、一時ディレクトリの内容（`SKILL.md` と `scripts/`）で置き換える。
+- ソースが変わらなければ skip される。coff-dullmify の同梱ファイル（ランタイムなど）だけを直したときは、利用者が `--force` を付けて作り直す。 <!-- フッタの md5 はソースのものなので、ランタイムの変更では skip される。作り直すと workflow も生成し直される（受容） -->
 - 報告は `compiled`。
 
 ## 1. 対象ファイルの選定
@@ -215,7 +215,7 @@ e. **同梱ファイルを同期する。** ディレクトリのソースにつ
 ## 6. レポート
 
 各ソースについて以下のいずれかを報告する:
-- `compiled`（lint で適用した件数があれば併記。同梱ファイルだけを同期したときも同じ）
+- `compiled`（lint で適用した件数があれば併記）
 - `linted (N applied, M rejected)` — `--lint-only` のとき、またはコンパイル前の確認で却下されたとき
 - `failed: <reason>`
 

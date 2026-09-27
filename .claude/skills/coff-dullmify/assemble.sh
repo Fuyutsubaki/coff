@@ -5,7 +5,7 @@
 # else in <outdir> is left alone. The workflow file is normally
 # <outdir>/scripts/workflow.<ext>; it is read before that directory is replaced.
 # Checks the workflow with langs/<lang>/check. On failure prints the reasons
-# and removes <outdir>/scripts/. On success writes SKILL.md and scripts/.
+# and removes <outdir>/SKILL.md and <outdir>/scripts/. On success writes both.
 set -u
 dir=$(cd "$(dirname "$0")" && pwd)
 if [ $# -ne 4 ]; then
@@ -22,7 +22,6 @@ fi
 [ "$(head -n 1 "$source")" = "---" ] || { echo "source has no frontmatter: $source" >&2; exit 1; }
 end=$(sed -n '2,${/^---$/{=;q;}}' "$source")
 [ -n "$end" ] || { echo "source frontmatter is not closed: $source" >&2; exit 1; }
-[ "$end" -gt 2 ] || { echo "source frontmatter is empty: $source" >&2; exit 1; }
 ext=$(cat "$langdir/ext")
 [ -f "$workflow" ] || { echo "workflow file not found: $workflow" >&2; exit 1; }
 
@@ -32,7 +31,7 @@ cp "$workflow" "$tmp/workflow.$ext"
 
 reject() { # reason
   echo "$1" >&2
-  rm -rf "$outdir/scripts"
+  rm -rf "$outdir/SKILL.md" "$outdir/scripts"
   exit 1
 }
 [ -s "$tmp/workflow.$ext" ] || reject "empty workflow; nothing written"
@@ -53,11 +52,10 @@ sh "$langdir/check" "$tmp/workflow.$ext" || reject "workflow rejected; nothing w
 
 mkdir -p "$outdir" || exit 1
 rm -rf "$outdir/SKILL.md" "$outdir/scripts"
-mkdir "$outdir/scripts" || exit 1
-cp "$tmp/SKILL.md" "$outdir/SKILL.md"
-for f in "$langdir"/*; do
-  case "$(basename "$f")" in check|GUIDE.md|ext) ;; *) cp "$f" "$outdir/scripts/" ;; esac
-done
-cp "$tmp/workflow.$ext" "$outdir/scripts/workflow.$ext"
+mkdir "$outdir/scripts" \
+  && cp "$tmp/SKILL.md" "$outdir/SKILL.md" \
+  && cp "$langdir/run" "$langdir"/runtime.* "$outdir/scripts/" \
+  && cp "$tmp/workflow.$ext" "$outdir/scripts/workflow.$ext" \
+  || reject "could not write $outdir; nothing left there"
 echo "assembled: $outdir"
 (cd "$outdir" && find SKILL.md scripts -type f | sort | sed 's/^/  /')

@@ -15,8 +15,11 @@ problems = []
 # Rebuild the source without comments and string contents. Interpolations
 # (#{...}) are ordinary tokens, so they stay in. Newlines inside dropped tokens
 # are kept so line numbers stay right.
-# Symbols (:name), labels (name:) and character literals (?x) are names, not calls.
-DROP = %i[on_comment on_embdoc_beg on_embdoc on_embdoc_end on_tstring_content on_label on_CHAR].freeze
+# Symbols (:name), labels (name:), instance/class variables and character
+# literals (?x) are names, not calls. A symbol of an output method is still
+# a call in disguise (&:display), so those are kept.
+DROP = %i[on_comment on_embdoc_beg on_embdoc on_embdoc_end on_tstring_content on_label on_CHAR on_ivar on_cvar].freeze
+IO_SYMBOLS = %w[puts print p pp printf putc warn display].freeze
 text = +''
 prev = nil
 Ripper.lex(src).each do |(pos, type, tok, _state)|
@@ -30,7 +33,7 @@ Ripper.lex(src).each do |(pos, type, tok, _state)|
   when *DROP
     text << ("\n" * tok.count("\n"))
   when :on_ident, :on_const, :on_kw
-    text << (prev == :on_symbeg ? ' ' : tok)
+    text << (prev == :on_symbeg && !IO_SYMBOLS.include?(tok) ? ' ' : tok)
   else
     text << tok
   end
@@ -50,8 +53,8 @@ DENY = [
    'process or file access outside the runtime'],
   [/\b(?:eval|instance_eval|class_eval|module_eval|instance_exec|class_exec|module_exec|binding|send|__send__|public_send|const_get|const_set|method|instance_method|define_method|remove_method|undef_method|instance_variable_get|instance_variable_set|ObjectSpace|GC|RubyVM|TOPLEVEL_BINDING|Marshal|set_trace_func|TracePoint|Thread|Fiber|Ractor|Mutex|Queue|Dullmify)\b/,
    'dynamic invocation, reflection, or runtime internals'],
-  [/\bException\b/,
-   'rescuing Exception would swallow the runtime signal; use rescue => e'],
+  [/\bException\b|\brescue\s+(?:::)?(?:Object|BasicObject)\b/,
+   'rescuing Exception (or Object) would swallow the runtime signal; use rescue => e'],
   [/\b(?:exit!?|abort|at_exit|END|BEGIN)\b/,
    'process exit'],
   [/\b(?:require|require_relative|load|autoload)\b/,

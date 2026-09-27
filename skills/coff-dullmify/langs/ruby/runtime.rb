@@ -197,7 +197,6 @@ module Dullmify
       stdin = stdin.to_s
       key = digest('cmd', argv.join("\0"), stdin)
       return CommandResult.new(0, '', '') if @suspended
-      return CommandResult.new(127, '', 'empty argv') if argv.empty?
 
       rec = replay('cmd', key)
       return decode_command(rec.result) if rec
@@ -254,7 +253,10 @@ module Dullmify
     end
 
     def emit(hash)
-      $stdout.write(JSON.generate(hash) + "\n")
+      # Command output or file content may not be valid UTF-8; JSON.generate
+      # would raise, so replace invalid bytes rather than lose the message.
+      clean = hash.transform_values { |v| v.is_a?(String) ? v.scrub('\uFFFD') : v }
+      $stdout.write(JSON.generate(clean) + "\n")
       $stdout.flush
     end
 
@@ -392,4 +394,4 @@ def fail_run(reason)
   Dullmify::Runtime.current.fail_run(reason)
 end
 
-Dullmify.main(ARGV) if __FILE__ == $PROGRAM_NAME
+Dullmify.main(ARGV)
