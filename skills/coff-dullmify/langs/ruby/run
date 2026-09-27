@@ -1,0 +1,6 @@
+#!/bin/sh
+# Launcher for a dullmified skill (Ruby). Called as:
+#   sh <skill dir>/scripts/run start
+#   sh <skill dir>/scripts/run continue <run>
+dir=$(cd "$(dirname "$0")" && pwd)
+exec ruby "$dir/runtime.rb" "$@"

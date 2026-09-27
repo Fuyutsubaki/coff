@@ -1,6 +1,6 @@
 ---
 name: coff-compile
-description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
+description: coff のソース (`.coff/src/`) を `.claude/` の実行用成果物にビルドする。`.skill.md` / `.skill/` → skills、`.outputstyle.md` → output-styles、`.agent.md` → agents。引数なしで全件、`<name>` 指定で個別ビルド、`--lint-only` で事前チェックのみ、`--force` で未変更ソースも再ビルド。`--out` / `--ref` / `--agent` で出力先・参照 stub・agent 別の出力に対応。
 license: MIT
 coff-dist: true
 ---
@@ -17,13 +17,23 @@ lint:
 
 ## 入出力
 
-ソース種別ごとに出力先が決まる。`<name>` はファイル名から `.<type>.md` を取り除いたもの。
+ソース種別ごとに出力先が決まる。`<name>` はファイル名から `.<type>.md` を、ディレクトリ名から `.skill` を取り除いたもの。
 
 | ソース glob | 出力パス |
 |---|---|
 | `.coff/src/*.skill.md` | `.claude/skills/<name>/SKILL.md` |
+| `.coff/src/*.skill/SKILL.md` | `.claude/skills/<name>/SKILL.md` と、同じディレクトリに写した同梱ファイル |
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
+
+ディレクトリのソース `.coff/src/<name>.skill/` の書き方: <!-- スクリプトやランタイムのように、SKILL.md 以外のファイルがないと動かない skill のための形。同梱ファイルのない skill は 1 ファイルのままでよい -->
+
+- `SKILL.md` が skill のソースで、1 ファイルのソースと同じ規則で lint とコンパイルを行う。`SKILL.md` のないディレクトリはソースとして扱わない。
+- ほかのファイル（`.md` を含む）は同梱ファイルで、英訳もコメント除去もせず、そのまま成果物ディレクトリに写す。
+- 同梱ファイルに `SKILL.md` という名前を使わない。 <!-- `gh skill` は入れ子の SKILL.md を別の skill として見つけ、導入時に frontmatter を注入する -->
+- 同じ `<name>` が両方の形（`<name>.skill.md` と `<name>.skill/`）にあればエラー。
+
+frontmatter に `coff-dullmify: <lang>` を持つ skill ソースは、「dullmify ビルド」の節の手順で変換する。
 
 ## オプション
 
@@ -31,10 +41,10 @@ lint:
 
 - `--lint-only`: lint だけ実行してそこで止める。コンパイル前の確認も行わない。
 - `--force`: md5 一致によるスキップを無視して、対象すべてを処理する。
-- `--out <root>`: 出力ルート（既定 `.claude`）を置き換える。種別ごとのサブレイアウト（`skills/<name>/SKILL.md` など）はルート配下でそのまま使う。
+- `--out <root>`: 出力ルート（既定 `.claude`）を置き換える。種別ごとのサブレイアウト（`skills/<name>/` など）はルート配下でそのまま使う。
 - `--ref`: `--out` と併用して、コンパイル済み本文の複製ではなく正本への参照 stub を出力する。`--out` なしで指定されたらエラーとして中断する。
 - `--agent <name>`: agent 名から `--out` と `--ref` を決めるプリセット（後述の表）。複数指定は各プリセットの出力を合算する。明示の `--out` / `--ref` と同時に指定されたらエラーとして中断する。
-- `<path|name> [<path|name> ...]`: 指定したソースだけを処理する。フルパス `.coff/src/foo.skill.md` や `.coff/src/foo.outputstyle.md`、ベース名 `foo`、ファイル名 `foo.skill.md` のいずれでも受け付ける。指定がなければ全 glob を対象にする。ベース名 `foo` が複数の種別に一致する場合（`foo.skill.md` と `foo.outputstyle.md` が両方ある等）は曖昧として報告し、フルパスかファイル名での指定を求める。
+- `<path|name> [<path|name> ...]`: 指定したソースだけを処理する。フルパス `.coff/src/foo.skill.md` や `.coff/src/foo.outputstyle.md`、ディレクトリ `.coff/src/foo.skill`（末尾の `/` も可）、ベース名 `foo`、ファイル名 `foo.skill.md` やディレクトリ名 `foo.skill` のいずれでも受け付ける。指定がなければ全 glob を対象にする。ベース名 `foo` が複数の種別に一致する場合（`foo.skill.md` と `foo.outputstyle.md` が両方ある等）は曖昧として報告し、フルパスかファイル名での指定を求める。
 
 例:
 - `/coff-compile --lint-only` — 全件 lint のみ（md5 一致のものはスキップ）。
@@ -64,22 +74,43 @@ agent 向けの実体（正本）はリポジトリに 1 箇所とし、他の a
   ---
 
   This file is a reference. Read and follow `../../../.claude/skills/<name>/SKILL.md`.
-  <!--{"src":".coff/src/<name>.skill.md","md5":"<src md5>"} -->
+  <!--{"src":"<ソースのパス>","md5":"<src md5>"} -->
   ```
 
 - ビルド順は正本 → 参照。参照を書くとき正本が存在しなければエラーとして報告する。
 
+## dullmify ビルド
+
+frontmatter に `coff-dullmify: <lang>` を持つソースは、本文を英訳する代わりに、coff-dullmify skill で `<lang>` のプログラムと薄い SKILL.md に変換する。 <!-- 制御を LLM からプログラムに移す。設計は issue/2026/09/2200-add-dullmify.md --> skill 型の 1 ファイルのソースだけに書ける。ディレクトリのソースや他の種別に付いていれば `failed` にする。
+
+- §1 の選定と skip 判定はそのまま。§2〜§4 の lint は行わない。 <!-- 実行時にソースを読まない成果物には、「消しても完遂できるか」の基準が当たらない -->
+- §5 の a〜d の代わりに次を行う。
+  1. リポジトリの外に `mktemp -d` で一時ディレクトリを作る。`.claude/skills/coff-dullmify/SKILL.md` を読み、その手順で `/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を実行する。`--out` があっても、読むのはこの場所。この SKILL.md がないとき、または dullmify が失敗したときは `failed: <理由>` とし、成果物に触れない。
+  2. 一時ディレクトリの `SKILL.md` の frontmatter について、`description` だけを英訳し（`coff-translate: false` なら訳さない）、`coff-` で始まるキーを取り除き、フッタを付ける。本文は訳さず、コメントも除去しない。
+  3. 実体の出力先のディレクトリ（既定 `.claude/skills/<name>/`。`--out` があればそのルートの下）を消し、一時ディレクトリの内容（`SKILL.md` と `scripts/`）で置き換える。参照 stub の出力先には、これまでどおり stub だけを書く。
+- ソースが変わらなければ skip される。coff-dullmify の同梱ファイル（ランタイムなど）だけを直したときは `--force` で作り直す。 <!-- フッタの md5 はソースのものなので、ランタイムの変更では skip される。作り直すと workflow も生成し直される（受容） -->
+- 報告は `compiled`。
+
 ## 1. 対象ファイルの選定
 
-ソースの拡張子から種別を判定し、出力先の集合 `dsts` を導出する。
+ソースの glob は `.coff/src/*.skill.md .coff/src/*.skill/SKILL.md .coff/src/*.outputstyle.md .coff/src/*.agent.md`。ソースのパスから種別を判定し、出力先の集合 `dsts` を導出する。実体の出力先を `body` に、ディレクトリのソースでは同梱ファイルのあるディレクトリを `bundle` に取る。
 
 ```bash
+bundle=
 case "$src" in
-  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md" ;;
-  *.outputstyle.md) name=$(basename "$src" .outputstyle.md); dsts=".claude/output-styles/$name.md" ;;
-  *.agent.md)       name=$(basename "$src" .agent.md);       dsts=".claude/agents/$name.md" ;;
+  *.skill/SKILL.md) name=$(basename "$(dirname "$src")" .skill); bundle=$(dirname "$src"); dsts=".claude/skills/$name/SKILL.md" ;;
+  *.skill.md)       name=$(basename "$src" .skill.md);           dsts=".claude/skills/$name/SKILL.md" ;;
+  *.outputstyle.md) name=$(basename "$src" .outputstyle.md);     dsts=".claude/output-styles/$name.md" ;;
+  *.agent.md)       name=$(basename "$src" .agent.md);           dsts=".claude/agents/$name.md" ;;
   *) echo "unknown source type: $src"; continue ;;
 esac
+case "$src" in
+  *.skill.md|*.skill/SKILL.md)
+    if [ -e ".coff/src/$name.skill.md" ] && [ -e ".coff/src/$name.skill/SKILL.md" ]; then
+      echo "failed: $name: both $name.skill.md and $name.skill/ exist"; continue
+    fi ;;
+esac
+body=$dsts
 src_md5=$(md5sum "$src" | cut -d' ' -f1)
 verdict=skip
 for dst in $dsts; do
@@ -89,9 +120,9 @@ done
 echo $verdict
 ```
 
-スキップは全出力先の md5 が一致するときに限る。
+スキップは全出力先の md5 が一致するときに限る。ディレクトリのソースは、skip でも §5 の e を行う。 <!-- 同梱ファイルだけを変えたとき SKILL.md を訳し直すと、英訳の揺れで無用な差分が出る -->
 
-`--out` / `--agent` があるときは、この導出に出力ルートの置換と参照出力の追加を適用する。参照出力も `dsts` に加え、skip 判定は全出力先に同じフッタ規則で行う。
+`--out` / `--agent` があるときは、この導出に出力ルートの置換と参照出力の追加を適用する。参照出力も `dsts` に加え、skip 判定は全出力先に同じフッタ規則で行う。`body` は置換後の実体の出力先で、参照だけの出力では空。
 
 空のソースはエラーとして報告し、次のファイルへ進む。
 
@@ -170,10 +201,21 @@ d. **出力を書き、フッタを付ける。** フッタは最終行に置き
    done
    ```
 
+e. **同梱ファイルを同期する。** ディレクトリのソースについて、実体の出力先のディレクトリ `out` の `SKILL.md` 以外を、`bundle` の同梱ファイルと一致させる。`SKILL.md` が skip か compiled で終わったときだけ行い、`body` が空（参照 stub だけ）なら行わない。 <!-- stub は正本を指し、同梱ファイルは正本の隣にある --> `--force` のときは差がなくても写し直す。写したら、skip だったソースも `compiled` と報告する。
+
+   ```bash
+   out=$(dirname "$body")
+   if [ "$force" = 1 ] || ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
+     (cd "$out" && find . -mindepth 1 ! -name SKILL.md -delete)
+     (cd "$bundle" && tar -cf - --exclude=SKILL.md .) | (cd "$out" && tar -xf -)
+     diff -r -x SKILL.md "$bundle" "$out" >/dev/null || echo "failed: $name: bundled files differ after sync"
+   fi
+   ```
+
 ## 6. レポート
 
 各ソースについて以下のいずれかを報告する:
-- `compiled`（lint で適用した件数があれば併記）
+- `compiled`（lint で適用した件数があれば併記。同梱ファイルだけを同期したときも同じ）
 - `linted (N applied, M rejected)` — `--lint-only` のとき、またはコンパイル前の確認で却下されたとき
 - `failed: <reason>`
 
@@ -183,7 +225,8 @@ d. **出力を書き、フッタを付ける。** フッタは最終行に置き
 
 - ソースを書き換えるのは lint で承認されたものだけ。
 - frontmatter の `name` 値、出力パスを構成する識別子は lint でも触らない。
-- lint も compile も、途中で失敗したら中途半端な書き込みを残さない。
+- lint も compile も、途中で失敗したら中途半端な書き込みを残さない。同梱ファイルの同期だけは、途中で止まっても次の実行で差として見つかって直る。
+- ディレクトリのソースを 1 ファイルのソースに戻したとき、成果物に残る同梱ファイルは手で消す。
 
 <!--
 実装メモ:

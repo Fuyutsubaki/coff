@@ -38,11 +38,12 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 - Codex でも動くことを要件にし、生成した skill と `/coff-dullmify` 自身の両方に求める
 - coff-compile は dullmify を呼び出し、dullmify を coff のコンパイル処理の一つにする。coff-dullmify の同梱ファイルを配る仕組みは、別の issue（issue/2026/09/2222-skill-source-dir.md）で作る
 - 初回実装（ブランチ `issue/dullmify-skill`）は真似も参考もしない（Perl で始めて途中で方針を変えたが、捨てるはずの Perl 時代の仕様があちこちに入り込み、蝕まれていた）
+- 引数と答えは heredoc ではなく run ディレクトリのファイルで渡し、起動スクリプトのコマンドは `start`（run を作る）と `continue <run>`（書かれたファイルを取り込んで再実行する）の 2 つにする。薄い SKILL.md の事前承認は `Write` と起動スクリプトの 2 つになる（Claude Code の Bash ツールが `{`、引用符、`}` を含む heredoc を静的に拒否するため。調査記録 6 と 9。2026-09-27）
 
 ## 完了条件
 
 - [ ] Ruby と C++ のランタイムが、問いの往復、副作用を一度だけ実行すること、非決定と workflow の変更の検出、呼び出しの誤りで run を残すこと、例外で failed にすることのテストを通る。検査スクリプトが、構文の誤りと禁止 API をそれぞれ検出するテストを通る
-- [ ] `/coff-dullmify <source> -o <dir> --lang <ruby|cpp>` が、Claude Code と Codex のどちらでも、薄い SKILL.md と `scripts/` を書く。薄い SKILL.md は事前承認が起動スクリプトの呼び出しだけで、本文が定型と一致する。生成コードが検査を通らなければ、失敗を報告して `<dir>` に何も書かない
+- [ ] `/coff-dullmify <source> -o <dir> --lang <ruby|cpp>` が、Claude Code と Codex のどちらでも、薄い SKILL.md と `scripts/` を書く。薄い SKILL.md は事前承認が `Write` と起動スクリプトの呼び出しだけで、本文が定型と一致する。生成コードが検査を通らなければ、失敗を報告して `<dir>` に何も残さない（LLM が書いた workflow の下書きは `assemble.sh` が消す）
 - [ ] fixture から生成した skill が、Ruby と C++ のどちらでも、Claude Code では承認で止まらずに、Codex では `workspace-write` で最後まで動く
 - [ ] `coff-dullmify: ruby` を宣言したソースを coff-compile でビルドすると、成果物に `scripts/` が入り、SKILL.md の description が英訳されてフッタが付く。ソースが変わらなければ skip される
 - [ ] `/compile` で coff-dullmify が同梱ファイルごと `.claude/skills/coff-dullmify/` と配布ミラー `skills/coff-dullmify/` に入り、`gh skill install` で単独の skill として導入できる。coff-init が導入対象に含める
@@ -56,21 +57,22 @@ issue/2026/09/2222-skill-source-dir.md の実装を先に済ませる。本 issu
 - `.coff/src/coff-dullmify.skill/langs/ruby/runtime.rb`：Ruby のランタイム（CLI、run ディレクトリ、記録と再実行、補助関数）
 - `.coff/src/coff-dullmify.skill/langs/ruby/run`：Ruby の起動スクリプト
 - `.coff/src/coff-dullmify.skill/langs/ruby/check`：構文検査と禁止 API の走査
+- `.coff/src/coff-dullmify.skill/langs/ruby/ext`：workflow ファイルの拡張子（`rb`）。`assemble.sh` が読む
 - `.coff/src/coff-dullmify.skill/langs/ruby/GUIDE.md`：Ruby で workflow を書くときの API と規則
-- `.coff/src/coff-dullmify.skill/langs/cpp/`：C++ の同じ 4 ファイル（`runtime.hpp`、`run`、`check`、`GUIDE.md`）。`run` はビルドとキャッシュも担う
+- `.coff/src/coff-dullmify.skill/langs/cpp/`：C++ の同じ 5 ファイル（`runtime.hpp`、`run`、`check`、`ext`、`GUIDE.md`）。`run` はビルドとキャッシュも担う
 - `.coff/src/coff-dullmify.skill/assemble.sh`：`<outdir>` の組み立て（検査、薄い SKILL.md の生成、`scripts/` への複製）。事前承認の対象
 - `.coff/src/coff-dullmify.skill/templates/thin-skill.md`：薄い SKILL.md の定型
 - `.coff/src/coff-dullmify.skill/SKILL.md`：dullmify の太いソース（`coff-dist: true`）
-- `.coff/test/coff-dullmify/`：ランタイムと検査のテスト（言語ごとの手書きの workflow と、LLM 役を務める駆動スクリプト `run-tests.sh`）と、fixture の skill ソース
+- `.coff/test/coff-dullmify/`：ランタイム、検査、`assemble.sh` のテスト（言語ごとの手書きの workflow と、LLM 役を務める駆動スクリプト `run-tests.sh`）と、fixture の skill ソース
 - `.coff/src/coff-compile.skill.md`：`coff-dullmify` 指示の処理
 - `.coff/src/coff-init.skill.md`：導入対象に coff-dullmify を足す
 
 呼び出しの規約:
 
-- 起動は `sh <skill ディレクトリ>/scripts/run start` と `sh <skill ディレクトリ>/scripts/run answer <run> <n>` の 2 つ。skill の引数と答えは、区切りを `DULLMIFY_EOF` に固定した引用符付きの heredoc で stdin に渡し、末尾の改行を 1 つだけ除いて使う。`gh skill install` が実行権限を落とすので、`sh` を前に付けて呼ぶ（調査記録 4）。
-- 出力は stdout に JSON 1 行。問いは `{"run":"<run ディレクトリ>","ask":<n>,"prompt":"…","input":"…"}`、終了は `{"done":true,"report":"…"}`、失敗は `{"failed":"<理由>"}` とし、done と failed では run ディレクトリを消す。stdout はこの規約だけに使い、workflow は stdout にも stderr にも直接書かない。
-- workflow の例外、非決定、C++ のビルドの失敗は、どれも stdout の `{"failed":…}` で返す。終了コード 2 を使うのは呼び出しの誤りだけである。
-- 呼び出しの誤り（`start` が作った目印のファイルがない run、未回答の問いと違う番号）は、記録に触れずに stderr と終了コード 2 で返し、run を残す。薄い SKILL.md は、呼び出しを直して同じ run に送り直すよう案内する。
+- 起動は `sh <skill ディレクトリ>/scripts/run start` と `sh <skill ディレクトリ>/scripts/run continue <run>` の 2 つ。`start` は run ディレクトリを作って `{"run":"<run>","write":"<run>/args"}` を返すだけで、workflow は実行しない。LLM は skill の引数を `<run>/args` にファイルを書くツールで書き、`continue <run>` を呼ぶ。答えも同じく、問いが示す `<run>/answer.<n>` に書いて `continue <run>` を呼ぶ。ランタイムはファイルの末尾の改行を 1 つだけ除いて使い、取り込んだ答えのファイルは消す。`gh skill install` が実行権限を落とすので、`sh` を前に付けて呼ぶ（調査記録 4）。
+- 出力は stdout に JSON 1 行。問いは `{"run":"<run>","ask":<n>,"prompt":"…","input":"…","write":"<run>/answer.<n>"}`、終了は `{"done":true,"report":"…"}`、失敗は `{"failed":"<理由>"}` とし、done と failed では run ディレクトリを消す。stdout はこの規約だけに使い、workflow は stdout にも stderr にも直接書かない。
+- workflow の例外、非決定、C++ のビルドの失敗は、どれも stdout の `{"failed":…}` で返す。終了コード 2 を使うのは、呼び出しの誤りと、書くべきファイルがまだないときだけである。
+- 呼び出しの誤り（`start` が作った目印のファイルがない run）と、`args` や未回答の問いの `answer.<n>` がまだないときは、記録に触れずに stderr と終了コード 2 で返し、run を残す。薄い SKILL.md は、stderr のとおりにしてから `continue` を呼び直すよう案内する。`continue` は記録の地点から再実行するので、答えを取り込んだ後に殺されても同じ呼び出しで再開できる（調査記録 9）。
 - run ディレクトリは `${TMPDIR:-/tmp}` の下に作り、その絶対パスを毎回の出力で LLM に渡し直す。Claude Code のサンドボックス下では `/tmp` が読み取り専用で `$TMPDIR` が `/tmp/claude` になり、サンドボックスの有無で `$TMPDIR` の解決先が変わるので、呼び出しごとに解決し直さない（調査記録 2、4）。
 - run の開始時の作業ディレクトリを記録し、再実行のたびにそこへ移ってから workflow を実行する。補助関数に渡す相対パスはこの作業ディレクトリが基準になるので、Claude Code と Codex で呼び出し時の作業ディレクトリが違っても結果は変わらない。
 
@@ -109,18 +111,18 @@ issue/2026/09/2222-skill-source-dir.md の実装を先に済ませる。本 issu
 
 - 定型には HTML コメントを書かない。本文が定型と一致するとは、frontmatter を閉じる `---` の次の行から末尾まで（coff-compile の成果物ではフッタの行を除く）が、定型とバイト単位で一致することを指す。
 - 定型のファイル名を `SKILL.md` にしない。`gh skill install` は入れ子の `SKILL.md` を別の skill として列挙し、インストール時に frontmatter を注入する（調査記録 4）。
-- frontmatter はソースのものから `allowed-tools` を除いて写し、`allowed-tools: Bash(sh ${CLAUDE_SKILL_DIR}/scripts/run *)` を加える。`coff-*` キーの除去は coff-compile が行い、dullmify は coff を知らない。
+- frontmatter はソースのものから `allowed-tools` を除いて写し、`allowed-tools: Write Bash(sh ${CLAUDE_SKILL_DIR}/scripts/run *)` を加える。`coff-*` キーの除去は coff-compile が行い、dullmify は coff を知らない。
 - 起動スクリプトは絶対パスで、単独のコマンドとして呼ばせる。`cd … &&` やパイプを付けると `allowed-tools` の規則に一致しない。呼び出しの合間には、問いに答える以外の操作をさせない。done では `report` をそのまま表示し、何も付け足さない。
 - 本文は英語の定型にする。起動スクリプトは「この SKILL.md と同じディレクトリの `scripts/run`」と書き、`${CLAUDE_SKILL_DIR}` を使わない（Codex には同じ変数がなく、相対パスを SKILL.md のディレクトリ基準で解決する。調査記録 3、4）。
-- 本文に `$ARGUMENTS` を書かず、「この skill に与えられた引数をそのまま渡す」と指示する。Codex は `$ARGUMENTS` を展開しないので、引用符付きの heredoc では文字どおり渡ってしまう。Claude Code は、プレースホルダがなければ本文の末尾に `ARGUMENTS: <入力>` を付け足す（調査記録 1）。
-- 呼び出しが終わらないうちに制御が戻ったとき（Claude Code は 2 分の既定のタイムアウトでバックグラウンドに移す）は、終わるまで待って最後の出力を読むよう案内する。Codex での待ち方は調べていないので、案内はエージェントを名指ししない書き方にする。
+- 本文に `$ARGUMENTS` を書かず、「この skill に与えられた引数を `<run>/args` にそのまま書く」と指示する。Codex は `$ARGUMENTS` を展開しないので、書けば文字どおり渡ってしまう。Claude Code は、プレースホルダがなければ本文の末尾に `ARGUMENTS: <入力>` を付け足す（調査記録 1）。
+- 呼び出しが終わらないうちに制御が戻ったとき（Claude Code は 2 分の既定のタイムアウトでバックグラウンドに移す）は、終わるまで待って最後の出力を読み、出力がなければ `continue` を呼び直すよう案内する。Codex での待ち方は調べていないので、案内はエージェントを名指ししない書き方にする。
 
 dullmify:
 
 - 引数は `<source> -o <outdir> --lang <lang>` で、どれも必須にし、frontmatter の `description` にこの呼び出し方を書く。対応外の言語は、生成の前に `langs/<lang>/GUIDE.md` の有無で確かめ、対応する言語（`langs/` の下のディレクトリ）を示してエラーにする。`assemble.sh` も対応外の言語を拒む。lint のオプションは issue/2026/09/2200-dullmify-lint-mode.md で足す。
 - 太いソースは言語に依らない規則（工程ごとのコメント、検査の回数、検査を回避しないこと）だけを持ち、言語ごとの API と禁止 API は `langs/<lang>/GUIDE.md` と `check` に置いて、GUIDE を読ませる。
-- coff-dullmify 自身も Claude Code と Codex の両方で動くよう、本文では同梱ファイルを SKILL.md のディレクトリ基準の相対パスで指す。`allowed-tools` で事前承認するのは `sh ${CLAUDE_SKILL_DIR}/assemble.sh *` だけにし、`assemble.sh` も絶対パスの単独のコマンドとして呼ばせる。
-- LLM が書くのは workflow 本体だけで、`assemble.sh <lang> <source> <outdir>` に区切りを `DULLMIFY_EOF` に固定した引用符付きの heredoc で渡す。`assemble.sh` は `langs/<lang>/check` で検査し、通らなければ理由を出して何も書かずに非 0 で終わる。通れば `<outdir>/SKILL.md` と `<outdir>/scripts/` を消してから、ソースの frontmatter と定型から作った薄い SKILL.md と、`scripts/`（`run`、ランタイム、`workflow.*`）を書く。`<outdir>` のほかのファイルには触れない。ファイルの書き込みを LLM にさせないので、dullmify はソースの読み込みと `assemble.sh` の呼び出しだけで完走する。
+- coff-dullmify 自身も Claude Code と Codex の両方で動くよう、本文では同梱ファイルを SKILL.md のディレクトリ基準の相対パスで指す。`allowed-tools` で事前承認するのは `Write` と `sh ${CLAUDE_SKILL_DIR}/assemble.sh *` にし、`assemble.sh` は絶対パスの単独のコマンドとして呼ばせる。（当初は `assemble.sh` だけの予定だったが、調査記録 6 により workflow をファイルで渡す形に変えた。2026-09-25）
+- LLM が書くのは workflow 本体だけで、`<outdir>/scripts/workflow.<ext>` にファイルを書くツールで書き、そのパスを `assemble.sh <lang> <source> <outdir> <workflow ファイル>` に渡す。`<outdir>/SKILL.md` と `<outdir>/scripts/` は `assemble.sh` のもので、検査に通らなければ理由を出し、`scripts/` を消して非 0 で終わる。通れば `<outdir>/SKILL.md` と `<outdir>/scripts/` を消してから、ソースの frontmatter と定型から作った薄い SKILL.md と、`scripts/`（`run`、ランタイム、`workflow.*`）を書く。`<outdir>` のほかのファイルには触れない。
 - 生成コードには、ソースの工程（番号付きの手順の 1 項目。手順がなければ段落）ごとに、節の見出しと工程の番号をソースの言語でコメントする。同梱ファイル（ランタイム、起動スクリプト、検査スクリプト、ガイド、定型）はコンパイルされずにそのまま配られるので、英語で書く。
 - fixture は `.coff/test/coff-dullmify/fixtures/prefecture.skill.md` とし、複数の問い、問いを含むループ、辞書による分岐、コマンド実行、ファイルの書き込みを通り、中身の決まった report を返すものにする。description は日本語で書く（確認手段 4 で英訳を確かめる）。同じディレクトリに、skill の引数 `prefecture.input` と、期待する report `prefecture.expected`（1 行）を置く。LLM の答えが揺れても report が変わらないよう、答えの紛れない入力を使い、report の 1 行の形式をソースに文字どおり書く。
 - テストと確認の出力は、リポジトリの外（`mktemp -d`）に置く。`gh skill` はリポジトリ内の入れ子の `skills/<name>/SKILL.md` も skill として見つけうる。
@@ -160,6 +162,12 @@ coff-compile:
    - Codex の `workspace-write` では、`nohup … &` と `setsid nohup … &` のどちらで切り離したプロセスも、次の呼び出しまでに消えていた。Claude Code（サンドボックスなし）では残り、ファイル越しに 2 往復して完走した。
    - gh 2.95.0 の `gh skill install --from-local` は、`scripts/run` の実行権限を落とした。skill の中に入れ子の `templates/SKILL.md` があると、それを別の skill（`t/templates`）として列挙し、インストール時に `metadata.local-path` の frontmatter を注入した。別名の `templates/thin-skill.md` はそのまま残った。
 5. この環境には ruby 3.0.2 と g++ 11.4 があり、bubblewrap と socat がないので、Claude Code のサンドボックスは試せない。サンドボックス下の動作は調査記録 2 の仕様で判断した。
+6. 実装時の確認（2026-09-25、Claude Code 2.1.281、codex-cli 0.155.1）: Claude Code の Bash ツールは、`{`、引用符、`}` をこの順で含むコマンド文字列を「Contains brace with quote character (expansion obfuscation)」として実行前に拒否する。引用符付き heredoc の本文も対象で、`dangerouslyDisableSandbox` でも通らない。C++ の関数本体は必ずこれに当たり、Ruby もハッシュリテラルに文字列があれば当たる。heredoc で `assemble.sh` に渡す当初の設計は Claude Code で C++ を一度も assemble できなかったので、workflow をファイルに書いてパスを渡す形に変えた。`claude -p --permission-mode default` では、skill の `allowed-tools` に `Write` を書くと、作業ディレクトリの外（`/tmp` の下）への Write も承認なしで通る。`Edit(**)` は作業ディレクトリの下だけ、`Edit(${CLAUDE_SKILL_DIR}/…)` は置換されず通らない。Codex は heredoc でもファイルでも通る。
+7. 同じ確認で、薄い SKILL.md の frontmatter の `description` に `` `---` `` を含む fixture では、Claude Code が `allowed-tools` の起動スクリプトの呼び出しを承認しなかった。`---` を含まない description に変えると通った。値の中の `---` を閉じ区切りと誤読して後続のキーが落ちるとみられる。fixture の description を「ハイフン 3 つだけの行」に言い換え、coff-dullmify の `<source>` の説明に、frontmatter の値に `---` を含めないと書いた。
+
+8. 確認手段の実行（2026-09-25〜26）: 1 は `run-tests.sh` が全件通過。2 は Claude Code（`claude -p --permission-mode default`）と Codex（`codex exec -s workspace-write`）の両方で Ruby と C++ の変換が通り、`allowed-tools` が起動スクリプトの 1 行だけで本文が定型と一致した。`CXX=false` では 3 回とも拒否され、出力ディレクトリは空のままだった。3 は両言語・両エージェントで `permission_denials` なし（Claude Code）に完走し、最後の応答に `prefecture.expected` の 1 行が含まれた。4 は `--out` の一時ディレクトリに `scripts/` と英訳された description、フッタ付きの SKILL.md ができ、2 回目は skip になった。5 は bundle とミラーの `diff -r` が空、`gh skill install --from-local` で導入でき、一覧に入れ子の skill は出ず、coff-init に coff-dullmify がある。レビュー後の修正と `start` / `continue` への規約変更（2026-09-27）の後、1、2、3、5 を再実行した。2 は Claude Code で両言語とも承認なしで通り、3 は両言語・両エージェントで完走して期待の 1 行を返し、run ディレクトリは残らなかった。4 は再実行していない（coff-compile 側の手順は変えていない）。
+
+9. 答えを取り込んだ直後に殺される場合（2026-09-27）: 旧規約の `answer <run> <n>` は答えを記録してから workflow を再実行するので、再実行中のコマンド（ビルドやテスト）がエージェントのコマンドタイムアウトを超えて殺されると（Codex はプロセスグループごと SIGKILL、Claude Code のサンドボックスは呼び出し終了時に PID 名前空間ごと終了。調査記録 2、3）、答えは記録済みなのに完走していない run が残り、同じ答えの再送は exit 2、`start` は全部を聞き直しになる。`continue` は記録の地点から再実行するので、この状態から続けられる。Ruby のランタイムは SIGTERM を失敗として扱わず素通しにする（`rescue Exception` で捕まえると run を消してしまう）。テスト `slow.rb` / `slow.cpp` で、`timeout` で殺した後の `continue` が次の問いに進むことを確かめる。
 
 ### 参考
 
