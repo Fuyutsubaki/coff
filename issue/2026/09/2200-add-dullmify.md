@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 ---
 # skill の制御を指定した言語のプログラムに移す skill dullmify を加える
 
@@ -42,11 +42,11 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 
 ## 完了条件
 
-- [ ] Ruby と C++ のランタイムが、問いの往復、副作用を一度だけ実行すること、非決定と workflow の変更の検出、呼び出しの誤りと未作成のファイルで run を残すこと、例外で failed にすること、答えを取り込んだ後に殺されても `continue` で続きから進むことのテストを通る。検査スクリプトが、構文の誤りと禁止 API をそれぞれ検出するテストを通る
-- [ ] `/coff-dullmify <source> -o <dir> --lang <ruby|cpp>` が、Claude Code と Codex のどちらでも、薄い SKILL.md と `scripts/` を書く。薄い SKILL.md は事前承認が `Write` と起動スクリプトの呼び出しだけで、本文が定型と一致する。3 回の検査で通らなければ失敗を報告し、`<dir>` に `SKILL.md` と `scripts/` を残さない
-- [ ] fixture から生成した skill が、Ruby と C++ のどちらでも、Claude Code では承認で止まらずに、Codex では `workspace-write` で最後まで動く。workflow が failed で終わると、Claude Code はそれを報告して止まり、ファイルの書き換えやコマンドの実行を始めない（定型は言語に依らないので Ruby で確かめる）
-- [ ] `coff-dullmify: ruby` を宣言したソースを coff-compile でビルドすると、成果物に `scripts/` が入り、SKILL.md の description が英訳されてフッタが付く。ソースが変わらなければ skip される
-- [ ] `/compile` で coff-dullmify が同梱ファイルごと `.claude/skills/coff-dullmify/` と配布ミラー `skills/coff-dullmify/` に入り、`gh skill install` で単独の skill として導入できる。coff-init が導入対象に含める
+- [x] Ruby と C++ のランタイムが、問いの往復、副作用を一度だけ実行すること、非決定と workflow の変更の検出、呼び出しの誤りと未作成のファイルで run を残すこと、例外で failed にすること、答えを取り込んだ後に殺されても `continue` で続きから進むことのテストを通る。検査スクリプトが、構文の誤りと禁止 API をそれぞれ検出するテストを通る
+- [x] `/coff-dullmify <source> -o <dir> --lang <ruby|cpp>` が、Claude Code と Codex のどちらでも、薄い SKILL.md と `scripts/` を書く。薄い SKILL.md は事前承認が `Write` と起動スクリプトの呼び出しだけで、本文が定型と一致する。3 回の検査で通らなければ失敗を報告し、`<dir>` に `SKILL.md` と `scripts/` を残さない
+- [x] fixture から生成した skill が、Ruby と C++ のどちらでも、Claude Code では承認で止まらずに、Codex では `workspace-write` で最後まで動く。workflow が failed で終わると、Claude Code はそれを報告して止まり、ファイルの書き換えやコマンドの実行を始めない（定型は言語に依らないので Ruby で確かめる）
+- [x] `coff-dullmify: ruby` を宣言したソースを coff-compile でビルドすると、成果物に `scripts/` が入り、SKILL.md の description が英訳されてフッタが付く。ソースが変わらなければ skip される
+- [x] `/compile` で coff-dullmify が同梱ファイルごと `.claude/skills/coff-dullmify/` と配布ミラー `skills/coff-dullmify/` に入り、`gh skill install` で単独の skill として導入できる。coff-init が導入対象に含める
 
 ## 実装メモ
 

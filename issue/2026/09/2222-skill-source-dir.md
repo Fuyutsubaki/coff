@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 ---
 # skill のソースをディレクトリで書けるようにし、中のファイルを同梱して配る
 
@@ -36,11 +36,11 @@ coff-dullmify（issue/2026/09/2200-add-dullmify.md）は、言語ごとのラン
 
 ## 完了条件
 
-- [ ] ディレクトリのソースをビルドすると、成果物の SKILL.md はこれまでと同じ規則でコンパイルされ、ほかのファイルはソースとバイト単位で一致し、それ以外のファイルがない。`--out` を付けたときも、置き換えた出力ルートの下に同じ形で入る
-- [ ] 同梱ファイルを変えたとき、足したとき、消したときに成果物の同梱ファイルが更新され、消したファイルは成果物からも消える。そのとき SKILL.md は訳し直されない。どれも変えなければ skip される
-- [ ] 既存の 1 ファイルのソースは、実装の後の `/compile` で成果物もミラーも変わらない（この issue で直したソースの分を除く）
-- [ ] 同じ名前のソースが両方の形にあると、エラーになる
-- [ ] `coff-dist` を宣言したディレクトリのソースは、`/compile` で配布ミラー `skills/<name>/` にディレクトリごと同期され、`gh skill install` で同梱ファイルごと導入できる
+- [x] ディレクトリのソースをビルドすると、成果物の SKILL.md はこれまでと同じ規則でコンパイルされ、ほかのファイルはソースとバイト単位で一致し、それ以外のファイルがない。`--out` を付けたときも、置き換えた出力ルートの下に同じ形で入る
+- [x] 同梱ファイルを変えたとき、足したとき、消したときに成果物の同梱ファイルが更新され、消したファイルは成果物からも消える。そのとき SKILL.md は訳し直されない。どれも変えなければ skip される
+- [x] 既存の 1 ファイルのソースは、実装の後の `/compile` で成果物もミラーも変わらない（この issue で直したソースの分を除く）
+- [x] 同じ名前のソースが両方の形にあると、エラーになる
+- [x] `coff-dist` を宣言したディレクトリのソースは、`/compile` で配布ミラー `skills/<name>/` にディレクトリごと同期され、`gh skill install` で同梱ファイルごと導入できる
 
 ## 実装メモ
 
@@ -78,7 +78,7 @@ coff-dullmify（issue/2026/09/2200-add-dullmify.md）は、言語ごとのラン
 
 1. gh 2.95.0 での試作（2026-09-22、scratchpad の使い捨てリポジトリ）: `gh skill install --from-local . --agent claude-code --dir <dir> </dev/null` の一覧に、`.coff/src/x.skill/SKILL.md` は出なかった。コミットしていない `skills/u/SKILL.md` と `skills/u/sub/b.txt` は、`gh skill install --from-local . u` でサブディレクトリごと導入された。skill の中の入れ子の `SKILL.md` は別の skill として列挙される（issue/2026/09/2200-add-dullmify.md の調査記録 4）。
 
-2. 確認手段の実行（2026-09-25）: 3 は、issue/2026/09/2200-add-dullmify.md の実装に入る前に行い、`git status --short .claude skills` に出たのは coff-compile と compile の成果物とミラーだけで、2 回目の `/compile` は何も報告しなかった。1、2、5、4 は `zz-bundle-sample` で行い、`--out` と `/compile` の両方で `diff -r -x SKILL.md` が空、同梱ファイルの変更・追加・削除のたびに `compiled` が報告されて目印の行が残り、無変更では何も報告されず、ミラーの `diff -r` が空、`gh skill install --from-local` で同梱ファイルごと導入され、両方の形にあるときは引数なしでも名前指定でもエラーになって md5 が変わらなかった。レビュー後に §1 の `sync` 判定を廃して skip でも §5 e を行う形に直したが、この確認は再実行していない。
+2. 確認手段の実行（2026-09-25）: 3 は、issue/2026/09/2200-add-dullmify.md の実装に入る前に行い、`git status --short .claude skills` に出たのは coff-compile と compile の成果物とミラーだけで、2 回目の `/compile` は何も報告しなかった。1、2、5、4 は `zz-bundle-sample` で行い、`--out` と `/compile` の両方で `diff -r -x SKILL.md` が空、同梱ファイルの変更・追加・削除のたびに `compiled` が報告されて目印の行が残り、無変更では何も報告されず、ミラーの `diff -r` が空、`gh skill install --from-local` で同梱ファイルごと導入され、両方の形にあるときは引数なしでも名前指定でもエラーになって md5 が変わらなかった。レビュー後に §1 の `sync` 判定を廃して skip でも §5 e を行う形に直し、同じ確認を再実行して同じ結果を得た（2026-09-28）。
 
 ### 参考
 
