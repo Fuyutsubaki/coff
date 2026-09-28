@@ -67,7 +67,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 
 呼び出しの規約:
 
-- 起動は `sh <skill ディレクトリ>/scripts/run start` と `sh <skill ディレクトリ>/scripts/run continue <run>` の 2 つ。`start` は run ディレクトリを作って `{"run":"<run>","write":"<run>/args"}` を返すだけで、workflow は実行しない。C++ の起動スクリプトは、`start` でも `continue` でもバイナリがなければ先にビルドする。キャッシュは呼び出しごとに解決した `${TMPDIR:-/tmp}` の下の利用者ごとのディレクトリに置き（skill ディレクトリには書かない）、解決先が変わればビルドし直す。LLM は skill の引数を `<run>/args` にファイルを書くツールで書き、`continue <run>` を呼ぶ。答えも同じく `<run>/answer` に書いて `continue <run>` を呼ぶ。ランタイムはファイルの末尾の改行を 1 つだけ除いて使い、取り込んだ `answer` は記録に書いた直後、再実行の前に消す（`args` は run が終わるまで残し、毎回読む）。`gh skill install` が実行権限を落とすので、`sh` を前に付けて呼ぶ（調査記録 4）。
+- 起動は `sh <skill ディレクトリ>/scripts/run start` と `sh <skill ディレクトリ>/scripts/run continue <run>` の 2 つ。`start` は起動スクリプトだけで run ディレクトリを作って `{"run":"<run>","write":"<run>/args"}` を返し、workflow の実行もビルドもしない。C++ の起動スクリプトは、`continue` で目印を確かめた後、バイナリがなければビルドする。キャッシュは呼び出しごとに解決した `${TMPDIR:-/tmp}` の下の、所有者が自分で権限 700 の利用者ごとのディレクトリに置き（skill ディレクトリには書かない。条件を満たさなければ終了コード 2）、解決先が変わればビルドし直す。LLM は skill の引数を `<run>/args` にファイルを書くツールで書き、`continue <run>` を呼ぶ。答えも同じく `<run>/answer` に書いて `continue <run>` を呼ぶ。ランタイムはファイルの末尾の改行を 1 つだけ除いて使い、取り込んだ `answer` は記録に書いた直後、再実行の前に消す（`args` は run が終わるまで残し、毎回読む）。`gh skill install` が実行権限を落とすので、`sh` を前に付けて呼ぶ（調査記録 4）。
 - `continue` は毎回先頭から再実行して記録を消費するので、答えを取り込んだ後に殺されても同じ呼び出しで続きから進む（調査記録 8）。
 - 出力は stdout に JSON 1 行で、終了コードは 0。問いは `{"run":"<run>","prompt":"…","input":"…","write":"<run>/answer"}`（`input` は問いの対象で、`prompt` はそれについて何をどう答えるか）、終了は `{"done":true,"report":"…"}`、失敗は `{"failed":"<理由>"}` とし、done と failed では run ディレクトリを消す。workflow の例外、非決定も `{"failed":…}` で返す。`args` や答えのファイルがまだないときは、記録に触れず、`start` の出力や同じ問いを出し直す。stdout はこの規約だけに使い、workflow は stdout にも stderr にも直接書かない（ランタイムでは強制せず、GUIDE の規則と点検で止める）。
 - 出力する文字列の不正な UTF-8 は U+FFFD に置き換え、出力を常に正しい JSON にする（nlohmann/json の `dump` は既定では例外を投げるので `error_handler_t::replace` を使う。Ruby は `scrub`）。
@@ -85,7 +85,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 
 - 記録は JSON Lines（1 行 1 件）で、1 件ごとに種別、照合キー、結果を持つ。C++ は nlohmann/json、Ruby は標準の json で読み書きする。照合キーはハッシュにせず、値そのもの（問いは prompt と input、コマンド実行は argv と stdin、読み込みはパス、書き込みはパスと内容）を記録して一致で比べる。
 - 未回答の問いも種別と照合キーを記録し、`continue` が `<run>/answer` の内容でその結果を埋める。再実行で記録の種別か照合キーが食い違ったとき、または記録を残したまま done に達したときは、非決定として failed にする。
-- 起動スクリプトは workflow とランタイム（C++ では `json.hpp` も）の内容から POSIX の `cksum` でキーを作り、引数でランタイムに渡す。ランタイムは run の開始時にそれを記録し、途中で変わったら failed にする。C++ ではビルドのキャッシュのキーも兼ね、ビルドは一時ファイルに書いて rename で置く。
+- 起動スクリプトは workflow とランタイム（C++ では `json.hpp` も）の内容から POSIX の `cksum` でキーを作り、`start` で `<run>/workflow-key` に書き、`continue` では引数でランタイムに渡す。ランタイムは両者を照合し、食い違えば failed にする。C++ はファイルをつないでから `cksum` にかけ、キーが置き場所に依らないようにする。C++ ではビルドのキャッシュのキーも兼ね、ビルドは一時ファイルに書いて rename で置く。
 - 書き込みとコマンド実行は初回だけ実行し、実行の後に記録して、再実行では記録を返す。実行から記録までの間に殺されると再開で二度実行されうるが、これは受け入れる。読み込みも記録する（読んだ後で自分が書いたファイルを、再実行では書く前の状態として読み直せるように）。記録が読めないときは failed にして run を消す。外から殺されたとき（SIGTERM など）は失敗として扱わず、run を残す。
 - 補助関数は次の集合とし、名前は言語の慣習に合わせてよい。環境変数や時刻が要るときは、コマンド実行で取る。
   - **引数**：`<run>/args` の内容をそのまま返す。分割は workflow が行う。
@@ -102,7 +102,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 - 点検は、太い SKILL.md の手順で、会話を継承しない新しいサブエージェント（Claude Code は Agent ツール、Codex は `spawn_agent`。調査記録 9）に行わせる。`review.md` のプロンプトの雛形の差し込み口に、ソース、workflow、GUIDE の内容を埋めて渡し（`review-tests.sh` も同じ雛形を機械的に埋める）、渡した内容だけで判断してファイルを読まないようプロンプトで指示する。最初の行に `合格` か `不合格`、続けて指摘を返させる。
 - 点検の観点は 2 つ。規則違反は GUIDE の規則（補助関数を通さない入出力、時刻と乱数、合図を捕まえる例外処理、プロセスの終了、後始末からの補助関数、GUIDE が列挙した標準ライブラリとランタイム以外の `require` や `#include`）に照らす。写しは、ソースの工程の抜けと余計な追加、分岐と繰り返しの条件、問いが LLM にしかできない判断に絞られているか、report の形式を見る。
 - 規則違反の相手は不注意な生成コードであって、回避を狙うコードではない。生成コードはチームがレビューして受け入れるので、レビューで一目で分かる回避まで点検の指示で網羅しようとしない。
-- 1 回は、workflow を書く、`assemble.sh`（構文検査と書き出し）、点検の 1 巡とし、構文検査か点検で落ちたら理由を読んで次の回に進む。構文検査で落ちたときは `assemble.sh` 自身が片付け、点検で落ちたときは `assemble.sh --discard <outdir>` で `SKILL.md` と `scripts/` を片付ける。別の手段でコンパイラを呼ぶなどして、検査や点検を回避してはいけない。
+- 1 回は、workflow を書く、`assemble.sh`（構文検査と書き出し）、点検の 1 巡とし、構文検査か点検で落ちたら理由を読んで次の回に進む。構文検査で落ちたときは `assemble.sh` 自身が片付ける。点検で落ちた回は片付けずに次の回で書き直し、3 回とも通らなければ最後に `assemble.sh --discard <outdir>` で `SKILL.md` と `scripts/` を片付ける。別の手段でコンパイラを呼ぶなどして、検査や点検を回避してはいけない。
 
 言語の前提:
 
@@ -125,10 +125,10 @@ dullmify:
 
 - 引数は `<source> -o <outdir> --lang <lang>` で、どれも必須にし、frontmatter の `description` にこの呼び出し方を書く。`<source>` の frontmatter の値に `---` を含めないことは利用者への前提として太いソースに書き、dullmify は検査しない（調査記録 7）。対応外の言語は、生成の前に `langs/<lang>/GUIDE.md` の有無で確かめ、対応する言語を示してエラーにする。
 - 太いソースは言語に依らない規則（問いの書き方、副作用は補助関数で起こすこと、工程ごとのコメント、点検の起動、回数、回避しないこと）だけを持つ。言語ごとの API、規則、入口の名前、workflow のファイル名は GUIDE を、点検の観点と返す形式は `review.md` を読ませ、その中身を太いソースに写さない。
-- ソース、GUIDE、`review.md` はファイルを読むツールで読ませる（`cd … && cat …` のような複合コマンドは承認で止まる）。作業ディレクトリの外のソースは Read に承認が要る。1 回の数え方は `--discard` を除く `assemble.sh` の呼び出しとし、失敗したときに原因を別のコマンドで調べさせない（どちらも、書かないと守られなかった）。
+- ソース、GUIDE、`review.md` はファイルを読むツールで読ませる（`cd … && cat …` のような複合コマンドは承認で止まる）。作業ディレクトリの外のソースは Read に承認が要る。1 回の数え方は `assemble.sh <lang> …` の呼び出しとし、失敗したときに原因を別のコマンドで調べさせない（どちらも、書かないと守られなかった）。
 - 太いソースの `description` をバッククォートで始めない。YAML の素のスカラーとして読めず、`gh skill install` が frontmatter の注入で失敗する。
 - coff-dullmify 自身も Claude Code と Codex の両方で動くよう、本文では同梱ファイルを SKILL.md のディレクトリ基準の相対パスで指す。`allowed-tools` で事前承認するのは `Write` と `sh ${CLAUDE_SKILL_DIR}/assemble.sh *` にし、`assemble.sh` は絶対パスの単独のコマンドとして呼ばせる。
-- LLM が書くのは workflow 本体だけで、`<outdir>/scripts/` に GUIDE が定めるファイル名で、ファイルを書くツールで書く（heredoc で渡さない。調査記録 6）。`<outdir>/SKILL.md` と `<outdir>/scripts/` は `assemble.sh` のもので、`<outdir>` のほかのファイルには触れない。`assemble.sh <lang> <source> <outdir> <workflow ファイル>` は、言語から拡張子を決めて構文検査を行い、通らなければ理由を出して `SKILL.md` と `scripts/` を消し、非 0 で終わる。通れば、既存の `SKILL.md` と `scripts/` を置き換えて、ソースの frontmatter と定型から作った薄い SKILL.md と、`scripts/`（`run`、ランタイム、C++ では `json.hpp`、workflow）を書く。
+- LLM が書くのは workflow 本体だけで、`<outdir>/scripts/` に GUIDE が定めるファイル名で、ファイルを書くツールで書く（heredoc で渡さない。調査記録 6）。`<outdir>/SKILL.md` と `<outdir>/scripts/` は `assemble.sh` のもので、`<outdir>` のほかのファイルには触れない。`assemble.sh <lang> <source> <outdir>` は、`<outdir>/scripts/workflow.*` をその場で構文検査し、通らなければ理由（コンパイラの出力を含む）を出して `SKILL.md` と `scripts/` を消し、非 0 で終わる。通れば、`langs/<lang>/` の `GUIDE.md` と `check` 以外（起動スクリプト、ランタイム、C++ では `json.hpp` と `LICENSE.MIT`）を `scripts/` に写し、ソースの frontmatter と定型から薄い SKILL.md を書く。frontmatter の `allowed-tools` は、続くリストの行も含めて置き換える。
 - 生成コードには、ソースの工程（番号付きの手順の 1 項目。手順がなければ段落）ごとに、節の見出しと工程の番号をソースの言語でコメントする。
 - fixture は `.coff/test/coff-dullmify/fixtures/prefecture.skill.md` とし、複数の問い、問いを含むループ、辞書による分岐、コマンド実行、ファイルの書き込みを通り、中身の決まった report を返すものにする。description は日本語で書く。同じディレクトリに、skill の引数 `prefecture.input` と、期待する report `prefecture.expected`（1 行）を置く。答えの紛れない入力を使い、report の 1 行の形式をソースに文字どおり書く。
 - テストと確認の出力は、リポジトリの外（`mktemp -d`）に置く。`gh skill` はリポジトリ内の入れ子の `skills/<name>/SKILL.md` も skill として見つけうる。

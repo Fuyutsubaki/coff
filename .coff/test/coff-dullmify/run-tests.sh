@@ -7,7 +7,11 @@ test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 repo_dir=$(CDPATH= cd -- "$test_dir/../../.." && pwd -P) || exit 2
 source_dir=$repo_dir/.coff/src/coff-dullmify.skill
 temporary=$(mktemp -d "${TMPDIR:-/tmp}/coff-dullmify-test.XXXXXX") || exit 2
-trap 'find "$temporary" -depth -delete 2>/dev/null || true' EXIT HUP INT TERM
+trap 'rm -rf "$temporary"' EXIT HUP INT TERM
+# run とビルドキャッシュもテスト用の一時ディレクトリの中に作らせる。
+TMPDIR=$temporary/tmp
+export TMPDIR
+mkdir -p "$TMPDIR" || exit 2
 
 failures=0
 
@@ -236,11 +240,19 @@ done
 build_base=$temporary/build-failure
 mkdir -p "$build_base"
 case_dir=$(prepare_case cpp ok)
-build_output=$(cd "$case_dir" && TMPDIR="$build_base" CXX=false sh "$case_dir/scripts/run" start)
-if printf '%s' "$build_output" | has_json_key failed; then
-  pass "C++: ビルド失敗を固定の failed JSON にする"
+build_run=$(cd "$case_dir" && TMPDIR="$build_base" sh "$case_dir/scripts/run" start | json_value run)
+: >"$build_run/args"
+build_output=$(cd "$case_dir" && TMPDIR="$build_base" CXX=false sh "$case_dir/scripts/run" continue "$build_run" 2>/dev/null)
+if printf '%s' "$build_output" | has_json_key failed && [ ! -e "$build_run" ]; then
+  pass "C++: ビルド失敗を固定の failed JSON にして run を消す"
 else
   fail "C++: ビルド失敗の出力（$build_output）"
+fi
+marker_output=$(cd "$case_dir" && TMPDIR="$build_base" CXX=false sh "$case_dir/scripts/run" continue "$build_base" 2>/dev/null)
+if [ "$?" -eq 2 ] && [ -z "$marker_output" ]; then
+  pass "C++: 目印のない run はビルドより先に終了コード 2"
+else
+  fail "C++: 目印のない run の出力（$marker_output）"
 fi
 
 if [ "$failures" -eq 0 ]; then

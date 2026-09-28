@@ -16,7 +16,7 @@ dullmify は、skill のソースの散文から制御を読み取ってプロ�
 
 ## 現状
 
-- dullmify 本体はまだない（issue/2026/09/2200-add-dullmify.md）。
+- dullmify 本体は issue/2026/09/2200-add-dullmify.md で作った（`.coff/src/coff-dullmify.skill/`）。coff-compile は `coff-dullmify: <lang>` のソースに lint をかけずに変換する。
 - coff-compile には、許可を得てソースを直す lint の段が既にある（`.coff/src/coff-compile.skill.md` の「2. Lint」「3. 対話による承認」）。生成物から消しても実行 LLM が手順を完遂できる文を候補に挙げ、`AskUserQuestion` の複数選択で承認された候補だけをソースに反映する。
 
 ## 決めたこと

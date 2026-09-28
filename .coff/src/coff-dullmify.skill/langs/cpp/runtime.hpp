@@ -393,12 +393,6 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    if (std::string(argv[1]) == "--start") {
-        const std::filesystem::path run_dir = std::filesystem::absolute(argv[2]);
-        dullmify::emit({{"run", run_dir.string()}, {"write", (run_dir / "args").string()}});
-        return 0;
-    }
-
     const std::filesystem::path run_dir = std::filesystem::absolute(argv[1]);
     try {
         if (!std::filesystem::is_regular_file(run_dir / "args")) {

@@ -234,7 +234,7 @@ module Dullmify
     require_relative "workflow"
     report = workflow
     runtime.finish!
-    emit("done" => true, "report" => report.to_s.scrub)
+    emit("done" => true, "report" => report.to_s)
     remove_run(run_dir)
     0
   rescue Pending => pending
@@ -246,8 +246,11 @@ module Dullmify
       "write" => File.join(File.expand_path(run_dir), "answer")
     )
     0
-  rescue Failure, Nondeterminism, StandardError => error
-    emit("failed" => error.message.to_s.scrub)
+  rescue SignalException
+    # 外から殺されたときは失敗として扱わず、run を残す。
+    raise
+  rescue Exception => error
+    emit("failed" => error.message.to_s)
     remove_run(run_dir) if run_dir
     0
   end

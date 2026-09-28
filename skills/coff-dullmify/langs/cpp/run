@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# C++ workflow を必要なときだけビルドし、run を作成または再実行する。
+# C++ workflow の run を作成し、必要なときだけビルドして再実行する。
 set -u
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || {
@@ -12,47 +12,16 @@ base=$(CDPATH= cd -- "$base" && pwd -P) || {
   echo "run とビルドキャッシュの作成先を解決できません: $base" >&2
   exit 2
 }
-user_id=$(id -u) || {
-  echo "利用者を識別できません" >&2
-  exit 2
-}
-cache_dir=$base/coff-dullmify-$user_id/cpp-cache
-mkdir -p "$cache_dir" || {
-  echo "ビルドキャッシュを作成できません: $cache_dir" >&2
-  exit 2
-}
 
-workflow_key=$(cksum "$script_dir/runtime.hpp" "$script_dir/json.hpp" "$script_dir/workflow.cpp") || {
+# キーはファイルの内容だけから作る（置き場所が変わっても同じバイナリを使う）。
+workflow_key=$(cat "$script_dir/runtime.hpp" "$script_dir/json.hpp" "$script_dir/workflow.cpp" | cksum | awk '{ print $1 "-" $2 }') || {
   echo "workflow の識別子を計算できません" >&2
   exit 2
 }
-cache_key=$(printf '%s' "$workflow_key" | cksum | awk '{ print $1 "-" $2 }')
-binary=$cache_dir/workflow-$cache_key
 
-discard_continue_run() {
-  if [ "${1:-}" = continue ] && [ -n "${2:-}" ] && [ -f "$2/.dullmify-run" ]; then
-    find "$2" -depth -delete
-  fi
+json_string() {
+  printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
-
-if [ ! -x "$binary" ]; then
-  temporary=$(mktemp "$cache_dir/workflow.XXXXXX") || {
-    echo "ビルド用の一時ファイルを作成できません" >&2
-    exit 2
-  }
-  cxx=${CXX:-c++}
-  if ! "$cxx" -std=c++17 -I"$script_dir" "$script_dir/workflow.cpp" -o "$temporary"; then
-    find "$temporary" -delete
-    discard_continue_run "${1:-}" "${2:-}"
-    printf '%s\n' '{"failed":"C++ workflow のビルドに失敗しました"}'
-    exit 0
-  fi
-  chmod 700 "$temporary" && mv "$temporary" "$binary" || {
-    find "$temporary" -delete
-    echo "ビルド結果をキャッシュに置けません" >&2
-    exit 2
-  }
-fi
 
 case ${1:-} in
   start)
@@ -67,7 +36,8 @@ case ${1:-} in
     : >"$run_dir/.dullmify-run" || exit 2
     pwd -P >"$run_dir/cwd" || exit 2
     printf '%s' "$workflow_key" >"$run_dir/workflow-key" || exit 2
-    "$binary" --start "$run_dir"
+    printf '{"run":%s,"write":%s}\n' "$(json_string "$run_dir")" "$(json_string "$run_dir/args")"
+    exit 0
     ;;
   continue)
     [ "$#" -eq 2 ] || {
@@ -79,10 +49,43 @@ case ${1:-} in
       echo "dullmify が作成した run ではありません: $run_dir" >&2
       exit 2
     }
-    exec "$binary" "$run_dir" "$workflow_key"
     ;;
   *)
     echo "使い方: sh scripts/run start | continue <run>" >&2
     exit 2
     ;;
 esac
+
+# キャッシュは自分だけが書ける 700 のディレクトリに置く。他人が先に作った場所は使わない。
+user_dir=$base/coff-dullmify-$(id -u)
+[ -d "$user_dir" ] || mkdir -m 700 "$user_dir" 2>/dev/null
+if [ -L "$user_dir" ] || [ ! -d "$user_dir" ] || [ ! -O "$user_dir" ] || ! chmod 700 "$user_dir"; then
+  echo "ビルドキャッシュの場所が安全ではありません（所有者が自分の 700 のディレクトリが必要です）: $user_dir" >&2
+  exit 2
+fi
+cache_dir=$user_dir/cpp-cache
+mkdir -p "$cache_dir" || {
+  echo "ビルドキャッシュを作成できません: $cache_dir" >&2
+  exit 2
+}
+binary=$cache_dir/workflow-$workflow_key
+
+if [ ! -x "$binary" ]; then
+  temporary=$(mktemp "$cache_dir/workflow.XXXXXX") || {
+    echo "ビルド用の一時ファイルを作成できません" >&2
+    exit 2
+  }
+  if ! "${CXX:-c++}" -std=c++17 -I"$script_dir" "$script_dir/workflow.cpp" -o "$temporary"; then
+    rm -f "$temporary"
+    find "$run_dir" -depth -delete
+    printf '%s\n' '{"failed":"C++ workflow のビルドに失敗しました（コンパイラの出力は stderr）"}'
+    exit 0
+  fi
+  chmod 700 "$temporary" && mv "$temporary" "$binary" || {
+    rm -f "$temporary"
+    echo "ビルド結果をキャッシュに置けません" >&2
+    exit 2
+  }
+fi
+
+exec "$binary" "$run_dir" "$workflow_key"

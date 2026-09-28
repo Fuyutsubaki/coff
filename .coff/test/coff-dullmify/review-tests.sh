@@ -27,7 +27,7 @@ make_prompt() {
     workflow = File.read(ARGV[2], encoding: "UTF-8")
     guide = File.read(ARGV[3], encoding: "UTF-8")
     prompt = template.sub(/.*?## プロンプト雛形\n\n/m, "")
-    prompt = prompt.gsub("{{SOURCE}}", source).gsub("{{WORKFLOW}}", workflow).gsub("{{GUIDE}}", guide)
+    prompt = prompt.sub("{{SOURCE}}") { source }.sub("{{WORKFLOW}}") { workflow }.sub("{{GUIDE}}") { guide }
     File.binwrite(ARGV[4], prompt)
   ' "$skill_dir/review.md" "$test_dir/fixtures/prefecture.skill.md" "$workflow" "$guide" "$output"
 }
