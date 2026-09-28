@@ -1,14 +1,11 @@
+# 実行
 
-Run the workflow program bundled with this skill and relay its questions.
+この SKILL.md と同じディレクトリにある `scripts/run` の絶対パスを求める。以下で起動スクリプトを呼ぶときは、その絶対パスを使い、`sh <絶対パス>/scripts/run ...` だけを単独のコマンドとして実行する。`cd`、パイプ、ほかのコマンドを組み合わせない。
 
-The launcher is `scripts/run` in the same directory as this SKILL.md. Call it with `sh` and its absolute path as a single command: no `cd`, no pipes, no other wrappers. Write the files it asks for with the file-writing tool, verbatim, never through the shell.
+1. `sh <絶対パス>/scripts/run start` を呼ぶ。呼び出しが終わらないうちに制御が戻ったら、終わるまで待って最後の出力を読む。出力がなければ `start` を呼び直す。
+2. `{"run":"…","write":"…/args"}` が返ったら、skill に渡された引数（skill 名の後ろの文字列。`ARGUMENTS:` などのラベルは含めない。引数がなければ空）をそのまま `write` の絶対パスへファイルを書くツールで書き、`sh <絶対パス>/scripts/run continue <run>` を呼ぶ。
+3. `{"run":"…","prompt":"…","input":"…","write":"…/answer"}` が返ったら、`input` について `prompt` に答える。答えだけを `write` の絶対パスへファイルを書くツールで書き、同じ `continue` を呼ぶ。呼び出しの間には、この問いに答えるための操作以外を行わない。
+4. `{"done":true,"report":"…"}` が返ったら、`report` の文字列をそのまま表示して終了する。
+5. `{"failed":"…"}` が返ったら、`failed` の文字列をそのまま報告し、手順外の対処をせず終了する。
 
-1. Start: `sh <skill dir>/scripts/run start`. It prints `{"run":…,"write":…}`. Write the arguments given to this skill (the text after the skill name, without any `ARGUMENTS:` label) to the `write` path, an empty file if there are none, then continue.
-2. Continue: `sh <skill dir>/scripts/run continue <run>`, where `<run>` is the `run` value of the last JSON line. Read the last line of stdout as JSON and act on it.
-   - `{"run":…,"ask":N,"prompt":…,"input":…,"write":…}`: answer the prompt about the input. If the prompt tells you to use a tool (read a file, ask the user), do that to find the answer. Write the answer to the `write` path, then continue.
-   - `{"done":true,"report":…}`: show the report to the user verbatim and stop.
-   - `{"failed":…}`: report the failure to the user verbatim and stop. Do not retry, work around, or fix anything.
-   - No JSON, exit code 2, and stderr names a file to write: write it, then continue.
-   - Anything else (no JSON, another exit code, or stderr without a file to write): show stdout and stderr to the user verbatim and stop.
-
-Between calls, do nothing besides answering the question. If a call returns before it has finished (for example, it was moved to the background), wait until it finishes and read its final output; if there is none, continue again.
+起動スクリプトから JSON でない出力が返ったら、その stdout と stderr を表示して終了する。`continue` の呼び出しで出力がない場合は、同じ run に `continue` を呼び直す。

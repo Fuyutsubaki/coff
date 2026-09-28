@@ -1,61 +1,116 @@
 #!/bin/sh
-# Assembles a dullmified skill.
-#   sh assemble.sh <lang> <source SKILL.md> <outdir> <workflow file>
-# <outdir>/SKILL.md and <outdir>/scripts/ belong to this script; everything
-# else in <outdir> is left alone. The workflow file is normally
-# <outdir>/scripts/workflow.<ext>; it is read before that directory is replaced.
-# Checks the workflow with langs/<lang>/check. On failure prints the reasons
-# and removes <outdir>/SKILL.md and <outdir>/scripts/. On success writes both.
+
+# 検査済みの workflow と同梱ランタイムから、薄い skill を組み立てる。
 set -u
-dir=$(cd "$(dirname "$0")" && pwd)
-if [ $# -ne 4 ]; then
-  echo "usage: sh assemble.sh <lang> <source> <outdir> <workflow file>" >&2
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || {
+  echo "coff-dullmify の場所を解決できません" >&2
+  exit 2
+}
+
+discard() {
+  target=$1
+  if [ -e "$target/SKILL.md" ]; then
+    find "$target/SKILL.md" -depth -delete
+  fi
+  if [ -e "$target/scripts" ]; then
+    find "$target/scripts" -depth -delete
+  fi
+}
+
+if [ "${1:-}" = --discard ]; then
+  if [ "$#" -ne 2 ]; then
+    echo "使い方: sh assemble.sh --discard <outdir>" >&2
+    exit 2
+  fi
+  discard "$2"
+  exit 0
+fi
+
+if [ "$#" -ne 4 ]; then
+  echo "使い方: sh assemble.sh <lang> <source> <outdir> <workflow>" >&2
   exit 2
 fi
-lang=$1; source=$2; outdir=$3; workflow=$4
-langdir="$dir/langs/$lang"
-if [ ! -f "$langdir/GUIDE.md" ]; then
-  echo "unsupported language: $lang (available: $(ls "$dir/langs" | tr '\n' ' '))" >&2
+
+lang=$1
+source_file=$2
+outdir=$3
+workflow_file=$4
+lang_dir=$script_dir/langs/$lang
+
+if [ ! -f "$lang_dir/GUIDE.md" ]; then
+  supported=$(find "$script_dir/langs" -mindepth 2 -maxdepth 2 -name GUIDE.md -print | sed 's:/GUIDE.md$::; s:.*/::' | sort | tr '\n' ' ')
+  echo "対応していない言語です: $lang（対応言語: $supported）" >&2
   exit 1
 fi
-[ -f "$source" ] || { echo "source not found: $source" >&2; exit 1; }
-[ "$(head -n 1 "$source")" = "---" ] || { echo "source has no frontmatter: $source" >&2; exit 1; }
-end=$(sed -n '2,${/^---$/{=;q;}}' "$source")
-[ -n "$end" ] || { echo "source frontmatter is not closed: $source" >&2; exit 1; }
-ext=$(cat "$langdir/ext")
-[ -f "$workflow" ] || { echo "workflow file not found: $workflow" >&2; exit 1; }
-
-tmp=$(mktemp -d) || exit 1
-trap 'rm -rf "$tmp"' EXIT
-cp "$workflow" "$tmp/workflow.$ext"
-
-reject() { # reason
-  echo "$1" >&2
-  rm -rf "$outdir/SKILL.md" "$outdir/scripts"
+if [ ! -f "$source_file" ]; then
+  echo "skill ソースがありません: $source_file" >&2
   exit 1
+fi
+if [ ! -f "$workflow_file" ]; then
+  echo "workflow がありません: $workflow_file" >&2
+  discard "$outdir"
+  exit 1
+fi
+
+case $lang in
+  ruby)
+    workflow_name=workflow.rb
+    runtime_name=runtime.rb
+    ;;
+  cpp)
+    workflow_name=workflow.cpp
+    runtime_name=runtime.hpp
+    ;;
+  *)
+    echo "言語の組み立て規約がありません: $lang" >&2
+    exit 1
+    ;;
+esac
+
+if ! sh "$lang_dir/check" "$workflow_file"; then
+  echo "workflow の構文検査に失敗しました" >&2
+  discard "$outdir"
+  exit 1
+fi
+
+temporary=$(mktemp -d "${TMPDIR:-/tmp}/coff-dullmify-assemble.XXXXXX") || {
+  echo "組み立て用の一時ディレクトリを作成できません" >&2
+  exit 2
 }
-[ -s "$tmp/workflow.$ext" ] || reject "empty workflow; nothing written"
-sh "$langdir/check" "$tmp/workflow.$ext" || reject "workflow rejected; nothing written"
+trap 'find "$temporary" -depth -delete 2>/dev/null || true' EXIT HUP INT TERM
+mkdir -p "$temporary/scripts" || exit 2
 
-# Thin SKILL.md: the source frontmatter minus allowed-tools, plus the launcher
-# approval, then the fixed template body.
-{
-  echo '---'
-  sed -n "2,$((end - 1))p" "$source" | awk '
-    /^allowed-tools:/ { skip = 1; next }
-    skip && /^[[:space:]]/ { next }
-    { skip = 0; print }'
-  echo 'allowed-tools: Write Bash(sh ${CLAUDE_SKILL_DIR}/scripts/run *)'
-  echo '---'
-  cat "$dir/templates/thin-skill.md"
-} > "$tmp/SKILL.md"
+cp "$lang_dir/run" "$temporary/scripts/run" || exit 2
+cp "$lang_dir/$runtime_name" "$temporary/scripts/$runtime_name" || exit 2
+cp "$workflow_file" "$temporary/scripts/$workflow_name" || exit 2
+if [ "$lang" = cpp ]; then
+  cp "$lang_dir/json.hpp" "$temporary/scripts/json.hpp" || exit 2
+fi
 
-mkdir -p "$outdir" || exit 1
-rm -rf "$outdir/SKILL.md" "$outdir/scripts"
-mkdir "$outdir/scripts" \
-  && cp "$tmp/SKILL.md" "$outdir/SKILL.md" \
-  && cp "$langdir/run" "$langdir"/runtime.* "$outdir/scripts/" \
-  && cp "$tmp/workflow.$ext" "$outdir/scripts/workflow.$ext" \
-  || reject "could not write $outdir; nothing left there"
-echo "assembled: $outdir"
-(cd "$outdir" && find SKILL.md scripts -type f | sort | sed 's/^/  /')
+if ! awk '
+  NR == 1 && $0 == "---" { print; frontmatter = 1; next }
+  frontmatter && $0 == "---" {
+    print "allowed-tools: Write Bash(sh ${CLAUDE_SKILL_DIR}/scripts/run *)"
+    print "---"
+    found_end = 1
+    exit
+  }
+  frontmatter && $0 !~ /^allowed-tools:[[:space:]]*/ { print }
+  END { if (!frontmatter || !found_end) exit 1 }
+' "$source_file" >"$temporary/SKILL.md"; then
+  echo "skill ソースの frontmatter を読めません" >&2
+  discard "$outdir"
+  exit 1
+fi
+cat "$script_dir/templates/thin-skill.md" >>"$temporary/SKILL.md" || exit 2
+
+mkdir -p "$outdir" || {
+  echo "出力先を作成できません: $outdir" >&2
+  exit 2
+}
+discard "$outdir"
+mv "$temporary/scripts" "$outdir/scripts" || exit 2
+mv "$temporary/SKILL.md" "$outdir/SKILL.md" || exit 2
+
+echo "薄い skill を組み立てました: $outdir"

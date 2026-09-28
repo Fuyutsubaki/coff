@@ -81,15 +81,13 @@ agent 向けの実体（正本）はリポジトリに 1 箇所とし、他の a
 
 ## dullmify ビルド
 
-frontmatter に `coff-dullmify: <lang>` を持つソースは、本文を英訳する代わりに、coff-dullmify skill で `<lang>` のプログラムと薄い SKILL.md に変換する。 <!-- 制御を LLM からプログラムに移す。設計は issue/2026/09/2200-add-dullmify.md --> skill 型の 1 ファイルのソースだけに書ける。ディレクトリのソースや他の種別に付いていれば `failed` にする。
+frontmatter に `coff-dullmify: <lang>` を持つ 1 ファイルの skill ソースは、通常の本文コンパイルの代わりに、`/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を Skill ツールで起動して変換する。ディレクトリの skill ソースやほかの種別に指定されていれば `failed` にする。
 
-- §1 の選定と skip 判定はそのまま。§2〜§4 の lint は行わない。 <!-- 実行時にソースを読まない成果物には、「消しても完遂できるか」の基準が当たらない -->
-- §5 の a〜d の代わりに次を行う。
-  1. リポジトリの外に `mktemp -d` で一時ディレクトリを作る。`/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を Skill ツールで起動する。 <!-- SKILL.md を読んで手順を実行する形では coff-dullmify の allowed-tools が効かず、assemble.sh の呼び出しに承認が要る --> coff-dullmify skill がないとき、または dullmify が失敗したときは `failed: <理由>` とし、成果物に触れない。
-  2. 一時ディレクトリの `SKILL.md` の frontmatter について、`description` だけを英訳し（`coff-translate: false` なら訳さない）、`coff-` で始まるキーを取り除き、フッタを付ける。本文は訳さず、コメントも除去しない。
-  3. 実体の出力先のディレクトリ（既定 `.claude/skills/<name>/`。`--out` があればそのルートの下）を消し、一時ディレクトリの内容（`SKILL.md` と `scripts/`）で置き換える。
-- ソースが変わらなければ skip される。coff-dullmify の同梱ファイル（ランタイムなど）だけを直したときは、利用者が `--force` を付けて作り直す。 <!-- フッタの md5 はソースのものなので、ランタイムの変更では skip される。作り直すと workflow も生成し直される（受容） -->
-- 報告は `compiled`。
+- §1 の選定と skip 判定は通常どおり行い、§2〜§4 の lint は行わない。
+- リポジトリ外に `mktemp -d` で一時ディレクトリを作る。coff-dullmify がない場合、または変換に失敗した場合は `failed: <理由>` とし、既存の成果物に触れない。
+- 一時ディレクトリの `SKILL.md` は、frontmatter の `description` だけを英訳し（`coff-translate: false` なら原文のまま）、`coff-` で始まるキーを除き、ソースの md5 を持つフッタを付ける。本文は英訳せず、コメントも除去しない。
+- 実体の出力先（既定は `.claude/skills/<name>/`、`--out` ではそのルートの下）を、一時ディレクトリの `SKILL.md` と `scripts/` で置き換える。参照 stub は通常どおり正本を指し、`scripts/` は正本の隣だけに置く。
+- 変換できた正本は `compiled` と報告する。ソースが同じなら skip するため、coff-dullmify の同梱ランタイムだけを変えた場合は `--force` で作り直す。
 
 ## 1. 対象ファイルの選定
 

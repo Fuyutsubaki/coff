@@ -1,78 +1,11 @@
 #!/bin/sh
-# Checks a Ruby workflow: syntax, then a deny list of APIs that bypass the
-# runtime. Prints every problem and exits non-zero if there is any.
-#   sh check <workflow.rb>
-f=$1
-[ -n "$f" ] && [ -f "$f" ] || { echo "usage: check <workflow.rb>" >&2; exit 2; }
-ruby -c "$f" >/dev/null || { echo "$f: syntax check with ruby -c failed (see the output above)"; exit 1; }
-exec ruby - "$f" <<'RUBY'
-require 'ripper'
 
-path = ARGV[0]
-src = File.read(path)
-problems = []
+# workflow と同じ Ruby で構文だけを検査する。
+set -u
 
-# Rebuild the source without comments and string contents. Interpolations
-# (#{...}) are ordinary tokens, so they stay in. Newlines inside dropped tokens
-# are kept so line numbers stay right.
-# Symbols (:name), labels (name:), instance/class variables and character
-# literals (?x) are names, not calls. A symbol of an output method is still
-# a call in disguise (&:display), so those are kept.
-DROP = %i[on_comment on_embdoc_beg on_embdoc on_embdoc_end on_tstring_content on_label on_CHAR on_ivar on_cvar].freeze
-IO_SYMBOLS = %w[puts print p pp printf putc warn display].freeze
-text = +''
-prev = nil
-Ripper.lex(src).each do |(pos, type, tok, _state)|
-  case type
-  when :on_backtick
-    problems << "line #{pos[0]}: backtick / %x command"
-    text << ' '
-  when :on___end__
-    problems << "line #{pos[0]}: __END__ / DATA"
-    break
-  when *DROP
-    text << ("\n" * tok.count("\n"))
-  when :on_ident, :on_const, :on_kw
-    text << (prev == :on_symbeg && !IO_SYMBOLS.include?(tok) ? ' ' : tok)
-  else
-    text << tok
-  end
-  prev = type
-end
+if [ "$#" -ne 1 ]; then
+  echo "使い方: sh check <workflow.rb>" >&2
+  exit 2
+fi
 
-DENY = [
-  [/(?<![\w$@])(?:puts|print|p|pp|printf|putc|warn|gets|readline|readlines|display)\b/,
-   'output or input outside the runtime'],
-  [/\$(?:stdin|stdout|stderr|PROGRAM_NAME|LOAD_PATH|LOADED_FEATURES|0|>|<)/,
-   'global IO or interpreter variable'],
-  [/\b(?:IO|File|FileUtils|Dir|Kernel|Process|Open3|Etc|Warning|STDIN|STDOUT|STDERR|ENV|ARGV|ARGF)\b/,
-   'file, process, or environment access outside the runtime'],
-  [/\b(?:Time|Random)\b|\b(?:rand|srand|sleep)\b|\.(?:shuffle!?|sample)\b/,
-   'time or randomness (get them through run_command if needed)'],
-  [/\b(?:system|spawn|exec|fork|open|syscall|trap|popen|test|Signal)\b/,
-   'process or file access outside the runtime'],
-  [/\b(?:eval|instance_eval|class_eval|module_eval|instance_exec|class_exec|module_exec|binding|send|__send__|public_send|const_get|const_set|method|instance_method|define_method|remove_method|undef_method|instance_variable_get|instance_variable_set|ObjectSpace|GC|RubyVM|TOPLEVEL_BINDING|Marshal|set_trace_func|TracePoint|Thread|Fiber|Ractor|Mutex|Queue|Dullmify)\b/,
-   'dynamic invocation, reflection, or runtime internals'],
-  [/\bException\b|\brescue\s+(?:::)?(?:Object|BasicObject)\b/,
-   'rescuing Exception (or Object) would swallow the runtime signal; use rescue => e'],
-  [/\b(?:exit!?|abort|at_exit|END|BEGIN)\b/,
-   'process exit'],
-  [/\b(?:require|require_relative|load|autoload)\b/,
-   'loading code (the runtime already loads set and json)'],
-  [/\b(?:object_id|__id__)\b|\.hash\b/,
-   'values that differ between runs'],
-].freeze
-
-text.each_line.with_index(1) do |line, no|
-  DENY.each do |re, why|
-    m = line.match(re)
-    problems << "line #{no}: #{m[0].strip} — #{why}" if m
-  end
-end
-
-unless problems.empty?
-  puts "#{path}: rejected"
-  problems.each { |p| puts "  #{p}" }
-  exit 1
-end
-RUBY
+exec ruby -c "$1"

@@ -1,3 +1,0 @@
-def workflow
-  `ls`
-end

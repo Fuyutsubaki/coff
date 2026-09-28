@@ -68,15 +68,13 @@ For agent placement, the real body (the canonical copy) lives in exactly one pla
 
 ## dullmify build
 
-A source whose frontmatter has `coff-dullmify: <lang>` is not translated; instead the coff-dullmify skill turns it into a `<lang>` program and a thin SKILL.md. Only a single-file skill source may carry it. On a directory source or another type, report `failed`.
+A single-file skill source whose frontmatter has `coff-dullmify: <lang>` is converted, instead of the normal body compile, by invoking `/coff-dullmify <src> -o <temp dir> --lang <lang>` with the Skill tool. If it is set on a directory skill source or another type, report `failed`.
 
-- §1 selection and skip detection apply as-is. Skip the lint of §2–§4.
-- In §5, do the following instead of a–d.
-  1. Create a temporary directory outside the repository with `mktemp -d`. Invoke `/coff-dullmify <src> -o <temp dir> --lang <lang>` with the Skill tool. If the coff-dullmify skill is missing, or dullmify fails, report `failed: <reason>` and leave the output untouched.
-  2. In the frontmatter of the temp dir's `SKILL.md`, translate only `description` (not when `coff-translate: false`), remove every key starting with `coff-`, and append the footer. Do not translate the body and do not strip comments.
-  3. Delete the body output directory (`.claude/skills/<name>/` by default; under the given root with `--out`) and replace it with the temp dir's contents (`SKILL.md` and `scripts/`).
-- Unchanged sources are skipped. When only coff-dullmify's bundled files (the runtime etc.) changed, the user rebuilds with `--force`.
-- Report `compiled`.
+- Do §1 selection and skip detection as usual; skip the lint of §2–§4.
+- Create a temporary directory outside the repository with `mktemp -d`. If coff-dullmify is missing or the conversion fails, report `failed: <reason>` and leave the existing output untouched.
+- In the temp dir's `SKILL.md`, translate only the frontmatter `description` (keep the original when `coff-translate: false`), remove keys starting with `coff-`, and append the footer with the source md5. Do not translate the body and do not strip comments.
+- Replace the body output (default `.claude/skills/<name>/`; under the given root with `--out`) with the temp dir's `SKILL.md` and `scripts/`. Reference stubs point at the canonical file as usual; `scripts/` lives only next to the canonical file.
+- Report a converted canonical output as `compiled`. An unchanged source is skipped, so when only coff-dullmify's bundled runtime changed, rebuild with `--force`.
 
 ## 1. Identify build targets
 
@@ -214,4 +212,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way. Bundled-file sync is the one exception: if it stops midway, the next run finds the difference and repairs it.
 - When a directory source is turned back into a single-file source, remove the bundled files left in the output by hand.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"1c818e2b6cf53203f98be6b7d6dc9428"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"5f601806de5a6a99e88e573f3d67f1e0"} -->

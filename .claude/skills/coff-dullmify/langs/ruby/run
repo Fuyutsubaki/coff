@@ -1,6 +1,57 @@
 #!/bin/sh
-# Launcher for a dullmified skill (Ruby). Called as:
-#   sh <skill dir>/scripts/run start
-#   sh <skill dir>/scripts/run continue <run>
-dir=$(cd "$(dirname "$0")" && pwd)
-exec ruby "$dir/runtime.rb" "$@"
+
+# Ruby workflow の run を作成し、再実行する。
+set -u
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || {
+  echo "起動スクリプトの場所を解決できません" >&2
+  exit 2
+}
+
+base=${TMPDIR:-/tmp}
+base=$(CDPATH= cd -- "$base" && pwd -P) || {
+  echo "run の作成先を解決できません: $base" >&2
+  exit 2
+}
+
+workflow_key=$(cksum "$script_dir/runtime.rb" "$script_dir/workflow.rb") || {
+  echo "workflow の識別子を計算できません" >&2
+  exit 2
+}
+
+json_start() {
+  ruby -rjson -e 'puts JSON.generate({"run" => ARGV[0], "write" => File.join(ARGV[0], "args")})' "$1"
+}
+
+case ${1:-} in
+  start)
+    [ "$#" -eq 1 ] || {
+      echo "start に追加の引数は指定できません" >&2
+      exit 2
+    }
+    run_dir=$(mktemp -d "$base/coff-dullmify-run.XXXXXX") || {
+      echo "run ディレクトリを作成できません" >&2
+      exit 2
+    }
+    : >"$run_dir/.dullmify-run" || exit 2
+    pwd -P >"$run_dir/cwd" || exit 2
+    printf '%s' "$workflow_key" >"$run_dir/workflow-key" || exit 2
+    json_start "$run_dir"
+    ;;
+  continue)
+    [ "$#" -eq 2 ] || {
+      echo "continue には run ディレクトリを 1 つ指定してください" >&2
+      exit 2
+    }
+    run_dir=$2
+    [ -f "$run_dir/.dullmify-run" ] || {
+      echo "dullmify が作成した run ではありません: $run_dir" >&2
+      exit 2
+    }
+    exec ruby "$script_dir/runtime.rb" "$run_dir" "$workflow_key"
+    ;;
+  *)
+    echo "使い方: sh scripts/run start | continue <run>" >&2
+    exit 2
+    ;;
+esac

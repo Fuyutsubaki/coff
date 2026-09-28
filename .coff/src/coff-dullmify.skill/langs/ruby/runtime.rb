@@ -1,397 +1,256 @@
-# dullmify Ruby runtime.
-#
-# Usage (normally through `run`):
-#   ruby runtime.rb start             creates a run directory, prints where to write the arguments
-#   ruby runtime.rb continue <run>    takes in what was written (args, or the pending answer) and re-runs
-#
-# The workflow (`workflow.rb`, next to this file) is re-run from the top on every
-# `continue`. Recorded questions and side effects return their recorded results;
-# the first unanswered question is recorded, printed as JSON, and the process
-# exits. Arguments and answers arrive as files in the run directory, written by
-# the caller, so no command line has to carry them.
-#
-# Run directory (under ${TMPDIR:-/tmp}):
-#   .dullmify-run   marker
-#   cwd             working directory at start
-#   workflow.hash   SHA-256 of workflow.rb at start
-#   args            the skill's arguments, verbatim (written by the caller)
-#   answer.<n>      the answer to ask <n> (written by the caller, consumed by continue)
-#   records         one record per helper call (see Records)
-#
-# Record format (parsable without a JSON library):
-#   <kind> <ask_no> <key_len> <result_len>\n<key>\n<result>\n
-#   result_len is -1 for an unanswered ask, and then the result line is absent.
-
-require 'digest'
-require 'fileutils'
-require 'json'
-require 'open3'
-require 'set'
-require 'tmpdir'
+require "json"
+require "open3"
+require "fileutils"
+require "set"
 
 module Dullmify
-  # Leaves the workflow when an unanswered question is reached. Not a
-  # StandardError, so `rescue => e` in the workflow cannot catch it.
-  class Suspend < Exception
-    attr_reader :ask_no, :prompt, :input
+  # 未回答の問いで今回の実行を終えるための合図。workflow の通常の rescue には捕まらない。
+  class Pending < Exception
+    attr_reader :record
 
-    def initialize(ask_no, prompt, input)
-      super('dullmify: waiting for an answer')
-      @ask_no = ask_no
-      @prompt = prompt
-      @input = input
+    def initialize(record)
+      @record = record
+      super()
     end
   end
 
-  # Stops the run as failed. Not a StandardError for the same reason.
-  class Failure < Exception
-    attr_reader :reason
+  class Failure < StandardError; end
+  class Nondeterminism < StandardError; end
 
-    def initialize(reason)
-      super(reason)
-      @reason = reason
-    end
-  end
-
-  Record = Struct.new(:kind, :ask_no, :key, :result) # result nil = unanswered
-  CommandResult = Struct.new(:status, :out, :err)
-
+  # 一回の再実行で、記録を先頭から照合しながら補助関数を提供する。
   class Runtime
-    MARKER = '.dullmify-run'
+    attr_reader :run_dir, :records, :cursor
 
-    attr_reader :args
-
-    def self.current
-      @current
-    end
-
-    def self.current=(runtime)
-      @current = runtime
-    end
-
-    def initialize(run_dir)
-      @run_dir = run_dir
-      @cwd = File.read(File.join(run_dir, 'cwd')).chomp
-      @args = self.class.read_input(File.join(run_dir, 'args'))
-      @records = load_records
+    def initialize(run_dir, workflow_key)
+      @run_dir = File.expand_path(run_dir)
+      @workflow_key = clean(workflow_key)
+      @records_path = File.join(@run_dir, "records.jsonl")
       @cursor = 0
-      @suspended = false
-      @pending = nil
+      @records = load_records
     end
 
-    # --- run lifecycle ---------------------------------------------------
+    def prepare!
+      expected = read_binary(File.join(@run_dir, "workflow-key"))
+      raise Nondeterminism, "workflow またはランタイムが実行途中で変更されました" unless clean(expected) == @workflow_key
 
-    # Creates the run directory. The caller writes the arguments to <run>/args
-    # and then calls `continue`.
-    def self.start(workflow_path)
-      run_dir = Dir.mktmpdir('dullmify-run.', ENV['TMPDIR'] || '/tmp')
-      File.write(File.join(run_dir, MARKER), '')
-      File.write(File.join(run_dir, 'cwd'), Dir.pwd + "\n")
-      File.write(File.join(run_dir, 'workflow.hash'), workflow_hash(workflow_path) + "\n")
-      File.write(File.join(run_dir, 'records'), '')
-      run_dir
+      answer_path = File.join(@run_dir, "answer")
+      return unless File.file?(answer_path)
+
+      pending = @records.find { |record| record["type"] == "ask" && !record.key?("result") }
+      raise Nondeterminism, "回答の対象になる問いが記録にありません" unless pending
+
+      pending["result"] = clean(trim_one_newline(read_binary(answer_path)))
+      save_records
+      File.delete(answer_path)
     end
 
-    # A file written by the caller, minus one trailing newline. nil if absent.
-    def self.read_input(path)
-      return nil unless File.file?(path)
+    def arguments
+      path = File.join(@run_dir, "args")
+      raise Failure, "引数ファイルがありません" unless File.file?(path)
 
-      data = File.binread(path).force_encoding('UTF-8')
-      data.end_with?("\n") ? data[0...-1] : data
+      clean(trim_one_newline(read_binary(path)))
     end
-
-    # Validates the call, takes in the pending answer if one was written, and
-    # returns the runtime ready to execute. Exits 2 with a message on stderr
-    # when the caller still has something to write; the run is left untouched.
-    def self.continue(run_dir, workflow_path)
-      unless File.file?(File.join(run_dir, MARKER))
-        warn "not a dullmify run: #{run_dir}"
-        exit 2
-      end
-      stored = File.read(File.join(run_dir, 'workflow.hash')).chomp
-      if stored != workflow_hash(workflow_path)
-        $stdout.write(JSON.generate('failed' => 'workflow changed since the run started') + "\n")
-        FileUtils.rm_rf(run_dir)
-        exit 0
-      end
-      begin
-        runtime = new(run_dir)
-      rescue Failure => e
-        $stdout.write(JSON.generate('failed' => e.reason) + "\n")
-        FileUtils.rm_rf(run_dir)
-        exit 0
-      end
-      if runtime.args.nil?
-        warn "write the arguments to #{File.join(run_dir, 'args')} first (an empty file if there are none), then continue"
-        exit 2
-      end
-      last = runtime.records.last
-      if last && last.kind == 'ask' && last.result.nil?
-        answer_path = File.join(run_dir, "answer.#{last.ask_no}")
-        answer = read_input(answer_path)
-        if answer.nil?
-          warn "write the answer to ask #{last.ask_no} to #{answer_path} first, then continue"
-          exit 2
-        end
-        last.result = answer
-        runtime.rewrite_records
-        File.delete(answer_path)
-      end
-      runtime
-    end
-
-    def self.workflow_hash(path)
-      Digest::SHA256.file(path).hexdigest
-    end
-
-    def records
-      @records
-    end
-
-    # Runs the workflow and prints exactly one JSON line. Always exits 0.
-    def execute(workflow_path)
-      Runtime.current = self
-      Dir.chdir(@cwd)
-      load workflow_path
-      # Run at the top level so that helper calls resolve to the wrappers below,
-      # not to this object's methods.
-      report = TOPLEVEL_BINDING.eval('workflow')
-      if @cursor < @records.size
-        raise Failure, "nondeterministic replay: the workflow finished after reusing #{@cursor} of #{@records.size} records"
-      end
-      emit('done' => true, 'report' => report.to_s)
-      remove_run
-    rescue Suspend => e
-      emit('run' => @run_dir, 'ask' => e.ask_no, 'prompt' => e.prompt, 'input' => e.input,
-           'write' => File.join(@run_dir, "answer.#{e.ask_no}"))
-    rescue Failure => e
-      emit('failed' => e.reason)
-      remove_run
-    rescue SignalException
-      raise # killed from outside: leave the run so that `continue` can resume it
-    rescue Exception => e # rubocop:disable Lint/RescueException -- any workflow error ends the run
-      emit('failed' => "#{e.class}: #{e.message}")
-      remove_run
-    end
-
-    # --- helpers ---------------------------------------------------------
 
     def ask(prompt, input)
-      key = digest('ask', prompt, input)
-      return '' if @suspended
+      key = { "prompt" => clean(prompt.to_s), "input" => clean(input.to_s) }
+      record = consume("ask", key) do
+        append_record("type" => "ask", "key" => key)
+      end
+      raise Pending, record unless record.key?("result")
 
-      rec = replay('ask', key)
-      return rec.result if rec
-
-      ask_no = @records.count { |r| r.kind == 'ask' } + 1
-      rec = Record.new('ask', ask_no, key, nil)
-      @records << rec
-      append_record(rec)
-      @suspended = true
-      @pending = Suspend.new(ask_no, prompt, input)
-      raise @pending
+      record["result"]
     end
 
-    def run_command(argv, stdin)
-      argv = argv.map(&:to_s)
-      stdin = stdin.to_s
-      key = digest('cmd', argv.join("\0"), stdin)
-      return CommandResult.new(0, '', '') if @suspended
+    def run_command(argv, stdin_data = "")
+      command = Array(argv).map { |part| clean(part.to_s) }
+      raise Failure, "コマンドの argv が空です" if command.empty?
 
-      rec = replay('cmd', key)
-      return decode_command(rec.result) if rec
-
-      result = begin
-        # [argv[0], argv[0]] forces argv semantics: no shell, even for one word.
-        out, err, status = Open3.capture3([argv[0], argv[0]], *argv[1..], stdin_data: stdin)
-        CommandResult.new(status.exitstatus || (128 + status.termsig.to_i), out, err)
-      rescue SystemCallError => e
-        CommandResult.new(127, '', e.message)
+      input = clean(stdin_data.to_s)
+      key = { "argv" => command, "stdin" => input }
+      record = consume("command", key) do
+        stdout, stderr, status = Open3.capture3(*command, stdin_data: input)
+        append_record(
+          "type" => "command",
+          "key" => key,
+          "result" => {
+            "exit_code" => status.exitstatus,
+            "stdout" => clean(stdout),
+            "stderr" => clean(stderr)
+          }
+        )
       end
-      record('cmd', key, encode_command(result))
-      result
+      record["result"]
     end
 
     def read_file(path)
-      key = digest('read', path)
-      return nil if @suspended
-
-      rec = replay('read', key)
-      return decode_read(rec.result) if rec
-
-      content = File.file?(path) ? File.binread(path).force_encoding('UTF-8') : nil
-      record('read', key, content ? "1#{content}" : '0')
-      content
+      normalized = clean(path.to_s)
+      key = { "path" => normalized }
+      record = consume("read", key) do
+        value = File.file?(normalized) ? clean(read_binary(normalized)) : nil
+        append_record("type" => "read", "key" => key, "result" => value)
+      end
+      record["result"]
     end
 
     def write_file(path, content)
-      content = content.to_s
-      key = digest('write', path, Digest::SHA256.hexdigest(content))
-      return nil if @suspended
-
-      rec = replay('write', key)
-      return nil if rec
-
-      FileUtils.mkdir_p(File.dirname(path))
-      File.binwrite(path, content)
-      record('write', key, '')
-      nil
+      normalized = clean(path.to_s)
+      value = clean(content.to_s)
+      key = { "path" => normalized, "content" => value }
+      record = consume("write", key) do
+        parent = File.dirname(normalized)
+        FileUtils.mkdir_p(parent) unless parent == "."
+        File.binwrite(normalized, value)
+        append_record("type" => "write", "key" => key, "result" => true)
+      end
+      record["result"]
     end
 
-    def fail_run(reason)
-      # Called from an ensure block while the question propagates: raising
-      # Failure here would replace the question. Re-raise the question instead.
-      raise @pending if @suspended
-
-      raise Failure, reason.to_s
+    def fail(reason)
+      raise Failure, clean(reason.to_s)
     end
 
-    # --- records ---------------------------------------------------------
+    def finish!
+      return if @cursor == @records.length
 
-    def rewrite_records
-      File.binwrite(records_path, @records.map { |r| format_record(r) }.join)
+      raise Nondeterminism, "記録をすべて消費せずに workflow が終了しました"
     end
 
-    def emit(hash)
-      # Command output or file content may not be valid UTF-8; JSON.generate
-      # would raise, so replace invalid bytes rather than lose the message.
-      clean = hash.transform_values { |v| v.is_a?(String) ? v.scrub('\uFFFD') : v }
-      $stdout.write(JSON.generate(clean) + "\n")
-      $stdout.flush
-    end
-
-    def remove_run
-      FileUtils.rm_rf(@run_dir)
+    def save_records
+      temporary = File.join(@run_dir, ".records.#{$PROCESS_ID}.tmp")
+      File.open(temporary, "wb") do |file|
+        @records.each do |record|
+          file.write(JSON.generate(clean_value(record)))
+          file.write("\n")
+        end
+      end
+      File.rename(temporary, @records_path)
+    ensure
+      File.delete(temporary) if temporary && File.exist?(temporary)
     end
 
     private
 
-    def replay(kind, key)
-      return nil if @cursor >= @records.size
-
-      rec = @records[@cursor]
-      if rec.kind != kind || rec.key != key
-        raise Failure, "nondeterministic replay: record #{@cursor + 1} is #{rec.kind}, but the workflow requested a different #{kind}"
+    def consume(type, key)
+      if @cursor < @records.length
+        record = @records[@cursor]
+        unless record["type"] == type && record["key"] == key
+          raise Nondeterminism, "記録と今回の実行が一致しません（#{type}）"
+        end
+        @cursor += 1
+        return record
       end
-      raise Failure, "nondeterministic replay: record #{@cursor + 1} has no answer" if rec.result.nil?
 
+      record = yield
       @cursor += 1
-      rec
+      record
     end
 
-    def record(kind, key, result)
-      rec = Record.new(kind, 0, key, result)
-      @records << rec
-      @cursor += 1
-      append_record(rec)
-    end
-
-    def digest(*parts)
-      Digest::SHA256.hexdigest(parts.join("\0"))
-    end
-
-    def encode_command(res)
-      "#{res.status}\n#{res.out.bytesize}\n#{res.out}#{res.err}"
-    end
-
-    def decode_command(data)
-      status, out_len, rest = data.split("\n", 3)
-      out_len = out_len.to_i
-      CommandResult.new(status.to_i, rest.byteslice(0, out_len).force_encoding('UTF-8'),
-                        rest.byteslice(out_len..-1).force_encoding('UTF-8'))
-    end
-
-    def decode_read(data)
-      data.start_with?('1') ? data.byteslice(1..-1).force_encoding('UTF-8') : nil
-    end
-
-    def records_path
-      File.join(@run_dir, 'records')
-    end
-
-    def format_record(rec)
-      key = rec.key.b
-      if rec.result.nil?
-        "#{rec.kind} #{rec.ask_no} #{key.bytesize} -1\n#{key}\n"
-      else
-        result = rec.result.b
-        "#{rec.kind} #{rec.ask_no} #{key.bytesize} #{result.bytesize}\n#{key}\n#{result}\n"
+    def append_record(record)
+      normalized = clean_value(record)
+      @records << normalized
+      File.open(@records_path, "ab") do |file|
+        file.write(JSON.generate(normalized))
+        file.write("\n")
       end
-    end
-
-    def append_record(rec)
-      File.open(records_path, 'ab') { |f| f.write(format_record(rec)) }
+      normalized
     end
 
     def load_records
-      data = File.binread(records_path)
-      records = []
-      pos = 0
-      while pos < data.bytesize
-        nl = data.index("\n", pos)
-        raise Failure, 'corrupt records' unless nl
+      return [] unless File.exist?(@records_path)
 
-        kind, ask_no, key_len, result_len = data.byteslice(pos...nl).split(' ')
-        pos = nl + 1
-        key = data.byteslice(pos, key_len.to_i)
-        pos += key_len.to_i + 1
-        result = nil
-        if result_len.to_i >= 0
-          result = data.byteslice(pos, result_len.to_i).force_encoding('UTF-8')
-          pos += result_len.to_i + 1
-        end
-        records << Record.new(kind, ask_no.to_i, key, result)
+      File.readlines(@records_path, chomp: true).reject(&:empty?).map { |line| JSON.parse(line) }
+    rescue JSON::ParserError, SystemCallError => error
+      raise Failure, "記録を読めません: #{clean(error.message)}"
+    end
+
+    def read_binary(path)
+      File.binread(path)
+    end
+
+    def trim_one_newline(value)
+      return value.byteslice(0, value.bytesize - 2) if value.end_with?("\r\n")
+      return value.byteslice(0, value.bytesize - 1) if value.end_with?("\n")
+
+      value
+    end
+
+    def clean(value)
+      value.to_s.dup.force_encoding(Encoding::UTF_8).scrub("�")
+    end
+
+    def clean_value(value)
+      case value
+      when String then clean(value)
+      when Array then value.map { |item| clean_value(item) }
+      when Hash then value.to_h { |key, item| [clean(key.to_s), clean_value(item)] }
+      else value
       end
-      records
     end
-
   end
 
-  # Entry point. Exit code 2 means the call itself was wrong or the caller still
-  # has a file to write; everything else is reported on stdout as JSON with
-  # exit code 0.
+  class << self
+    attr_accessor :runtime
+
+    def arguments = runtime.arguments
+    def ask(prompt, input) = runtime.ask(prompt, input)
+    def run_command(argv, stdin_data = "") = runtime.run_command(argv, stdin_data)
+    def read_file(path) = runtime.read_file(path)
+    def write_file(path, content) = runtime.write_file(path, content)
+    def fail(reason) = runtime.fail(reason)
+  end
+
+  def self.clean_value(value)
+    case value
+    when String then value.dup.force_encoding(Encoding::UTF_8).scrub("�")
+    when Array then value.map { |item| clean_value(item) }
+    when Hash then value.to_h { |key, item| [clean_value(key.to_s), clean_value(item)] }
+    else value
+    end
+  end
+
+  def self.emit(value)
+    puts JSON.generate(clean_value(value))
+  end
+
+  def self.remove_run(run_dir)
+    FileUtils.remove_entry(run_dir) if File.exist?(run_dir)
+  end
+
   def self.main(argv)
-    workflow_path = File.join(__dir__, 'workflow.rb')
-    usage = 'usage: run start | run continue <run>'
-    case argv[0]
-    when 'start'
-      (warn usage; exit 2) unless argv.size == 1
-      run_dir = Runtime.start(workflow_path)
-      $stdout.write(JSON.generate('run' => run_dir, 'write' => File.join(run_dir, 'args')) + "\n")
-    when 'continue'
-      (warn usage; exit 2) unless argv.size == 2
-      Runtime.continue(argv[1], workflow_path).execute(workflow_path)
-    else
-      warn usage
-      exit 2
+    unless argv.length == 2
+      warn "ランタイムの引数が正しくありません"
+      return 2
     end
-    exit 0
+
+    run_dir, workflow_key = argv
+    unless File.file?(File.join(run_dir, "args"))
+      emit("run" => File.expand_path(run_dir), "write" => File.join(File.expand_path(run_dir), "args"))
+      return 0
+    end
+    self.runtime = Runtime.new(run_dir, workflow_key)
+    runtime.prepare!
+    cwd = File.binread(File.join(run_dir, "cwd")).sub(/\r?\n\z/, "")
+    Dir.chdir(cwd)
+    require_relative "workflow"
+    report = workflow
+    runtime.finish!
+    emit("done" => true, "report" => report.to_s.scrub)
+    remove_run(run_dir)
+    0
+  rescue Pending => pending
+    key = pending.record.fetch("key")
+    emit(
+      "run" => File.expand_path(run_dir),
+      "prompt" => key.fetch("prompt"),
+      "input" => key.fetch("input"),
+      "write" => File.join(File.expand_path(run_dir), "answer")
+    )
+    0
+  rescue Failure, Nondeterminism, StandardError => error
+    emit("failed" => error.message.to_s.scrub)
+    remove_run(run_dir) if run_dir
+    0
   end
 end
 
-# Helpers available to workflow.rb.
-def args
-  Dullmify::Runtime.current.args
-end
-
-def ask(prompt, input = '')
-  Dullmify::Runtime.current.ask(prompt.to_s, input.to_s)
-end
-
-def run_command(argv, stdin = nil)
-  Dullmify::Runtime.current.run_command(Array(argv), stdin)
-end
-
-def read_file(path)
-  Dullmify::Runtime.current.read_file(path.to_s)
-end
-
-def write_file(path, content)
-  Dullmify::Runtime.current.write_file(path.to_s, content)
-end
-
-def fail_run(reason)
-  Dullmify::Runtime.current.fail_run(reason)
-end
-
-Dullmify.main(ARGV)
+exit(Dullmify.main(ARGV)) if $PROGRAM_NAME == __FILE__

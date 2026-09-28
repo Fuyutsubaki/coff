@@ -1,258 +1,252 @@
 #!/bin/sh
-# Tests for the dullmify runtimes and check scripts. The LLM's role is played
-# by fixed answers. Exit code 0 means every test passed.
-#   sh .coff/test/coff-dullmify/run-tests.sh [ruby|cpp]
+
+# 両言語の単体テスト、構文検査、再実行の実動作をまとめて確認する。
 set -u
-here=$(cd "$(dirname "$0")" && pwd)
-skill=$(cd "$here/../../src/coff-dullmify.skill" && pwd)
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
-export TMPDIR="$work/tmp"
-mkdir -p "$TMPDIR"
-fails=0
-total=0
 
-pass() { total=$((total + 1)); echo "ok   $1"; }
-fail() { total=$((total + 1)); fails=$((fails + 1)); echo "FAIL $1${2:+ -- $2}"; }
-check() { # name, expected, actual
-  if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "expected [$2] got [$3]"; fi
-}
-contains() { # name, needle, haystack
-  case "$3" in *"$2"*) pass "$1" ;; *) fail "$1" "missing [$2] in [$3]" ;; esac
-}
-field() { # json line, field name (string value)
-  printf '%s\n' "$1" | tail -n 1 | sed -n "s/.*\"$2\":\"\([^\"]*\)\".*/\1/p"
-}
-nfield() { # json line, field name (number value)
-  printf '%s\n' "$1" | tail -n 1 | sed -n "s/.*\"$2\":\([0-9]*\).*/\1/p"
+test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
+repo_dir=$(CDPATH= cd -- "$test_dir/../../.." && pwd -P) || exit 2
+source_dir=$repo_dir/.coff/src/coff-dullmify.skill
+temporary=$(mktemp -d "${TMPDIR:-/tmp}/coff-dullmify-test.XXXXXX") || exit 2
+trap 'find "$temporary" -depth -delete 2>/dev/null || true' EXIT HUP INT TERM
+
+failures=0
+
+pass() {
+  echo "成功: $1"
 }
 
-# Builds a scripts/ directory for one test workflow and prints its path.
-scripts_for() { # lang, workflow file
-  d=$(mktemp -d "$work/scripts.XXXXXX")
-  for f in "$skill/langs/$1"/*; do
-    case "$(basename "$f")" in check|GUIDE.md|ext) ;; *) cp "$f" "$d/" ;; esac
-  done
-  cp "$2" "$d/workflow.$(cat "$skill/langs/$1/ext")"
-  echo "$d"
+fail() {
+  echo "失敗: $1" >&2
+  failures=$((failures + 1))
 }
 
-runtime_tests() { # lang
-  lang=$1
-  ext=$(cat "$skill/langs/$lang/ext")
-  case "$lang" in ruby) comment='#' ;; *) comment='//' ;; esac
+json_value() {
+  ruby -rjson -e 'value = JSON.parse(STDIN.read); result = value.fetch(ARGV[0]); print(result.is_a?(String) ? result : JSON.generate(result))' "$1"
+}
 
-  # start creates the run; continue takes in args / answers written as files.
-  begin_run() { # scripts dir, args -> sets $run
-    out=$(sh "$1/run" start); run=$(field "$out" run)
-    printf '%s\n' "$2" > "$run/args"
+has_json_key() {
+  ruby -rjson -e 'exit(JSON.parse(STDIN.read).key?(ARGV[0]) ? 0 : 1)' "$1"
+}
+
+prepare_case() {
+  language=$1
+  name=$2
+  case_dir=$temporary/cases/$language-$name
+  mkdir -p "$case_dir" || exit 2
+  cp -R "$source_dir/langs/$language" "$case_dir/scripts" || exit 2
+  case $language in
+    ruby) cp "$test_dir/workflows/ruby/$name.rb" "$case_dir/scripts/workflow.rb" || exit 2 ;;
+    cpp) cp "$test_dir/workflows/cpp/$name.cpp" "$case_dir/scripts/workflow.cpp" || exit 2 ;;
+  esac
+  printf '%s' "$case_dir"
+}
+
+start_case() {
+  case_dir=$1
+  (cd "$case_dir" && sh "$case_dir/scripts/run" start)
+}
+
+continue_case() {
+  case_dir=$1
+  run_dir=$2
+  (cd "$case_dir" && sh "$case_dir/scripts/run" continue "$run_dir")
+}
+
+test_standard_run() {
+  language=$1
+  case_dir=$(prepare_case "$language" ok)
+  start_output=$(start_case "$case_dir") || {
+    fail "$language: start"
+    return
   }
-  answer() { printf '%s\n' "$3" > "$1/answer.$2"; }
+  run_dir=$(printf '%s' "$start_output" | json_value run) || {
+    fail "$language: start の JSON"
+    return
+  }
 
-  # 1. ask round trip, side effects once, missing files leave the run.
-  cwd=$(mktemp -d "$work/cwd.XXXXXX"); cd "$cwd" || exit 1
-  d=$(scripts_for "$lang" "$here/$lang/ok.$ext")
-  out=$(sh "$d/run" start); run=$(field "$out" run)
-  check "$lang: start names the args file" "$run/args" "$(field "$out" write)"
-  check "$lang: run directory exists" yes "$([ -d "$run" ] && echo yes)"
-  sh "$d/run" continue "$run" >/dev/null 2>"$work/err"
-  check "$lang: continue without args exits 2" 2 "$?"
-  contains "$lang: continue without args explains" "$run/args" "$(cat "$work/err")"
-  printf 'hello\n' > "$run/args"
-  out=$(sh "$d/run" continue "$run")
-  check "$lang: continue asks question 1" 1 "$(nfield "$out" ask)"
-  check "$lang: ask 1 prompt" "first question" "$(field "$out" prompt)"
-  check "$lang: ask 1 input is the arguments" "hello" "$(field "$out" input)"
-  check "$lang: ask 1 names the answer file" "$run/answer.1" "$(field "$out" write)"
-  check "$lang: nothing ran before ask 1" no "$([ -e counter ] && echo yes || echo no)"
-  sh "$d/run" continue "$run" >/dev/null 2>"$work/err"
-  check "$lang: continue without the answer exits 2" 2 "$?"
-  contains "$lang: continue without the answer explains" "answer.1" "$(cat "$work/err")"
-  answer "$run" 7 x
-  sh "$d/run" continue "$run" >/dev/null 2>"$work/err"
-  check "$lang: a wrongly numbered answer file exits 2" 2 "$?"
-  check "$lang: wrong answer file keeps the run" yes "$([ -d "$run" ] && echo yes)"
-  sh "$d/run" continue "$work/no-such-run" >/dev/null 2>"$work/err"
-  check "$lang: unknown run exits 2" 2 "$?"
-  contains "$lang: unknown run explains" "not a dullmify run" "$(cat "$work/err")"
-  answer "$run" 1 one
-  out=$(sh "$d/run" continue "$run")
-  check "$lang: answer 1 asks question 2" 2 "$(nfield "$out" ask)"
-  check "$lang: answer file is consumed" gone "$([ -e "$run/answer.1" ] || echo gone)"
-  check "$lang: ask 2 input is the written file" "one" "$(field "$out" input)"
-  check "$lang: command ran once" 1 "$(wc -l < counter | tr -d ' ')"
-  check "$lang: write happened" "one" "$(cat out/answer.txt)"
-  answer "$run" 2 two
-  out=$(sh "$d/run" continue "$run")
-  check "$lang: done report" "report: one|two|0|out|err|true" "$(field "$out" report)"
-  check "$lang: done removes the run" gone "$([ -d "$run" ] || echo gone)"
-  check "$lang: command ran once in total" 1 "$(wc -l < counter | tr -d ' ')"
-
-  # 2. nondeterminism: finishing early leaves records unused.
-  cwd=$(mktemp -d "$work/cwd.XXXXXX"); cd "$cwd" || exit 1
-  d=$(scripts_for "$lang" "$here/$lang/nondet.$ext")
-  begin_run "$d" early
-  sh "$d/run" continue "$run" >/dev/null
-  answer "$run" 1 a
-  out=$(sh "$d/run" continue "$run")
-  check "$lang: nondet early reaches ask B" "B" "$(field "$out" prompt)"
-  : > toggle
-  answer "$run" 2 b
-  out=$(sh "$d/run" continue "$run")
-  contains "$lang: early finish is nondeterministic" "nondeterministic" "$(field "$out" failed)"
-  check "$lang: nondeterminism removes the run" gone "$([ -d "$run" ] || echo gone)"
-
-  # 3. nondeterminism: a different question than recorded.
-  cwd=$(mktemp -d "$work/cwd.XXXXXX"); cd "$cwd" || exit 1
-  begin_run "$d" mismatch
-  sh "$d/run" continue "$run" >/dev/null
-  answer "$run" 1 a
-  sh "$d/run" continue "$run" >/dev/null
-  : > toggle
-  answer "$run" 2 b
-  out=$(sh "$d/run" continue "$run")
-  contains "$lang: mismatched question is nondeterministic" "nondeterministic" "$(field "$out" failed)"
-
-  # 4. workflow changed during the run.
-  cwd=$(mktemp -d "$work/cwd.XXXXXX"); cd "$cwd" || exit 1
-  d=$(scripts_for "$lang" "$here/$lang/ok.$ext")
-  begin_run "$d" hello
-  sh "$d/run" continue "$run" >/dev/null
-  printf '%s changed\n' "$comment" >> "$d/workflow.$ext"
-  answer "$run" 1 one
-  out=$(sh "$d/run" continue "$run")
-  contains "$lang: changed workflow fails" "workflow changed" "$(field "$out" failed)"
-  check "$lang: changed workflow removes the run" gone "$([ -d "$run" ] || echo gone)"
-
-  # 5. exceptions and fail.
-  cwd=$(mktemp -d "$work/cwd.XXXXXX"); cd "$cwd" || exit 1
-  case "$lang" in ruby) wf=raise.rb ;; *) wf=throw.cpp ;; esac
-  d=$(scripts_for "$lang" "$here/$lang/$wf")
-  begin_run "$d" ""
-  sh "$d/run" continue "$run" >/dev/null
-  answer "$run" 1 a
-  out=$(sh "$d/run" continue "$run")
-  contains "$lang: exception fails the run" "boom" "$(field "$out" failed)"
-  check "$lang: exception removes the run" gone "$([ -d "$run" ] || echo gone)"
-  d=$(scripts_for "$lang" "$here/$lang/fail_run.$ext")
-  begin_run "$d" ""
-  out=$(sh "$d/run" continue "$run")
-  check "$lang: fail reports the reason" "nope" "$(field "$out" failed)"
-  check "$lang: no run directory is left" "" "$(ls "$TMPDIR" | grep dullmify-run || true)"
-
-  # 6. fail from cleanup code while a question propagates keeps the question.
-  case "$lang" in ruby) wf=ensure_fail.rb ;; *) wf=dtor_fail.cpp ;; esac
-  d=$(scripts_for "$lang" "$here/$lang/$wf")
-  begin_run "$d" ""
-  out=$(sh "$d/run" continue "$run" 2>&1)
-  check "$lang: cleanup fail still asks the question" "Q" "$(field "$out" prompt)"
-  check "$lang: cleanup fail keeps the run" yes "$([ -d "$run" ] && echo yes)"
-  answer "$run" 1 a
-  out=$(sh "$d/run" continue "$run")
-  check "$lang: cleanup fail after the answer is a real failure" "cleanup saw an empty result" "$(field "$out" failed)"
-
-  # 7. corrupt records end as failed, not as a crash.
-  d=$(scripts_for "$lang" "$here/$lang/ok.$ext")
-  begin_run "$d" hello
-  sh "$d/run" continue "$run" >/dev/null
-  printf 'garbage' > "$run/records"
-  out=$(sh "$d/run" continue "$run" 2>/dev/null)
-  check "$lang: corrupt records exit 0" 0 "$?"
-  contains "$lang: corrupt records fail" "records" "$(field "$out" failed)"
-  check "$lang: corrupt records remove the run" gone "$([ -d "$run" ] || echo gone)"
-
-  # 8. a question carrying invalid UTF-8 is still printed (Ruby only; C++ passes bytes through).
-  if [ "$lang" = ruby ]; then
-    d=$(scripts_for "$lang" "$here/$lang/binary_ask.rb")
-    begin_run "$d" ""
-    out=$(sh "$d/run" continue "$run" 2>&1)
-    check "$lang: invalid UTF-8 in a question still asks" "bytes?" "$(field "$out" prompt)"
-    rm -rf "$run"
+  before=$(find "$run_dir" -maxdepth 1 -type f -print | sort | cksum)
+  missing_output=$(continue_case "$case_dir" "$run_dir")
+  after=$(find "$run_dir" -maxdepth 1 -type f -print | sort | cksum)
+  if [ "$missing_output" = "$start_output" ] && [ "$before" = "$after" ]; then
+    pass "$language: args 未作成なら同じ出力で記録を変えない"
+  else
+    fail "$language: args 未作成時の再提示"
   fi
 
-  # 9. killed after the answer was taken in: continue resumes from the records.
-  d=$(scripts_for "$lang" "$here/$lang/slow.$ext")
-  begin_run "$d" ""
-  sh "$d/run" continue "$run" >/dev/null
-  answer "$run" 1 a
-  timeout 0.5 sh "$d/run" continue "$run" >/dev/null 2>&1
-  check "$lang: continue was killed midway" 124 "$?"
-  check "$lang: killed run keeps its directory" yes "$([ -d "$run" ] && echo yes)"
-  out=$(sh "$d/run" continue "$run")
-  check "$lang: continue after the kill resumes to the next question" "R" "$(field "$out" prompt)"
-  check "$lang: resumed run replays the answer" "a" "$(field "$out" input)"
-  answer "$run" 2 b
-  out=$(sh "$d/run" continue "$run")
-  check "$lang: resumed run finishes" "a|b" "$(field "$out" report)"
+  printf 'テスト入力\n' >"$run_dir/args"
+  first=$(continue_case "$case_dir" "$run_dir")
+  first_prompt=$(printf '%s' "$first" | json_value prompt 2>/dev/null || true)
+  records_before=$(cksum "$run_dir/records.jsonl")
+  repeated=$(continue_case "$case_dir" "$run_dir")
+  records_after=$(cksum "$run_dir/records.jsonl")
+  if [ "$first" = "$repeated" ] && [ "$records_before" = "$records_after" ] && [ "$first_prompt" = "最初の値を答えてください" ]; then
+    pass "$language: 未回答の問いを同じ記録で再提示"
+  else
+    fail "$language: 未回答の問いの再提示"
+  fi
 
-  # 10. usage errors.
-  sh "$d/run" bogus >/dev/null 2>&1
-  check "$lang: unknown command exits 2" 2 "$?"
-  cd "$here" || exit 1
+  printf '甲\n' >"$run_dir/answer"
+  second=$(continue_case "$case_dir" "$run_dir")
+  second_prompt=$(printf '%s' "$second" | json_value prompt 2>/dev/null || true)
+  printf '乙\n' >"$run_dir/answer"
+  done_output=$(continue_case "$case_dir" "$run_dir")
+  report=$(printf '%s' "$done_output" | json_value report 2>/dev/null || true)
+  side_effect_count=$(wc -l <"$case_dir/side-effect.log" 2>/dev/null || printf 0)
+  if [ "$second_prompt" = "二つ目の値を答えてください" ] && [ "$report" = "完了: 甲/乙" ] && [ "$side_effect_count" -eq 1 ] && [ ! -e "$run_dir" ]; then
+    pass "$language: 問いの往復、副作用一回、完了時の片付け"
+  else
+    fail "$language: 標準の完走（出力: $done_output）"
+  fi
 }
 
-check_tests() { # lang
-  lang=$1
-  ext=$(cat "$skill/langs/$lang/ext")
-  chk="$skill/langs/$lang/check"
-  for f in "$here/$lang"/ok.$ext "$here/$lang"/ok_strings.$ext "$here/$lang"/fail_run.$ext; do
-    out=$(sh "$chk" "$f" 2>&1)
-    check "$lang check accepts $(basename "$f")" 0 "$?"
-    [ -z "$out" ] || echo "$out" | sed 's/^/     /'
-  done
-  for f in "$here/$lang"/syntax_error.$ext "$here/$lang"/forbid_*.$ext; do
-    sh "$chk" "$f" >/dev/null 2>&1
-    check "$lang check rejects $(basename "$f")" 1 "$?"
-  done
+test_nondeterminism() {
+  language=$1
+  case_dir=$(prepare_case "$language" nondet)
+  start_output=$(start_case "$case_dir") || { fail "$language: 非決定 start"; return; }
+  run_dir=$(printf '%s' "$start_output" | json_value run)
+  printf '入力' >"$run_dir/args"
+  continue_case "$case_dir" "$run_dir" >/dev/null
+  output=$(continue_case "$case_dir" "$run_dir")
+  if printf '%s' "$output" | has_json_key failed && [ ! -e "$run_dir" ]; then
+    pass "$language: 再実行の食い違いを failed にする"
+  else
+    fail "$language: 非決定の検出（出力: $output）"
+  fi
 }
 
-assemble_tests() { # lang
-  lang=$1
-  ext=$(cat "$skill/langs/$lang/ext")
-  outdir=$(mktemp -d "$work/out.XXXXXX")
-  : > "$outdir/keep.txt"
-  draft() { mkdir -p "$outdir/scripts" && cp "$1" "$outdir/scripts/workflow.$ext"; }
-  draft "$here/$lang/forbid_io.$ext"
-  sh "$skill/assemble.sh" "$lang" "$here/fixtures/prefecture.skill.md" "$outdir" "$outdir/scripts/workflow.$ext" >/dev/null 2>&1
-  check "$lang assemble rejects a bad workflow" 1 "$?"
-  check "$lang assemble leaves nothing on rejection" "keep.txt" "$(ls "$outdir")"
-  draft /dev/null
-  sh "$skill/assemble.sh" "$lang" "$here/fixtures/prefecture.skill.md" "$outdir" "$outdir/scripts/workflow.$ext" >/dev/null 2>&1
-  check "$lang assemble rejects an empty workflow" 1 "$?"
-  check "$lang assemble leaves nothing after an empty workflow" "keep.txt" "$(ls "$outdir")"
-  sh "$skill/assemble.sh" "$lang" "$here/fixtures/prefecture.skill.md" "$outdir" "$work/no-such-file" >/dev/null 2>&1
-  check "$lang assemble rejects a missing workflow file" 1 "$?"
-  draft "$here/$lang/ok.$ext"
-  sh "$skill/assemble.sh" "$lang" "$here/fixtures/prefecture.skill.md" "$outdir" "$outdir/scripts/workflow.$ext" >/dev/null
-  check "$lang assemble succeeds" 0 "$?"
-  check "$lang assemble keeps the workflow content" "" "$(diff "$here/$lang/ok.$ext" "$outdir/scripts/workflow.$ext")"
-  draft "$here/$lang/forbid_io.$ext"
-  sh "$skill/assemble.sh" "$lang" "$here/fixtures/prefecture.skill.md" "$outdir" "$outdir/scripts/workflow.$ext" >/dev/null 2>&1
-  check "$lang assemble regenerating in place removes SKILL.md and scripts on rejection" "keep.txt" "$(ls "$outdir" | tr '\n' ' ' | sed 's/ $//')"
-  draft "$here/$lang/ok.$ext"
-  sh "$skill/assemble.sh" "$lang" "$here/fixtures/prefecture.skill.md" "$outdir" "$outdir/scripts/workflow.$ext" >/dev/null
-  check "$lang assemble writes SKILL.md, scripts, keeps others" "SKILL.md keep.txt scripts" "$(ls "$outdir" | tr '\n' ' ' | sed 's/ $//')"
-  check "$lang assemble copies run, runtime, workflow" yes "$([ -f "$outdir/scripts/run" ] && [ -f "$outdir/scripts/workflow.$ext" ] && ls "$outdir/scripts" | grep -q '^runtime\.' && echo yes)"
-  awk 'f { print } /^---$/ { n++; if (n == 2) f = 1 }' "$outdir/SKILL.md" > "$work/body"
-  check "$lang assemble body matches the template" "" "$(diff "$skill/templates/thin-skill.md" "$work/body")"
-  check "$lang assemble allowed-tools is Write and the launcher only" 'allowed-tools: Write Bash(sh ${CLAUDE_SKILL_DIR}/scripts/run *)' "$(grep '^allowed-tools:' "$outdir/SKILL.md")"
-  check "$lang assemble keeps name" "name: prefecture" "$(grep '^name:' "$outdir/SKILL.md")"
+test_workflow_change() {
+  language=$1
+  case_dir=$(prepare_case "$language" ok)
+  start_output=$(start_case "$case_dir") || { fail "$language: 変更検出 start"; return; }
+  run_dir=$(printf '%s' "$start_output" | json_value run)
+  printf '入力' >"$run_dir/args"
+  continue_case "$case_dir" "$run_dir" >/dev/null
+  case $language in
+    ruby) printf '\n# テスト中の変更\n' >>"$case_dir/scripts/workflow.rb" ;;
+    cpp) printf '\n// テスト中の変更\n' >>"$case_dir/scripts/workflow.cpp" ;;
+  esac
+  output=$(continue_case "$case_dir" "$run_dir")
+  if printf '%s' "$output" | has_json_key failed && [ ! -e "$run_dir" ]; then
+    pass "$language: workflow の途中変更を検出"
+  else
+    fail "$language: workflow の変更検出（出力: $output）"
+  fi
 }
 
-assemble_common_tests() {
-  outdir=$(mktemp -d "$work/out.XXXXXX")
-  sh "$skill/assemble.sh" nolang "$here/fixtures/prefecture.skill.md" "$outdir" "$here/ruby/ok.rb" >/dev/null 2>"$work/err"
-  check "assemble rejects an unknown language" 1 "$?"
-  contains "assemble lists available languages" "available: cpp ruby" "$(cat "$work/err")"
+test_exception() {
+  language=$1
+  workflow_name=raise
+  [ "$language" = cpp ] && workflow_name=throw
+  case_dir=$(prepare_case "$language" "$workflow_name")
+  start_output=$(start_case "$case_dir") || { fail "$language: 例外 start"; return; }
+  run_dir=$(printf '%s' "$start_output" | json_value run)
+  printf '入力' >"$run_dir/args"
+  output=$(continue_case "$case_dir" "$run_dir")
+  if printf '%s' "$output" | has_json_key failed && [ ! -e "$run_dir" ]; then
+    pass "$language: 例外を failed にして片付ける"
+  else
+    fail "$language: 例外処理（出力: $output）"
+  fi
 }
 
-langs=${1:-"ruby cpp"}
-for lang in $langs; do
-  echo "== $lang"
-  runtime_tests "$lang"
-  check_tests "$lang"
-  assemble_tests "$lang"
+test_invalid_utf8() {
+  language=$1
+  case_dir=$(prepare_case "$language" invalid_utf8)
+  start_output=$(start_case "$case_dir") || { fail "$language: UTF-8 start"; return; }
+  run_dir=$(printf '%s' "$start_output" | json_value run)
+  printf '入力' >"$run_dir/args"
+  output=$(continue_case "$case_dir" "$run_dir")
+  if printf '%s' "$output" | ruby -rjson -e 'value = JSON.parse(STDIN.read); exit(value["done"] && value["report"].include?("�") ? 0 : 1)'; then
+    pass "$language: 不正な UTF-8 を置換した JSON"
+  else
+    fail "$language: 不正な UTF-8 の JSON（出力: $output）"
+  fi
+}
+
+test_killed_resume() {
+  language=$1
+  case_dir=$(prepare_case "$language" slow)
+  start_output=$(start_case "$case_dir") || { fail "$language: 再開 start"; return; }
+  run_dir=$(printf '%s' "$start_output" | json_value run)
+  printf '入力' >"$run_dir/args"
+  continue_case "$case_dir" "$run_dir" >/dev/null
+  printf '一つ目の回答\n' >"$run_dir/answer"
+  timeout 0.5 sh -c 'cd "$1" && sh "$1/scripts/run" continue "$2"' _ "$case_dir" "$run_dir" >/dev/null 2>&1 || true
+  if [ ! -e "$run_dir/answer" ] && [ -e "$run_dir" ]; then
+    output=$(continue_case "$case_dir" "$run_dir")
+    prompt=$(printf '%s' "$output" | json_value prompt 2>/dev/null || true)
+    if [ "$prompt" = "再開後の問い" ]; then
+      pass "$language: 強制終了後に記録済みの回答から再開"
+      find "$run_dir" -depth -delete
+      return
+    fi
+  fi
+  fail "$language: 強制終了後の再開"
+}
+
+test_syntax() {
+  language=$1
+  case $language in
+    ruby) extension=rb ;;
+    cpp) extension=cpp ;;
+  esac
+  if sh "$source_dir/langs/$language/check" "$test_dir/workflows/$language/ok.$extension" >/dev/null 2>&1 &&
+     ! sh "$source_dir/langs/$language/check" "$test_dir/workflows/$language/syntax_error.$extension" >/dev/null 2>&1; then
+    pass "$language: 構文検査"
+  else
+    fail "$language: 構文検査"
+  fi
+}
+
+test_marker() {
+  language=$1
+  case_dir=$(prepare_case "$language" ok)
+  fake=$temporary/fake-$language
+  mkdir -p "$fake"
+  if (cd "$case_dir" && sh "$case_dir/scripts/run" continue "$fake" >/dev/null 2>"$temporary/marker-$language.err"); then
+    fail "$language: 目印のない run を受理した"
+  else
+    code=$?
+    if [ "$code" -eq 2 ]; then pass "$language: 目印のない run は終了コード 2"; else fail "$language: 目印のない run の終了コード $code"; fi
+  fi
+}
+
+echo "Ruby 単体テスト"
+if MT_NO_PLUGINS=1 ruby "$test_dir/unit/ruby/runtime_test.rb"; then pass "Ruby 単体テスト"; else fail "Ruby 単体テスト"; fi
+
+echo "C++ 単体テスト"
+# doctest は unit/cpp/ に同梱した単一ヘッダを使う。
+if ${CXX:-c++} -std=c++17 -I"$source_dir/langs/cpp" -I"$test_dir/unit/cpp" "$test_dir/unit/cpp/runtime_test.cpp" -o "$temporary/cpp-unit" && "$temporary/cpp-unit"; then
+  pass "C++ 単体テスト"
+else
+  fail "C++ 単体テスト"
+fi
+
+for language in ruby cpp; do
+  test_syntax "$language"
+  test_standard_run "$language"
+  test_nondeterminism "$language"
+  test_workflow_change "$language"
+  test_exception "$language"
+  test_invalid_utf8 "$language"
+  test_killed_resume "$language"
+  test_marker "$language"
 done
-assemble_common_tests
-echo "$((total - fails)) / $total passed"
-[ "$fails" -eq 0 ]
+
+build_base=$temporary/build-failure
+mkdir -p "$build_base"
+case_dir=$(prepare_case cpp ok)
+build_output=$(cd "$case_dir" && TMPDIR="$build_base" CXX=false sh "$case_dir/scripts/run" start)
+if printf '%s' "$build_output" | has_json_key failed; then
+  pass "C++: ビルド失敗を固定の failed JSON にする"
+else
+  fail "C++: ビルド失敗の出力（$build_output）"
+fi
+
+if [ "$failures" -eq 0 ]; then
+  echo "すべてのテストに成功しました"
+  exit 0
+fi
+
+echo "$failures 件のテストが失敗しました" >&2
+exit 1

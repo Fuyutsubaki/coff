@@ -1,25 +1,88 @@
 #!/bin/sh
-# Launcher for a dullmified skill (C++). Builds workflow.cpp on first use and
-# caches the binary under ${TMPDIR:-/tmp}, keyed by the source contents.
-#   sh <skill dir>/scripts/run start
-#   sh <skill dir>/scripts/run continue <run>
-dir=$(cd "$(dirname "$0")" && pwd)
-key=$(cat "$dir/workflow.cpp" "$dir/runtime.hpp" | cksum | tr ' ' '-')
-cache="${TMPDIR:-/tmp}/dullmify-cpp-cache-$(id -u)"
-bin="$cache/workflow-$key"
-if [ ! -d "$cache" ]; then
-  mkdir -m 700 "$cache" || { echo "cannot create build cache $cache" >&2; exit 2; }
-fi
-[ -O "$cache" ] || { echo "build cache $cache is not owned by the current user" >&2; exit 2; }
-if [ ! -x "$bin" ]; then
-  tmp=$(mktemp "$cache/build.XXXXXX") || { echo "cannot create a build file in $cache" >&2; exit 2; }
-  if ! log=$(${CXX:-c++} -std=c++17 -O1 -I"$dir" -o "$tmp" "$dir/workflow.cpp" 2>&1); then
-    rm -f "$tmp"
-    esc=$(printf '%s' "$log" | awk 'BEGIN { ORS = "" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); if (NR > 1) printf "\\n"; printf "%s", $0 }')
-    printf '{"failed":"C++ build failed: %s"}\n' "$esc"
-    [ "$1" = continue ] && [ -f "$2/.dullmify-run" ] && rm -rf "$2"
+
+# C++ workflow を必要なときだけビルドし、run を作成または再実行する。
+set -u
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || {
+  echo "起動スクリプトの場所を解決できません" >&2
+  exit 2
+}
+base=${TMPDIR:-/tmp}
+base=$(CDPATH= cd -- "$base" && pwd -P) || {
+  echo "run とビルドキャッシュの作成先を解決できません: $base" >&2
+  exit 2
+}
+user_id=$(id -u) || {
+  echo "利用者を識別できません" >&2
+  exit 2
+}
+cache_dir=$base/coff-dullmify-$user_id/cpp-cache
+mkdir -p "$cache_dir" || {
+  echo "ビルドキャッシュを作成できません: $cache_dir" >&2
+  exit 2
+}
+
+workflow_key=$(cksum "$script_dir/runtime.hpp" "$script_dir/json.hpp" "$script_dir/workflow.cpp") || {
+  echo "workflow の識別子を計算できません" >&2
+  exit 2
+}
+cache_key=$(printf '%s' "$workflow_key" | cksum | awk '{ print $1 "-" $2 }')
+binary=$cache_dir/workflow-$cache_key
+
+discard_continue_run() {
+  if [ "${1:-}" = continue ] && [ -n "${2:-}" ] && [ -f "$2/.dullmify-run" ]; then
+    find "$2" -depth -delete
+  fi
+}
+
+if [ ! -x "$binary" ]; then
+  temporary=$(mktemp "$cache_dir/workflow.XXXXXX") || {
+    echo "ビルド用の一時ファイルを作成できません" >&2
+    exit 2
+  }
+  cxx=${CXX:-c++}
+  if ! "$cxx" -std=c++17 -I"$script_dir" "$script_dir/workflow.cpp" -o "$temporary"; then
+    find "$temporary" -delete
+    discard_continue_run "${1:-}" "${2:-}"
+    printf '%s\n' '{"failed":"C++ workflow のビルドに失敗しました"}'
     exit 0
   fi
-  mv -f "$tmp" "$bin"
+  chmod 700 "$temporary" && mv "$temporary" "$binary" || {
+    find "$temporary" -delete
+    echo "ビルド結果をキャッシュに置けません" >&2
+    exit 2
+  }
 fi
-exec "$bin" "$key" "$@"
+
+case ${1:-} in
+  start)
+    [ "$#" -eq 1 ] || {
+      echo "start に追加の引数は指定できません" >&2
+      exit 2
+    }
+    run_dir=$(mktemp -d "$base/coff-dullmify-run.XXXXXX") || {
+      echo "run ディレクトリを作成できません" >&2
+      exit 2
+    }
+    : >"$run_dir/.dullmify-run" || exit 2
+    pwd -P >"$run_dir/cwd" || exit 2
+    printf '%s' "$workflow_key" >"$run_dir/workflow-key" || exit 2
+    "$binary" --start "$run_dir"
+    ;;
+  continue)
+    [ "$#" -eq 2 ] || {
+      echo "continue には run ディレクトリを 1 つ指定してください" >&2
+      exit 2
+    }
+    run_dir=$2
+    [ -f "$run_dir/.dullmify-run" ] || {
+      echo "dullmify が作成した run ではありません: $run_dir" >&2
+      exit 2
+    }
+    exec "$binary" "$run_dir" "$workflow_key"
+    ;;
+  *)
+    echo "使い方: sh scripts/run start | continue <run>" >&2
+    exit 2
+    ;;
+esac
