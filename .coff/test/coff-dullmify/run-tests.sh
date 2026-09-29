@@ -1,264 +1,259 @@
 #!/bin/sh
 
-# 両言語の単体テスト、構文検査、再実行の実動作をまとめて確認する。
-set -u
+# 両言語の単体テスト、再実行のシナリオ、構文検査を一度に確かめる。
+set -eu
 
-test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
-repo_dir=$(CDPATH= cd -- "$test_dir/../../.." && pwd -P) || exit 2
+test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+repo_dir=$(CDPATH= cd -- "$test_dir/../../.." && pwd -P)
 source_dir=$repo_dir/.coff/src/coff-dullmify.skill
-temporary=$(mktemp -d "${TMPDIR:-/tmp}/coff-dullmify-test.XXXXXX") || exit 2
-trap 'rm -rf "$temporary"' EXIT HUP INT TERM
-# run とビルドキャッシュもテスト用の一時ディレクトリの中に作らせる。
-TMPDIR=$temporary/tmp
-export TMPDIR
-mkdir -p "$TMPDIR" || exit 2
+temporary=$(mktemp -d "${TMPDIR:-/tmp}/coff-dullmify-tests.XXXXXX")
+trap 'rm -rf -- "$temporary"' EXIT HUP INT TERM
+mkdir -p "$temporary/tmp" "$temporary/work"
 
-failures=0
-
+pass_count=0
 pass() {
+  pass_count=$((pass_count + 1))
   echo "成功: $1"
 }
 
-fail() {
+fail_test() {
   echo "失敗: $1" >&2
-  failures=$((failures + 1))
+  exit 1
 }
 
-json_value() {
-  ruby -rjson -e 'value = JSON.parse(STDIN.read); result = value.fetch(ARGV[0]); print(result.is_a?(String) ? result : JSON.generate(result))' "$1"
+json_get() {
+  ruby -rjson -e 'value = JSON.parse(STDIN.read.lines.last).fetch(ARGV.fetch(0)); puts(value)' "$1"
 }
 
-has_json_key() {
-  ruby -rjson -e 'exit(JSON.parse(STDIN.read).key?(ARGV[0]) ? 0 : 1)' "$1"
+assert_json_key() {
+  output=$1
+  key=$2
+  printf '%s\n' "$output" | json_get "$key" >/dev/null || fail_test "JSON に $key がありません"
 }
 
-prepare_case() {
+make_skill() {
   language=$1
-  name=$2
-  case_dir=$temporary/cases/$language-$name
-  mkdir -p "$case_dir" || exit 2
-  cp -R "$source_dir/langs/$language" "$case_dir/scripts" || exit 2
-  case $language in
-    ruby) cp "$test_dir/workflows/ruby/$name.rb" "$case_dir/scripts/workflow.rb" || exit 2 ;;
-    cpp) cp "$test_dir/workflows/cpp/$name.cpp" "$case_dir/scripts/workflow.cpp" || exit 2 ;;
+  workflow_name=$2
+  destination=$(mktemp -d "$temporary/skill-$language-$workflow_name.XXXXXX")
+  cp -R "$source_dir/langs/$language/." "$destination/"
+  case "$language" in
+    ruby) cp "$test_dir/workflows/ruby/$workflow_name.rb" "$destination/workflow.rb" ;;
+    cpp) cp "$test_dir/workflows/cpp/$workflow_name.cpp" "$destination/workflow.cpp" ;;
   esac
-  printf '%s' "$case_dir"
+  echo "$destination"
 }
 
-start_case() {
-  case_dir=$1
-  (cd "$case_dir" && sh "$case_dir/scripts/run" start)
+start_run() {
+  skill=$1
+  work=$2
+  (cd "$work" && TMPDIR="$temporary/tmp" sh "$skill/run" start)
 }
 
-continue_case() {
-  case_dir=$1
-  run_dir=$2
-  (cd "$case_dir" && sh "$case_dir/scripts/run" continue "$run_dir")
+continue_run() {
+  skill=$1
+  run=$2
+  TMPDIR="$temporary/tmp" sh "$skill/run" continue "$run"
 }
 
-test_standard_run() {
+test_ok() {
   language=$1
-  case_dir=$(prepare_case "$language" ok)
-  start_output=$(start_case "$case_dir") || {
-    fail "$language: start"
-    return
-  }
-  run_dir=$(printf '%s' "$start_output" | json_value run) || {
-    fail "$language: start の JSON"
-    return
-  }
+  skill=$(make_skill "$language" ok)
+  work=$temporary/work/ok-$language
+  mkdir -p "$work"
+  started=$(start_run "$skill" "$work")
+  run=$(printf '%s\n' "$started" | json_get run)
+  repeated=$(continue_run "$skill" "$run")
+  [ "$started" = "$repeated" ] || fail_test "$language: args 未作成時の出力が変わりました"
+  [ ! -e "$run/records.jsonl" ] || fail_test "$language: args 未作成時に記録ができました"
 
-  before=$(find "$run_dir" -maxdepth 1 -type f -print | sort | cksum)
-  missing_output=$(continue_case "$case_dir" "$run_dir")
-  after=$(find "$run_dir" -maxdepth 1 -type f -print | sort | cksum)
-  if [ "$missing_output" = "$start_output" ] && [ "$before" = "$after" ]; then
-    pass "$language: args 未作成なら同じ出力で記録を変えない"
-  else
-    fail "$language: args 未作成時の再提示"
-  fi
+  printf '%s\n' "引数" > "$run/args"
+  first=$(continue_run "$skill" "$run")
+  assert_json_key "$first" prompt
+  before=$(cksum "$run/records.jsonl")
+  same=$(continue_run "$skill" "$run")
+  after=$(cksum "$run/records.jsonl")
+  [ "$first" = "$same" ] || fail_test "$language: answer 未作成時の問いが変わりました"
+  [ "$before" = "$after" ] || fail_test "$language: answer 未作成時に記録が変わりました"
 
-  printf 'テスト入力\n' >"$run_dir/args"
-  first=$(continue_case "$case_dir" "$run_dir")
-  first_prompt=$(printf '%s' "$first" | json_value prompt 2>/dev/null || true)
-  records_before=$(cksum "$run_dir/records.jsonl")
-  repeated=$(continue_case "$case_dir" "$run_dir")
-  records_after=$(cksum "$run_dir/records.jsonl")
-  if [ "$first" = "$repeated" ] && [ "$records_before" = "$records_after" ] && [ "$first_prompt" = "最初の値を答えてください" ]; then
-    pass "$language: 未回答の問いを同じ記録で再提示"
-  else
-    fail "$language: 未回答の問いの再提示"
-  fi
-
-  printf '甲\n' >"$run_dir/answer"
-  second=$(continue_case "$case_dir" "$run_dir")
-  second_prompt=$(printf '%s' "$second" | json_value prompt 2>/dev/null || true)
-  printf '乙\n' >"$run_dir/answer"
-  done_output=$(continue_case "$case_dir" "$run_dir")
-  report=$(printf '%s' "$done_output" | json_value report 2>/dev/null || true)
-  side_effect_count=$(wc -l <"$case_dir/side-effect.log" 2>/dev/null || printf 0)
-  if [ "$second_prompt" = "二つ目の値を答えてください" ] && [ "$report" = "完了: 甲/乙" ] && [ "$side_effect_count" -eq 1 ] && [ ! -e "$run_dir" ]; then
-    pass "$language: 問いの往復、副作用一回、完了時の片付け"
-  else
-    fail "$language: 標準の完走（出力: $done_output）"
-  fi
+  printf '%s\n' "甲" > "$run/answer"
+  second=$(continue_run "$skill" "$run")
+  assert_json_key "$second" prompt
+  [ ! -e "$run/answer" ] || fail_test "$language: 取り込んだ answer が残っています"
+  printf '%s\n' "乙" > "$run/answer"
+  done_output=$(continue_run "$skill" "$run")
+  report=$(printf '%s\n' "$done_output" | json_get report)
+  [ "$report" = "引数|甲|乙" ] || fail_test "$language: report が違います: $report"
+  [ ! -e "$run" ] || fail_test "$language: done 後に run が残っています"
+  [ "$(wc -l < "$work/effect.log")" -eq 1 ] || fail_test "$language: effect が複数回動きました"
+  pass "$language の問い、再実行、副作用の一度性"
 }
 
-test_nondeterminism() {
+test_bad_marker() {
   language=$1
-  case_dir=$(prepare_case "$language" nondet)
-  start_output=$(start_case "$case_dir") || { fail "$language: 非決定 start"; return; }
-  run_dir=$(printf '%s' "$start_output" | json_value run)
-  printf '入力' >"$run_dir/args"
-  continue_case "$case_dir" "$run_dir" >/dev/null
-  output=$(continue_case "$case_dir" "$run_dir")
-  if printf '%s' "$output" | has_json_key failed && [ ! -e "$run_dir" ]; then
-    pass "$language: 再実行の食い違いを failed にする"
-  else
-    fail "$language: 非決定の検出（出力: $output）"
-  fi
+  skill=$(make_skill "$language" ok)
+  fake=$temporary/fake-$language
+  mkdir -p "$fake"
+  set +e
+  TMPDIR="$temporary/tmp" sh "$skill/run" continue "$fake" >/dev/null 2>"$temporary/marker-$language.err"
+  status=$?
+  set -e
+  [ "$status" -eq 2 ] || fail_test "$language: 目印なし run の終了コードが $status です"
+  pass "$language の run 目印"
 }
 
-test_workflow_change() {
+test_changed() {
   language=$1
-  case_dir=$(prepare_case "$language" ok)
-  start_output=$(start_case "$case_dir") || { fail "$language: 変更検出 start"; return; }
-  run_dir=$(printf '%s' "$start_output" | json_value run)
-  printf '入力' >"$run_dir/args"
-  continue_case "$case_dir" "$run_dir" >/dev/null
-  case $language in
-    ruby) printf '\n# テスト中の変更\n' >>"$case_dir/scripts/workflow.rb" ;;
-    cpp) printf '\n// テスト中の変更\n' >>"$case_dir/scripts/workflow.cpp" ;;
+  skill=$(make_skill "$language" ok)
+  work=$temporary/work/change-$language
+  mkdir -p "$work"
+  started=$(start_run "$skill" "$work")
+  run=$(printf '%s\n' "$started" | json_get run)
+  printf '%s\n' "引数" > "$run/args"
+  continue_run "$skill" "$run" >/dev/null
+  case "$language" in
+    ruby) printf '\n# テスト中の変更\n' >> "$skill/workflow.rb" ;;
+    cpp) printf '\n// テスト中の変更\n' >> "$skill/workflow.cpp" ;;
   esac
-  output=$(continue_case "$case_dir" "$run_dir")
-  if printf '%s' "$output" | has_json_key failed && [ ! -e "$run_dir" ]; then
-    pass "$language: workflow の途中変更を検出"
-  else
-    fail "$language: workflow の変更検出（出力: $output）"
-  fi
+  output=$(continue_run "$skill" "$run")
+  assert_json_key "$output" failed
+  [ ! -e "$run" ] || fail_test "$language: workflow 変更後に run が残っています"
+  pass "$language の workflow 変更検出"
 }
 
-test_exception() {
+test_failure_case() {
   language=$1
-  workflow_name=raise
-  [ "$language" = cpp ] && workflow_name=throw
-  case_dir=$(prepare_case "$language" "$workflow_name")
-  start_output=$(start_case "$case_dir") || { fail "$language: 例外 start"; return; }
-  run_dir=$(printf '%s' "$start_output" | json_value run)
-  printf '入力' >"$run_dir/args"
-  output=$(continue_case "$case_dir" "$run_dir")
-  if printf '%s' "$output" | has_json_key failed && [ ! -e "$run_dir" ]; then
-    pass "$language: 例外を failed にして片付ける"
-  else
-    fail "$language: 例外処理（出力: $output）"
+  workflow_name=$2
+  skill=$(make_skill "$language" "$workflow_name")
+  work=$temporary/work/$workflow_name-$language
+  mkdir -p "$work"
+  started=$(start_run "$skill" "$work")
+  run=$(printf '%s\n' "$started" | json_get run)
+  printf '%s\n' "引数" > "$run/args"
+  if [ "$workflow_name" = nondet ]; then
+    continue_run "$skill" "$run" >/dev/null
   fi
+  output=$(continue_run "$skill" "$run")
+  assert_json_key "$output" failed
+  [ ! -e "$run" ] || fail_test "$language: $workflow_name の失敗後に run が残っています"
+  pass "$language の $workflow_name 検出"
+}
+
+test_strict() {
+  language=$1
+  skill=$(make_skill "$language" strict)
+  work=$temporary/work/strict-$language
+  mkdir -p "$work"
+  started=$(start_run "$skill" "$work")
+  run=$(printf '%s\n' "$started" | json_get run)
+  printf '%s\n' "引数" > "$run/args"
+  continue_run "$skill" "$run" >/dev/null
+  printf '%s\n' "了承" > "$run/answer"
+  output=$(continue_run "$skill" "$run")
+  assert_json_key "$output" failed
+  [ ! -e "$run" ] || fail_test "$language: done 前の非決定後に run が残っています"
+  pass "$language の done 前確認"
+}
+
+test_slow_effect() {
+  language=$1
+  skill=$(make_skill "$language" slow)
+  work=$temporary/work/slow-$language
+  mkdir -p "$work"
+  if [ "$language" = cpp ]; then
+    warm_started=$(start_run "$skill" "$work")
+    warm_run=$(printf '%s\n' "$warm_started" | json_get run)
+    printf '%s\n' "ビルド" > "$warm_run/args"
+    continue_run "$skill" "$warm_run" >/dev/null
+  fi
+  started=$(start_run "$skill" "$work")
+  run=$(printf '%s\n' "$started" | json_get run)
+  printf '%s\n' "引数" > "$run/args"
+  set +e
+  TMPDIR="$temporary/tmp" timeout 1 sh "$skill/run" continue "$run" >"$temporary/slow-$language.out" 2>"$temporary/slow-$language.err"
+  status=$?
+  set -e
+  [ "$status" -eq 124 ] || fail_test "$language: effect の中断が timeout になりませんでした: $status"
+  output=$(continue_run "$skill" "$run")
+  assert_json_key "$output" failed
+  [ ! -e "$run" ] || fail_test "$language: 中断 effect の検出後に run が残っています"
+  pass "$language の effect 中断"
+}
+
+test_resume() {
+  language=$1
+  skill=$(make_skill "$language" resume)
+  work=$temporary/work/resume-$language
+  mkdir -p "$work"
+  started=$(start_run "$skill" "$work")
+  run=$(printf '%s\n' "$started" | json_get run)
+  printf '%s\n' "引数" > "$run/args"
+  continue_run "$skill" "$run" >/dev/null
+  printf '%s\n' "甲" > "$run/answer"
+  set +e
+  TMPDIR="$temporary/tmp" timeout 1 sh "$skill/run" continue "$run" >"$temporary/resume-$language.out" 2>"$temporary/resume-$language.err"
+  status=$?
+  set -e
+  [ "$status" -eq 124 ] || fail_test "$language: 問い後の中断が timeout になりませんでした: $status"
+  next=$(continue_run "$skill" "$run")
+  assert_json_key "$next" prompt
+  [ "$(printf '%s\n' "$next" | json_get input)" = "甲" ] || fail_test "$language: 回答記録後に続きへ進めません"
+  printf '%s\n' "乙" > "$run/answer"
+  done_output=$(continue_run "$skill" "$run")
+  [ "$(printf '%s\n' "$done_output" | json_get report)" = "甲|乙" ] || fail_test "$language: 再開後の report が違います"
+  pass "$language の回答記録後の再開"
 }
 
 test_invalid_utf8() {
   language=$1
-  case_dir=$(prepare_case "$language" invalid_utf8)
-  start_output=$(start_case "$case_dir") || { fail "$language: UTF-8 start"; return; }
-  run_dir=$(printf '%s' "$start_output" | json_value run)
-  printf '入力' >"$run_dir/args"
-  output=$(continue_case "$case_dir" "$run_dir")
-  if printf '%s' "$output" | ruby -rjson -e 'value = JSON.parse(STDIN.read); exit(value["done"] && value["report"].include?("�") ? 0 : 1)'; then
-    pass "$language: 不正な UTF-8 を置換した JSON"
-  else
-    fail "$language: 不正な UTF-8 の JSON（出力: $output）"
-  fi
-}
-
-test_killed_resume() {
-  language=$1
-  case_dir=$(prepare_case "$language" slow)
-  start_output=$(start_case "$case_dir") || { fail "$language: 再開 start"; return; }
-  run_dir=$(printf '%s' "$start_output" | json_value run)
-  printf '入力' >"$run_dir/args"
-  continue_case "$case_dir" "$run_dir" >/dev/null
-  printf '一つ目の回答\n' >"$run_dir/answer"
-  timeout 0.5 sh -c 'cd "$1" && sh "$1/scripts/run" continue "$2"' _ "$case_dir" "$run_dir" >/dev/null 2>&1 || true
-  if [ ! -e "$run_dir/answer" ] && [ -e "$run_dir" ]; then
-    output=$(continue_case "$case_dir" "$run_dir")
-    prompt=$(printf '%s' "$output" | json_value prompt 2>/dev/null || true)
-    if [ "$prompt" = "再開後の問い" ]; then
-      pass "$language: 強制終了後に記録済みの回答から再開"
-      find "$run_dir" -depth -delete
-      return
-    fi
-  fi
-  fail "$language: 強制終了後の再開"
+  skill=$(make_skill "$language" invalid_utf8)
+  work=$temporary/work/utf8-$language
+  mkdir -p "$work"
+  started=$(start_run "$skill" "$work")
+  run=$(printf '%s\n' "$started" | json_get run)
+  printf '%s\n' "引数" > "$run/args"
+  output=$(continue_run "$skill" "$run")
+  [ "$(printf '%s\n' "$output" | json_get report)" = "a�b" ] || fail_test "$language: 不正 UTF-8 を置換できません"
+  pass "$language の不正 UTF-8"
 }
 
 test_syntax() {
   language=$1
-  case $language in
-    ruby) extension=rb ;;
-    cpp) extension=cpp ;;
+  case "$language" in
+    ruby) good=$test_dir/workflows/ruby/ok.rb; bad=$test_dir/workflows/ruby/syntax_error.rb ;;
+    cpp) good=$test_dir/workflows/cpp/ok.cpp; bad=$test_dir/workflows/cpp/syntax_error.cpp ;;
   esac
-  if sh "$source_dir/langs/$language/check" "$test_dir/workflows/$language/ok.$extension" >/dev/null 2>&1 &&
-     ! sh "$source_dir/langs/$language/check" "$test_dir/workflows/$language/syntax_error.$extension" >/dev/null 2>&1; then
-    pass "$language: 構文検査"
-  else
-    fail "$language: 構文検査"
+  sh "$source_dir/langs/$language/check" "$good" >/dev/null
+  if sh "$source_dir/langs/$language/check" "$bad" >"$temporary/syntax-$language.out" 2>"$temporary/syntax-$language.err"; then
+    fail_test "$language: 構文エラーを受理しました"
   fi
-}
-
-test_marker() {
-  language=$1
-  case_dir=$(prepare_case "$language" ok)
-  fake=$temporary/fake-$language
-  mkdir -p "$fake"
-  if (cd "$case_dir" && sh "$case_dir/scripts/run" continue "$fake" >/dev/null 2>"$temporary/marker-$language.err"); then
-    fail "$language: 目印のない run を受理した"
-  else
-    code=$?
-    if [ "$code" -eq 2 ]; then pass "$language: 目印のない run は終了コード 2"; else fail "$language: 目印のない run の終了コード $code"; fi
-  fi
+  pass "$language の構文検査"
 }
 
 echo "Ruby 単体テスト"
-if MT_NO_PLUGINS=1 ruby "$test_dir/unit/ruby/runtime_test.rb"; then pass "Ruby 単体テスト"; else fail "Ruby 単体テスト"; fi
+MT_NO_PLUGINS=1 ruby "$test_dir/unit/ruby/runtime_test.rb"
+pass "Ruby ランタイム単体テスト"
 
 echo "C++ 単体テスト"
-# doctest は unit/cpp/ に同梱した単一ヘッダを使う。
-if ${CXX:-c++} -std=c++17 -I"$source_dir/langs/cpp" -I"$test_dir/unit/cpp" "$test_dir/unit/cpp/runtime_test.cpp" -o "$temporary/cpp-unit" && "$temporary/cpp-unit"; then
-  pass "C++ 単体テスト"
-else
-  fail "C++ 単体テスト"
-fi
+"${CXX:-c++}" -std=c++17 -I"$source_dir/langs/cpp" -I"$test_dir/unit/cpp" \
+  "$test_dir/unit/cpp/runtime_test.cpp" -o "$temporary/cpp-unit"
+"$temporary/cpp-unit"
+pass "C++ ランタイム単体テスト"
 
 for language in ruby cpp; do
-  test_syntax "$language"
-  test_standard_run "$language"
-  test_nondeterminism "$language"
-  test_workflow_change "$language"
-  test_exception "$language"
+  test_ok "$language"
+  test_bad_marker "$language"
+  test_changed "$language"
+  test_failure_case "$language" nondet
+  if [ "$language" = ruby ]; then
+    test_failure_case "$language" raise
+  else
+    test_failure_case "$language" throw
+  fi
+  test_strict "$language"
+  test_slow_effect "$language"
+  test_resume "$language"
   test_invalid_utf8 "$language"
-  test_killed_resume "$language"
-  test_marker "$language"
+  test_syntax "$language"
 done
 
-build_base=$temporary/build-failure
-mkdir -p "$build_base"
-case_dir=$(prepare_case cpp ok)
-build_run=$(cd "$case_dir" && TMPDIR="$build_base" sh "$case_dir/scripts/run" start | json_value run)
-: >"$build_run/args"
-build_output=$(cd "$case_dir" && TMPDIR="$build_base" CXX=false sh "$case_dir/scripts/run" continue "$build_run" 2>/dev/null)
-if printf '%s' "$build_output" | has_json_key failed && [ ! -e "$build_run" ]; then
-  pass "C++: ビルド失敗を固定の failed JSON にして run を消す"
-else
-  fail "C++: ビルド失敗の出力（$build_output）"
-fi
-marker_output=$(cd "$case_dir" && TMPDIR="$build_base" CXX=false sh "$case_dir/scripts/run" continue "$build_base" 2>/dev/null)
-if [ "$?" -eq 2 ] && [ -z "$marker_output" ]; then
-  pass "C++: 目印のない run はビルドより先に終了コード 2"
-else
-  fail "C++: 目印のない run の出力（$marker_output）"
-fi
-
-if [ "$failures" -eq 0 ]; then
-  echo "すべてのテストに成功しました"
-  exit 0
-fi
-
-echo "$failures 件のテストが失敗しました" >&2
-exit 1
+echo "全 $pass_count 項目に成功しました"

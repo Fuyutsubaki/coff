@@ -1,59 +1,67 @@
-#define DULLMIFY_NO_MAIN
-#include "runtime.hpp"
-
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#define DULLMIFY_NO_MAIN
 #include "doctest.h"
+#include "../../../../src/coff-dullmify.skill/langs/cpp/runtime.hpp"
+
+#include <filesystem>
+#include <fstream>
+
+std::string workflow() { return "単体テスト"; }
 
 namespace {
 
-// テストごとに空の run ディレクトリを用意し、終わったら消す。
-struct RuntimeFixture {
-    RuntimeFixture() {
-        directory = std::filesystem::temp_directory_path() /
-                    ("coff-dullmify-unit-" + std::to_string(::getpid()) + "-" + std::to_string(counter++));
-        std::filesystem::create_directories(directory);
-        std::ofstream(directory / "workflow-key") << "キー";
-    }
+namespace fs = std::filesystem;
 
-    ~RuntimeFixture() {
-        std::error_code ignored;
-        std::filesystem::remove_all(directory, ignored);
-    }
-
-    std::filesystem::path directory;
-    static inline int counter = 0;
+struct TemporaryDirectory {
+  fs::path path;
+  TemporaryDirectory() {
+    std::string pattern = (fs::temp_directory_path() / "dullmify-cpp-unit-XXXXXX").string();
+    std::vector<char> buffer(pattern.begin(), pattern.end());
+    buffer.push_back('\0');
+    path = ::mkdtemp(buffer.data());
+    std::ofstream(path / "args") << "引数\n";
+    std::ofstream(path / "cwd") << fs::current_path().string() << '\n';
+  }
+  ~TemporaryDirectory() { std::error_code ignored; fs::remove_all(path, ignored); }
 };
 
-TEST_CASE_FIXTURE(RuntimeFixture, "問いの記録を書いて読み戻す") {
-    dullmify::Runtime runtime(directory, "キー");
-    CHECK_THROWS_AS(runtime.ask("判断", "対象"), dullmify::Pending);
-    REQUIRE(runtime.records().size() == 1U);
+}  // 無名名前空間
 
-    std::ofstream(directory / "answer") << "回答\n";
-    dullmify::Runtime replay(directory, "キー");
-    replay.prepare();
-    CHECK(replay.ask("判断", "対象") == "回答");
-    CHECK_NOTHROW(replay.finish());
-    CHECK_FALSE(std::filesystem::exists(directory / "answer"));
+TEST_CASE("記録の書き込み、読み戻し、型の往復") {
+  TemporaryDirectory temporary;
+  dullmify::Runtime first(temporary.path);
+  dullmify::current_runtime = &first;
+  const std::string value = dullmify::once(dullmify::json::array({"key"}), [] { return std::string("value"); });
+  CHECK(value == "value");
+  CHECK(first.records().front().at("result") == "value");
+
+  dullmify::Runtime second(temporary.path);
+  dullmify::current_runtime = &second;
+  int calls = 0;
+  const std::string replayed = dullmify::once(dullmify::json::array({"key"}), [&] {
+    ++calls;
+    return std::string("other");
+  });
+  CHECK(replayed == "value");
+  CHECK(calls == 0);
+  dullmify::current_runtime = nullptr;
 }
 
-TEST_CASE_FIXTURE(RuntimeFixture, "照合キーの食い違いを検出する") {
-    dullmify::Runtime runtime(directory, "キー");
-    CHECK_THROWS_AS(runtime.ask("判断", "対象"), dullmify::Pending);
-
-    dullmify::Runtime replay(directory, "キー");
-    CHECK_THROWS_AS(replay.ask("別の判断", "対象"), dullmify::Nondeterminism);
+TEST_CASE("照合キーの食い違いを検出する") {
+  TemporaryDirectory temporary;
+  dullmify::Runtime first(temporary.path);
+  dullmify::current_runtime = &first;
+  dullmify::once(dullmify::json::array({"a"}), [] { return 1; });
+  dullmify::Runtime second(temporary.path);
+  dullmify::current_runtime = &second;
+  CHECK_THROWS_AS(dullmify::once(dullmify::json::array({"b"}), [] { return 2; }), dullmify::Failure);
+  dullmify::current_runtime = nullptr;
 }
 
-TEST_CASE_FIXTURE(RuntimeFixture, "壊れた記録を拒否する") {
-    std::ofstream(directory / "records.jsonl") << "{壊れた記録\n";
-    CHECK_THROWS_AS(dullmify::Runtime(directory, "キー"), dullmify::Failure);
+TEST_CASE("不正な UTF-8 を JSON にできる") {
+  const std::string invalid("a\xFF" "b", 3);
+  const std::string encoded = dullmify::dump_json(dullmify::json{{"value", invalid}});
+  dullmify::json parsed;
+  CHECK_NOTHROW(parsed = dullmify::json::parse(encoded));
+  CHECK(parsed.at("value") == "a�b");
 }
-
-TEST_CASE("不正な UTF-8 を正しい JSON にする") {
-    const std::string text = dullmify::json_text({{"値", std::string("\xFF", 1)}});
-    const auto parsed = dullmify::json::parse(text);
-    CHECK(parsed.at("値").get<std::string>() == "\xEF\xBF\xBD");
-}
-
-}  // namespace

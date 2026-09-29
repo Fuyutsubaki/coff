@@ -1,13 +1,6 @@
 #!/bin/sh
 
-# workflow とランタイムを C++17 として構文検査する。
-set -u
-
-if [ "$#" -ne 1 ]; then
-  echo "使い方: sh check <workflow.cpp>" >&2
-  exit 2
-fi
-
+# workflow とランタイムを、実行時と同じ規格と include パスで構文検査する。
+[ "$#" -eq 1 ] || { echo "workflow ファイルを一つ指定してください" >&2; exit 2; }
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
-cxx=${CXX:-c++}
-exec "$cxx" -std=c++17 -I"$script_dir" -fsyntax-only "$1"
+"${CXX:-c++}" -std=c++17 -I"$script_dir" -fsyntax-only "$1"

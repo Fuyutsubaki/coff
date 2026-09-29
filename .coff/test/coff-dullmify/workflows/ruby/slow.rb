@@ -1,7 +1,8 @@
 def workflow
   Dullmify.arguments
-  first = Dullmify.ask("停止前の問い", "一つ目")
-  sleep 2
-  second = Dullmify.ask("再開後の問い", first)
-  "再開: #{second}"
+  Dullmify.effect(["遅い副作用"]) do
+    sleep 5
+    "完了"
+  end
+  "完了"
 end

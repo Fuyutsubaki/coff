@@ -1,4 +1,4 @@
 def workflow
   Dullmify.arguments
-  raise "テスト用の例外"
+  raise "意図した例外"
 end

@@ -2,53 +2,44 @@
 
 require "minitest/autorun"
 require "tmpdir"
-require "stringio"
 require_relative "../../../../src/coff-dullmify.skill/langs/ruby/runtime"
 
-class DullmifyRubyRuntimeTest < Minitest::Test
+class DullmifyRuntimeTest < Minitest::Test
   def setup
-    @directory = Dir.mktmpdir("coff-dullmify-unit-")
-    File.write(File.join(@directory, "workflow-key"), "キー")
+    @directory = Dir.mktmpdir("dullmify-ruby-unit-")
+    File.write(File.join(@directory, "args"), "引数\n")
+    File.write(File.join(@directory, "cwd"), Dir.pwd)
   end
 
   def teardown
-    FileUtils.remove_entry(@directory) if File.exist?(@directory)
+    FileUtils.rm_rf(@directory)
   end
 
-  def test_問いの記録を書いて読み戻す
-    runtime = Dullmify::Runtime.new(@directory, "キー")
-    assert_raises(Dullmify::Pending) { runtime.ask("判断", "対象") }
-    assert_equal 1, runtime.records.length
+  def test_record_write_read_and_type_normalization
+    first = Dullmify::Runtime.new(@directory)
+    value = first.once([:key]) { :value }
+    assert_equal "value", value
+    assert_equal({ "type" => "once", "key" => ["key"], "result" => "value" }, first.records.first)
 
-    File.binwrite(File.join(@directory, "answer"), "回答\n")
-    replay = Dullmify::Runtime.new(@directory, "キー")
-    replay.prepare!
-    assert_equal "回答", replay.ask("判断", "対象")
-    replay.finish!
-    refute File.exist?(File.join(@directory, "answer"))
+    second = Dullmify::Runtime.new(@directory)
+    replayed = second.once(["key"]) { flunk "記録済みのブロックが再実行された" }
+    assert_equal "value", replayed
   end
 
-  def test_照合キーの食い違いを検出する
-    runtime = Dullmify::Runtime.new(@directory, "キー")
-    assert_raises(Dullmify::Pending) { runtime.ask("判断", "対象") }
-
-    replay = Dullmify::Runtime.new(@directory, "キー")
-    assert_raises(Dullmify::Nondeterminism) { replay.ask("別の判断", "対象") }
+  def test_key_mismatch_becomes_nondeterministic_failure
+    Dullmify::Runtime.new(@directory).once(["a"]) { 1 }
+    signal = catch(Dullmify::SIGNAL) do
+      Dullmify::Runtime.new(@directory).once(["b"]) { 2 }
+      nil
+    end
+    assert_equal :failed, signal.first
+    assert_includes signal.last, "非決定"
   end
 
-  def test_壊れた記録を拒否する
-    File.binwrite(File.join(@directory, "records.jsonl"), "{壊れた記録\n")
-    assert_raises(Dullmify::Failure) { Dullmify::Runtime.new(@directory, "キー") }
-  end
-
-  def test_不正な_utf8_を正しい_json_にする
-    previous = $stdout
-    output = StringIO.new
-    $stdout = output
-    Dullmify.emit("値" => "\xFF".b)
-    parsed = JSON.parse(output.string)
-    assert_equal "�", parsed.fetch("値")
-  ensure
-    $stdout = previous
+  def test_invalid_utf8_is_valid_json
+    runtime = Dullmify::Runtime.new(@directory)
+    runtime.once(["bytes"]) { "a\xFFb".b }
+    File.foreach(File.join(@directory, "records.jsonl")) { |line| JSON.parse(line) }
+    assert_equal "a�b", runtime.records.first.fetch("result")
   end
 end

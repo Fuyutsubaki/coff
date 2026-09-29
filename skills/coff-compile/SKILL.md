@@ -22,7 +22,7 @@ How to write a directory source `.coff/src/<name>.skill/`:
 - Never name a bundled file `SKILL.md`.
 - If the same `<name>` exists in both forms (`<name>.skill.md` and `<name>.skill/`), it is an error. This check comes before the bare-name ambiguity check.
 
-A skill source whose frontmatter has `coff-dullmify: <lang>` is converted by the procedure in the "dullmify build" section.
+A single-file skill source that declares `coff-dullmify: <lang>` goes through the "dullmify build" instead of §2–§4.
 
 ## Options
 
@@ -68,13 +68,21 @@ For agent placement, the real body (the canonical copy) lives in exactly one pla
 
 ## dullmify build
 
-A single-file skill source whose frontmatter has `coff-dullmify: <lang>` is converted, instead of the normal body compile, by invoking `/coff-dullmify <src> -o <temp dir> --lang <lang>` with the Skill tool. If it is set on a directory skill source or another type, report `failed`.
+`coff-dullmify: <lang>` is accepted only on a single-file skill source. If it appears on another type or on a directory source, report `failed: <reason>` and leave the output untouched.
 
-- Do §1 selection and skip detection as usual; skip the lint of §2–§4.
-- Create a temporary directory outside the repository with `mktemp -d`. If coff-dullmify is missing or the conversion fails, report `failed: <reason>` and leave the existing output untouched.
-- In the temp dir's `SKILL.md`, translate only the frontmatter `description` (keep the original when `coff-translate: false`), remove keys starting with `coff-`, and append the footer with the source md5. Do not translate the body and do not strip comments.
-- Replace the body output (default `.claude/skills/<name>/`; under the given root with `--out`) with the temp dir's `SKILL.md` and `scripts/`. Reference stubs point at the canonical file as usual; `scripts/` lives only next to the canonical file.
-- Report a converted canonical output as `compiled`. An unchanged source is skipped, so when only coff-dullmify's bundled runtime changed, rebuild with `--force`.
+For such a source, compute the `src_md5` used by §1's skip detection and by the footer from the source joined with coff-dullmify's whole set of bundled files. A change to coff-dullmify's runtime or template alone then triggers a rebuild.
+
+```bash
+dullmify_dir=.claude/skills/coff-dullmify
+if [ ! -f "$dullmify_dir/SKILL.md" ]; then echo "failed: $name: coff-dullmify がありません"; continue; fi
+src_md5=$( (cat "$src"; cd "$dullmify_dir" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s\n' "$f"; cat "$f"; done) | md5sum | cut -d' ' -f1)
+```
+
+To build, create an empty temporary directory outside the repository and invoke `/coff-dullmify <src> -o <temp dir> --lang <lang>` with the Skill tool. If coff-dullmify is unavailable, the call fails, or no complete output is produced, report `failed: <reason>` and leave the body output untouched.
+
+On success, remove keys starting with `coff-` from the frontmatter of the temp dir's `SKILL.md` and turn only the `description` value into concise English (keep it untranslated when `coff-translate: false`). Do not translate the body and do not strip HTML/markdown comments. Append the usual footer using the `src_md5` above, then replace the body output directory with the temp dir's contents. If the replacement fails, keep the previous output.
+
+Reference stubs from `--ref` and `--agent` point at the canonical file as usual; the generated `scripts/` lives only in the body output.
 
 ## 1. Identify build targets
 
@@ -212,4 +220,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way. Bundled-file sync is the one exception: if it stops midway, the next run finds the difference and repairs it.
 - When a directory source is turned back into a single-file source, remove the bundled files left in the output by hand.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"5f601806de5a6a99e88e573f3d67f1e0"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"ae4eec39ed9beaa6190d97c99a450974"} -->

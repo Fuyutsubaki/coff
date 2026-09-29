@@ -1,9 +1,13 @@
 #include "runtime.hpp"
 
+#include <chrono>
+#include <thread>
+
 std::string workflow() {
-    dullmify::arguments();
-    const std::string first = dullmify::ask("停止前の問い", "一つ目");
-    ::sleep(2);
-    const std::string second = dullmify::ask("再開後の問い", first);
-    return "再開: " + second;
+  dullmify::arguments();
+  dullmify::effect(dullmify::json::array({"遅い副作用"}), [] {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    return std::string("完了");
+  });
+  return "完了";
 }

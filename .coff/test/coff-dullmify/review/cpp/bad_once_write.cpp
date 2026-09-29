@@ -46,9 +46,13 @@ std::string workflow() {
                              cities[1] + "=" + prefectures[1] + "(" + regions[1] + ")";
 
   // 都道府県と地域の確認 / 手順 5
-  const dullmify::CommandResult command_result{0, report, ""};
+  const auto command_result = dullmify::command({"printf", "%s", report});
+  if (command_result.exit_code != 0) dullmify::fail("printf が失敗しました");
 
   // 都道府県と地域の確認 / 手順 6
-  dullmify::write("prefecture-output.txt", command_result.stdout_text);
+  dullmify::once(dullmify::json::array({"保存"}), [&] {
+    std::ofstream("prefecture-output.txt") << command_result.stdout_text;
+    return 0;
+  });
   return command_result.stdout_text;
 }

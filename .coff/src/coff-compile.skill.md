@@ -33,7 +33,8 @@ lint:
 - 同梱ファイルに `SKILL.md` という名前を使わない。 <!-- `gh skill` は入れ子の SKILL.md を別の skill として見つけ、導入時に frontmatter を注入する -->
 - 同じ `<name>` が両方の形（`<name>.skill.md` と `<name>.skill/`）にあればエラー。ベース名の曖昧さの判定より先に見る。
 
-frontmatter に `coff-dullmify: <lang>` を持つ skill ソースは、「dullmify ビルド」の節の手順で変換する。
+1 ファイルの skill ソースで `coff-dullmify: <lang>` を宣言すると、§2〜§4 の代わりに「dullmify ビルド」を行う。
+
 
 ## オプション
 
@@ -81,13 +82,21 @@ agent 向けの実体（正本）はリポジトリに 1 箇所とし、他の a
 
 ## dullmify ビルド
 
-frontmatter に `coff-dullmify: <lang>` を持つ 1 ファイルの skill ソースは、通常の本文コンパイルの代わりに、`/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を Skill ツールで起動して変換する。ディレクトリの skill ソースやほかの種別に指定されていれば `failed` にする。
+frontmatter に `coff-dullmify: <lang>` があるソースは、skill 型の 1 ファイルのソースだけを認める。ほかの型やディレクトリのソースにあれば `failed: <理由>` を報告し、成果物に触れない。
 
-- §1 の選定と skip 判定は通常どおり行い、§2〜§4 の lint は行わない。
-- リポジトリ外に `mktemp -d` で一時ディレクトリを作る。coff-dullmify がない場合、または変換に失敗した場合は `failed: <理由>` とし、既存の成果物に触れない。
-- 一時ディレクトリの `SKILL.md` は、frontmatter の `description` だけを英訳し（`coff-translate: false` なら原文のまま）、`coff-` で始まるキーを除き、ソースの md5 を持つフッタを付ける。本文は英訳せず、コメントも除去しない。
-- 実体の出力先（既定は `.claude/skills/<name>/`、`--out` ではそのルートの下）を、一時ディレクトリの `SKILL.md` と `scripts/` で置き換える。参照 stub は通常どおり正本を指し、`scripts/` は正本の隣だけに置く。
-- 変換できた正本は `compiled` と報告する。ソースが同じなら skip するため、coff-dullmify の同梱ランタイムだけを変えた場合は `--force` で作り直す。
+このソースでは、§1 の skip 判定とフッタに使う `src_md5` を、ソースと coff-dullmify の同梱ファイル一式をつないだ内容から求める。coff-dullmify のランタイムや定型だけが変わっても、作り直しの対象になる。 <!-- ソースだけの md5 では、ランタイムの変更を利用者が --force で拾う必要があり、忘れると古いランタイムが残る -->
+
+```bash
+dullmify_dir=.claude/skills/coff-dullmify
+if [ ! -f "$dullmify_dir/SKILL.md" ]; then echo "failed: $name: coff-dullmify がありません"; continue; fi
+src_md5=$( (cat "$src"; cd "$dullmify_dir" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s\n' "$f"; cat "$f"; done) | md5sum | cut -d' ' -f1)
+```
+
+ビルドするときは、リポジトリ外に空の一時ディレクトリを作り、Skill ツールで `/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を起動する。coff-dullmify が利用できないとき、呼び出しが失敗したとき、または完全な生成物を得られないときは `failed: <理由>` を報告し、実体の出力先に触れない。
+
+成功したら、一時ディレクトリの `SKILL.md` の frontmatter から `coff-` で始まるキーを除き、`description` の値だけを簡潔な英語にする。`coff-translate: false` なら英訳しない。本文は英訳せず、HTML/markdown コメントも除去しない。上の `src_md5` を使う通常のフッタを末尾に付けてから、一時ディレクトリの内容で実体の出力ディレクトリを置き換える。置き換えに失敗した場合も、以前の成果物を残す。
+
+`--ref` と `--agent` の参照 stub は通常どおり正本を指し、生成された `scripts/` は実体の出力先だけに置く。
 
 ## 1. 対象ファイルの選定
 

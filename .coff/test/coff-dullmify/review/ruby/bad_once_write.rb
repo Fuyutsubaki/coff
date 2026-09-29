@@ -29,6 +29,6 @@ def workflow
   Dullmify.fail("printf が失敗しました") unless command_result["exit_code"].zero?
 
   # 都道府県と地域の確認 / 手順 6
-  Dullmify.write("prefecture-output.txt", command_result["stdout"])
+  Dullmify.once(["保存"]) { File.write("prefecture-output.txt", command_result["stdout"]); nil }
   command_result["stdout"]
 end

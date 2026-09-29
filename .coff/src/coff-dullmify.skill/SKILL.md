@@ -1,25 +1,20 @@
 ---
 name: coff-dullmify
-description: skill ソースを指定言語の workflow と薄い skill に変換する。`/coff-dullmify <source> -o <outdir> --lang <ruby|cpp>`。
+description: skill のソースを指定言語の workflow と薄い skill に変換する。`<source> -o <outdir> --lang <ruby|cpp>` の全引数が必須。
 license: MIT
 coff-dist: true
 allowed-tools: Write Bash(sh ${CLAUDE_SKILL_DIR}/assemble.sh *)
 ---
 
-# coff-dullmify
+引数を `<source> -o <outdir> --lang <lang>` として解釈する。欠け、重複、余計な引数があれば、使い方を示して止まる。ソースの frontmatter 値には `---` が含まれないことを前提とする。
 
-skill ソースを読み、手順の制御を指定言語の workflow に移す。LLM にしかできない判断だけを問いとして残す。
+この SKILL.md と同じディレクトリを基準に、`langs/<lang>/GUIDE.md` があるかをファイル参照で確かめる。なければ `langs/*/GUIDE.md` から対応言語を示して止まる。ソース、選んだ GUIDE、`review.md` をそれぞれファイル参照で読む。事前承認がないので、`cd`、`cat`、`ls` などのシェルのコマンドでは読まない。
 
-引数は `<source> -o <outdir> --lang <lang>` の形で、`<source>`、`<outdir>`、`<lang>` の 3 つとも必須とする。欠けていれば、この形を示して止まる。`source` と `outdir` は絶対パスに直す。ソースの frontmatter の値に `---` が含まれないことを前提とし、ここでは検査しない。
+最大 3 回、次の一巡を行う。
 
-この SKILL.md と同じディレクトリを基準に同梱ファイルを参照する。`langs/<lang>/GUIDE.md` がなければ、`langs/*/GUIDE.md` から対応言語を列挙して、生成前に終了する。言語ごとの API、入口、workflow のファイル名、規則は対象言語の `GUIDE.md` を読む。点検方法と返答形式は `review.md` を読む。ソース、GUIDE、`review.md` はファイルを読むツールで読み、シェルのコマンドで読まない。
+1. ソースの制御を GUIDE の API で workflow にする。問いは LLM にしかできない判断だけにし、副作用は補助関数で起こす。ソースの番号付き工程ごとに、番号がなければ段落ごとに、その節見出しと工程番号をソースと同じ言語のコメントで付ける。
+2. GUIDE が定める名前の workflow 全体を `<outdir>/scripts/` に Write で書く。直すときも全体を Write で書き直す。事前承認は Write だけなので、Edit、`sed`、heredoc は承認で止まる。ほかのファイルを書かない。
+3. この SKILL.md と同じディレクトリの `assemble.sh` の絶対パスを求め、`sh <絶対パス>/assemble.sh <lang> <source> <outdir>` を単独のコマンドとして呼ぶ。構文検査に落ちたら、その出力だけを使って次の回で直す。別の検査コマンドを使わない。
+4. 組み立てに通ったら、`review.md` の雛形へソース、workflow、GUIDE の全文を埋め、会話を継承しない新しいサブエージェントに渡す。Claude Code では Agent、Codex では `spawn_agent` を使う。点検役には渡した内容だけで判定させる。最初の行が `合格` なら終了する。`不合格` なら指摘だけを使って次の回で直す。
 
-次の 1〜5 を 1 回とし、最大 3 回行う。回数は `assemble.sh <lang> …` の呼び出しで数え、3 回呼んだら 4 回目は呼ばない。
-
-1. ソースの各工程を逐次処理の workflow に写す。問いは LLM にしかできない判断に限り、ファイル操作とコマンド実行は GUIDE の補助関数で行う。ソースの番号付き手順の各項目（番号付き手順がなければ各段落）に対応するコードへ、節見出しと工程番号をソースと同じ言語のコメントで付ける。前の回が失敗した場合は、その構文エラーまたは点検の指摘を直す。
-2. LLM が書くのは workflow 本体だけとする。GUIDE が定めるファイル名で `<outdir>/scripts/` へファイルを書くツールを使って書く。heredoc やシェル経由では書かない。`<outdir>` のほかのファイルには触れない。
-3. この SKILL.md と同じディレクトリにある `assemble.sh` の絶対パスを求め、`sh <絶対パス>/assemble.sh <lang> <source> <outdir>` だけを単独のコマンドとして呼ぶ。構文検査を別の方法で代用・回避しない。失敗したら `assemble.sh` が出した理由だけを読み、次の回へ進む。原因を調べるためにほかのコマンドを実行しない。
-4. 組み立てに成功したら、`review.md` の雛形へソース、workflow、GUIDE の全内容を機械的に差し込む。会話を継承しない新しいサブエージェントを起動し、差し込んだプロンプトだけを渡して点検させる。Claude Code では Agent ツール、Codex では `spawn_agent` を使う。自分自身で代用せず、サブエージェントにファイルを読ませない。
-5. 点検の最初の行が `合格` なら終了する。`不合格` または形式違反なら、指摘を読んで次の回へ進む。点検を回避しない。
-
-3 回とも通らなければ、`sh <絶対パス>/assemble.sh --discard <outdir>` を単独のコマンドとして呼び、最後の失敗理由をそのまま報告して止まる。`<outdir>/SKILL.md` と `<outdir>/scripts/` を残さない。
+原因が環境に見えても 3 回を行い、検査や点検を回避しない。3 回とも合格しなければ、`sh <絶対パス>/assemble.sh --discard <outdir>` を単独のコマンドとして呼び、失敗理由を報告する。`<outdir>` では `SKILL.md` と `scripts/` 以外に触れない。

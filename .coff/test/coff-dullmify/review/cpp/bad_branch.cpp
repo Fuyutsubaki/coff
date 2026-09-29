@@ -1,39 +1,55 @@
 #include "runtime.hpp"
 
+#include <map>
+#include <string>
+#include <vector>
+
 std::string workflow() {
-    // 都道府県コードを作る 1. 住所を入力順に得る
-    std::vector<std::string> addresses;
-    std::string input = dullmify::arguments();
-    std::size_t start = 0;
-    while (start < input.size()) {
-        const auto end = input.find('\n', start);
-        const std::string line = input.substr(start, end - start);
-        if (!line.empty()) addresses.push_back(line);
-        if (end == std::string::npos) break;
-        start = end + 1;
+  // 都道府県と地域の確認 / 手順 1
+  const std::string input = dullmify::arguments();
+  const std::size_t separator = input.find("、");
+  if (separator == std::string::npos || input.find("、", separator + 3) != std::string::npos)
+    dullmify::fail("市名を二つ指定してください");
+  const std::vector<std::string> cities{input.substr(0, separator), input.substr(separator + 3)};
+
+  // 都道府県と地域の確認 / 手順 2
+  std::vector<std::string> prefectures;
+  for (const auto &city : cities) {
+    std::string answer;
+    bool valid = false;
+    for (int attempt = 0; attempt < 4; ++attempt) {
+      const std::string prompt =
+          attempt == 0 ? std::string("都道府県名だけを答えてください")
+                       : "前の答え「" + answer + "」は末尾が都・道・府・県のいずれでもありません。都道府県名だけを、末尾まで含めて答え直してください";
+      answer = dullmify::ask(prompt, city);
+      const std::vector<std::string> suffixes{"都", "道", "府", "県"};
+      for (const auto &suffix : suffixes)
+        if (answer.size() >= suffix.size() && answer.compare(answer.size() - suffix.size(), suffix.size(), suffix) == 0)
+          valid = true;
+      if (valid) break;
     }
-    std::vector<std::string> prefectures;
-    for (const auto& address : addresses) {
-        // 都道府県コードを作る 2. 市区町村を尋ねる
-        const auto city = dullmify::ask("住所から市区町村名だけを答えてください", address);
-        // 都道府県コードを作る 3. 都道府県を尋ねる
-        prefectures.push_back(dullmify::ask("市区町村が属する都道府県名を末尾まで含めて答えてください", city));
-    }
-    std::vector<std::string> results;
-    for (const auto& prefecture : prefectures) {
-        // 都道府県コードを作る 4. 辞書でコードにする
-        const std::map<std::string, std::string> codes{{"東京都", "27"}, {"大阪府", "13"}};
-        const auto found = codes.find(prefecture);
-        if (found == codes.end()) dullmify::fail("対応していない都道府県です: " + prefecture);
-        // 都道府県コードを作る 5. printf でコードを得る
-        const auto command = dullmify::run_command({"printf", "%s", found->second});
-        if (command.at("exit_code").get<int>() != 0) dullmify::fail("printf が失敗しました");
-        results.push_back(prefecture + "=" + command.at("stdout").get<std::string>());
-    }
-    // 都道府県コードを作る 6. 結果をファイルへ書く
-    std::string content;
-    for (std::size_t index = 0; index < results.size(); ++index) content += (index ? ", " : "") + results[index];
-    dullmify::write_file("prefecture-result.txt", content);
-    // 都道府県コードを作る 7. report を返す
-    return "処理完了: " + content;
+    if (!valid) dullmify::fail("都道府県名の形式が不正です");
+    prefectures.push_back(answer);
+  }
+
+  // 都道府県と地域の確認 / 手順 3
+  const std::map<std::string, std::string> region_by_prefecture{{"神奈川県", "東北"}, {"宮城県", "関東"}};
+  std::vector<std::string> regions;
+  for (const auto &prefecture : prefectures) {
+    const auto found = region_by_prefecture.find(prefecture);
+    if (found == region_by_prefecture.end()) dullmify::fail("地域の辞書にない都道府県です: " + prefecture);
+    regions.push_back(found->second);
+  }
+
+  // 都道府県と地域の確認 / 手順 4
+  const std::string report = cities[0] + "=" + prefectures[0] + "(" + regions[0] + "), " +
+                             cities[1] + "=" + prefectures[1] + "(" + regions[1] + ")";
+
+  // 都道府県と地域の確認 / 手順 5
+  const auto command_result = dullmify::command({"printf", "%s", report});
+  if (command_result.exit_code != 0) dullmify::fail("printf が失敗しました");
+
+  // 都道府県と地域の確認 / 手順 6
+  dullmify::write("prefecture-output.txt", command_result.stdout_text);
+  return command_result.stdout_text;
 }

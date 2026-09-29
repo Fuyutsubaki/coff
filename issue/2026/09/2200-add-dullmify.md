@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 ---
 # skill の制御を指定した言語のプログラムに移す skill dullmify を加える
 
@@ -34,29 +34,27 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 - dullmify のオプションは入力ソース、出力先、言語とし、生成する言語を指定させる（レビューをする際、チームで使っている言語が最も都合がよい）
 - まず C++ と Ruby を実装し、C++ は利用者の環境で初回の実行時にビルドする
 - Codex でも動くことを要件にし、生成した skill と `/coff-dullmify` 自身の両方に求める
-- coff-compile は dullmify を呼び出し、dullmify を coff のコンパイル処理の一つにする
+- coff-compile は dullmify を呼び出し、dullmify を coff のコンパイル処理の一つにする。coff-dullmify の同梱ファイルが変われば、dullmify したソースは自動で作り直す（`--force` での作り直しはヒューマンエラーの温床になる）
 - ライブラリを使う。C++ のランタイムは nlohmann/json を同梱し、POSIX は標準に代わりのないプロセス起動と一時ファイルだけに使う。ランタイムの単体テストを C++ は doctest、Ruby は minitest で書く
 - 構文検査はコンパイラと `ruby -c` で行い、正規表現の拒否リストは使わず、新しいサブエージェントに点検させる。規則違反と手順の写しの両方を点検し、どちらの指摘でも不合格にして直させる
 - 同梱ファイル（ランタイム、スクリプト、GUIDE、薄い SKILL.md の定型、点検の指示）のコメント、メッセージ、本文は日本語で書く
 - 補助関数の基本は `arguments`、`ask`、`once`、`effect`、`fail` とし、時刻、乱数、環境変数、ファイル、コマンドは `once` と `effect` の上の便利関数にする
 - `effect` は途中で殺されたら次の再実行で failed にする
 - done を出す前にもう一度先頭から再実行し、同じ report になることを確かめる（React の StrictMode にあたる）
-- dullmify の実装はすべて廃棄して、この issue から書き直す。これまでの実装は真似も参考もしない
 
 ## 完了条件
 
-- [ ] Ruby と C++ のランタイムが、問いの往復、`once` と `effect` を一度だけ実行すること、非決定と workflow の変更の検出、`effect` の途中で殺された run を failed にすること、done の前の確認の再実行で非決定を検出すること、未作成のファイルで同じ出力を出し直すこと、例外で failed にすること、問いの後で殺されても `continue` で続きから進むことのテストを通る。単体テストが、記録の読み書き、再実行の照合、初回と再実行で値の型がそろうこと、不正な UTF-8 を含む出力が正しい JSON になることを確かめる。構文検査が構文の誤りを検出する
-- [ ] 点検の指示が、規則違反の workflow（`once` や `effect` の外の不純、`once` の中で世界を変える操作を含む）と手順を誤って写した workflow をそれぞれ不合格にし、正しい workflow を合格にする
-- [ ] `/coff-dullmify <source> -o <outdir> --lang <ruby|cpp>` が、Claude Code と Codex のどちらでも、新しいサブエージェントで点検して薄い SKILL.md と `scripts/` を書き、Claude Code では承認で止まらない。薄い SKILL.md は事前承認が `Write` と起動スクリプトの呼び出しだけで、本文が定型と一致する。workflow にはソースの工程ごとのコメントが付く。3 回で通らなければ失敗を報告し、`<outdir>` に `SKILL.md` と `scripts/` を残さない
-- [ ] fixture から生成した skill が、Ruby と C++ のどちらでも、Claude Code では承認で止まらずに、Codex では `workspace-write` で最後まで動く。workflow が failed で終わると、Claude Code はそれを報告して止まる
-- [ ] `coff-dullmify: ruby` を宣言したソースを coff-compile でビルドすると、成果物に `scripts/` が入り、description が英訳されてフッタが付く。ソースが変わらなければ skip される
-- [ ] `/compile` で coff-dullmify が同梱ファイルごと `.claude/skills/coff-dullmify/` と `skills/coff-dullmify/` に入り、`gh skill install` で導入できる。coff-init が導入対象に含める。同梱ファイルが日本語で書かれ（nlohmann/json のファイルを除く）、そのライセンス全文を同梱する
+- [x] Ruby と C++ のランタイムが、問いの往復、`once` と `effect` を一度だけ実行すること、非決定と workflow の変更の検出、`effect` の途中で殺された run を failed にすること、done の前の確認の再実行で非決定を検出すること、未作成のファイルで同じ出力を出し直すこと、例外で failed にすること、問いの後で殺されても `continue` で続きから進むことのテストを通る。単体テストが、記録の読み書き、再実行の照合、初回と再実行で値の型がそろうこと、不正な UTF-8 を含む出力が正しい JSON になることを確かめる。構文検査が構文の誤りを検出する
+- [x] 点検の指示が、規則違反の workflow（`once` や `effect` の外の不純、`once` の中で世界を変える操作を含む）と手順を誤って写した workflow をそれぞれ不合格にし、正しい workflow を合格にする
+- [x] `/coff-dullmify <source> -o <outdir> --lang <ruby|cpp>` が、Claude Code と Codex のどちらでも、新しいサブエージェントで点検して薄い SKILL.md と `scripts/` を書き、Claude Code では承認で止まらない。薄い SKILL.md は事前承認が `Write` と起動スクリプトの呼び出しだけで、本文が定型と一致する。workflow にはソースの工程ごとのコメントが付く。3 回で通らなければ失敗を報告し、`<outdir>` に `SKILL.md` と `scripts/` を残さない
+- [x] fixture から生成した skill が、Ruby と C++ のどちらでも、Claude Code では承認で止まらずに、Codex では `workspace-write` で最後まで動く。workflow が failed で終わると、Claude Code はそれを報告して止まる
+- [x] `coff-dullmify: ruby` を宣言したソースを coff-compile でビルドすると、成果物に `scripts/` が入り、description が英訳されてフッタが付く。ソースも coff-dullmify も変わらなければ skip され、coff-dullmify の同梱ファイルだけが変わると作り直される
+- [x] `/compile` で coff-dullmify が同梱ファイルごと `.claude/skills/coff-dullmify/` と `skills/coff-dullmify/` に入り、`gh skill install` で導入できる。coff-init が導入対象に含める。同梱ファイルが日本語で書かれ（nlohmann/json のファイルを除く）、そのライセンス全文を同梱する
 
 ## 実装メモ
 
 ### 実装詳細
 
-- 廃棄：`.coff/src/coff-dullmify.skill/`、`.coff/test/coff-dullmify/`、`.claude/skills/coff-dullmify/`、`skills/coff-dullmify/`、`.coff/src/coff-compile.skill.md` の「dullmify ビルド」の節とその案内。coff-init の導入対象の `coff-dullmify` は残す
 - `.coff/src/coff-dullmify.skill/langs/ruby/runtime.rb`：Ruby のランタイム（CLI、run ディレクトリ、記録と再実行、補助関数）
 - `.coff/src/coff-dullmify.skill/langs/ruby/run`：Ruby の起動スクリプト
 - `.coff/src/coff-dullmify.skill/langs/ruby/check`：構文検査（`ruby -c`）。`assemble.sh` が呼ぶ
@@ -71,7 +69,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 
 呼び出しの規約:
 
-- 起動は `sh <skill ディレクトリ>/scripts/run start` と `sh <skill ディレクトリ>/scripts/run continue <run>` の 2 つ。`start` は起動スクリプトだけで run ディレクトリを作って `{"run":"<run>","write":"<run>/args"}` を返し、workflow の実行もビルドもしない。C++ の起動スクリプトは、`continue` で目印を確かめた後、バイナリがなければビルドする。キャッシュは呼び出しごとに解決した `${TMPDIR:-/tmp}` の下の、所有者が自分で権限 700 の利用者ごとのディレクトリ `coff-dullmify-<uid>/cpp-cache` に置き（skill ディレクトリには書かない。条件を満たさなければ終了コード 2）、解決先が変わればビルドし直す。LLM は skill の引数を `<run>/args` にファイルを書くツールで書き、`continue <run>` を呼ぶ。答えも同じく `<run>/answer` に書いて `continue <run>` を呼ぶ。ランタイムはファイルの末尾の改行を 1 つだけ除いて使い、取り込んだ `answer` は記録に書いた直後、再実行の前に消す（`args` は run が終わるまで残し、毎回読む）。`gh skill install` が実行権限を落とすので、`sh` を前に付けて呼ぶ（調査記録 4）。
+- 起動は `sh <skill ディレクトリ>/scripts/run start` と `sh <skill ディレクトリ>/scripts/run continue <run>` の 2 つ。`start` は起動スクリプトだけで run ディレクトリを作って `{"run":"<run>","write":"<run>/args"}` を返し、workflow の実行もビルドもしない。C++ の起動スクリプトは、`continue` で目印を確かめた後、バイナリがなければビルドする。キャッシュは呼び出しごとに解決した `${TMPDIR:-/tmp}` の下の、利用者ごとのディレクトリ `coff-dullmify-<uid>/cpp-cache` に置く（skill ディレクトリには書かない）。自分が所有しシンボリックリンクでなければ権限を 700 に直して使い、他人のものなら終了コード 2 にする（古い版が残したディレクトリでも止まらないように）、解決先が変わればビルドし直す。LLM は skill の引数を `<run>/args` にファイルを書くツールで書き、`continue <run>` を呼ぶ。答えも同じく `<run>/answer` に書いて `continue <run>` を呼ぶ。ランタイムはファイルの末尾の改行を 1 つだけ除いて使い、取り込んだ `answer` は記録に書いた直後、再実行の前に消す（`args` は run が終わるまで残し、毎回読む）。`gh skill install` が実行権限を落とすので、`sh` を前に付けて呼ぶ（調査記録 4）。
 - `continue` は毎回先頭から再実行して記録を消費するので、答えを取り込んだ後に殺されても同じ呼び出しで続きから進む（調査記録 8）。
 - 出力は stdout に JSON 1 行で、終了コードは 0。問いは `{"run":"<run>","prompt":"…","input":"…","write":"<run>/answer"}`（`input` は問いの対象で、`prompt` はそれについて何をどう答えるか）、終了は `{"done":true,"report":"…"}`、失敗は `{"failed":"<理由>"}` とし、done と failed では run ディレクトリを消す。workflow の例外、非決定も `{"failed":…}` で返す。`args` がまだないときは記録に触れずに `start` と同じ出力を出し直し、答えのファイルがまだないときは記録に触れずに再実行して、同じ問いを出し直す。未回答の問いがないのに `answer` があれば、消して無視する。`continue` は両言語とも、目印の確認、`args` がないときの出し直し、キーの照合、（C++ は）ビルド、ランタイムの起動の順に行う。作業ディレクトリは `start` で起動スクリプトが記録する。stdout はこの規約だけに使い、workflow は stdout にも stderr にも直接書かない（ランタイムでは強制せず、GUIDE の規則と点検で止める）。
 - 出力する文字列の不正な UTF-8 は U+FFFD に置き換え、出力を常に正しい JSON にする（nlohmann/json の `dump` は既定では例外を投げるので `error_handler_t::replace` を使う。Ruby は `scrub`）。
@@ -118,7 +116,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 
 薄い SKILL.md:
 
-- 本文は日本語の定型で、HTML コメントを書かない。本文が定型と一致するとは、frontmatter を閉じる `---` の次の行から末尾まで（coff-compile の成果物ではフッタが定型の直後の行に付くので、その最終行を除く）が、定型とバイト単位で一致することを指す。
+- 本文は日本語の定型で、HTML コメントを書かない。本文が定型と一致するとは、frontmatter を閉じる `---` の次の空行 1 行を除いた次の行から末尾まで（coff-compile の成果物ではフッタが定型の直後の行に付くので、その最終行を除く）が、定型とバイト単位で一致することを指す。
 - 定型のファイル名を `SKILL.md` にしない。`gh skill install` は入れ子の `SKILL.md` を別の skill として列挙し、インストール時に frontmatter を注入する（調査記録 4）。
 - frontmatter はソースのものから `allowed-tools` を除いて写し、`allowed-tools: Write Bash(sh ${CLAUDE_SKILL_DIR}/scripts/run *)` を加える。`coff-*` キーの除去は coff-compile が行い、dullmify は coff を知らない。
 - 定型が満たす制約: 起動スクリプトは「この SKILL.md と同じディレクトリの `scripts/run`」を絶対パスで、単独のコマンドとして `sh` で呼ばせる（`cd … &&` やパイプを付けると `allowed-tools` の規則に一致しない。`${CLAUDE_SKILL_DIR}` は Codex にないので使わない。調査記録 3、4）。引数と答えはファイルを書くツールで書かせる。stdout の最後の行の JSON で分岐させ（C++ のビルドの失敗のように stderr が混じっても、最後の行が JSON ならそれに従う）、最後の行が JSON でなければ出力を表示して止めさせる。定型の末尾は改行 1 つにする（フッタを付けたときの一致の判定のため）。呼び出しの合間には問いに答える以外の操作をさせず、done では `report` をそのまま表示させ、failed では手順外の対処をさせない。
@@ -142,7 +140,7 @@ coff-compile:
 - 「dullmify ビルド」の節に書くのは、起動、`description` の英訳とフッタ、置き換え、lint をかけないこと、`failed` にする条件だけで、薄い SKILL.md の定型や起動スクリプトの規約を写さない。
 - `coff-dullmify: <lang>` のソースでは、coff-compile の Lint（§2）を行わない（候補が出ないので §3、§4 も起きない）。「生成物から消しても実行 LLM が手順を完遂できるか」という基準は、実行時にソースを読まない dullmify の成果物には当たらない。
 - `coff-dullmify: <lang>` は skill 型の 1 ファイルのソースだけに書け、ほかに付いていれば `failed` にする（同梱ファイルの同期と `scripts/` の置き換えが衝突するため）。coff-compile は `/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を Skill ツールで起動し（SKILL.md を読んで実行する形では coff-dullmify の事前承認が効かない）、一時ディレクトリの SKILL.md の `description` だけを英訳して（`coff-translate: false` なら訳さない）フッタを付け、実体の出力先を一時ディレクトリの内容で置き換える。本文の英訳とコメント除去は行わない。`--ref` や `--agent` の参照 stub は他のソースと同じく正本を指し、`scripts/` は正本の隣にだけ置く。失敗したとき、または coff-dullmify がないときは `failed: <理由>` を報告し、成果物に触れない。
-- coff-dullmify のランタイムだけを直したとき、dullmify 済みの skill は md5 が変わらないので、利用者が `--force` で作り直す。workflow も生成し直される。
+- dullmify のソースでは、skip 判定とフッタの md5 を、ソースと `.claude/skills/coff-dullmify/` の同梱ファイル一式（パスと内容）をつないだ内容から求める。ランタイムや定型だけが変わっても作り直され、`--force` は要らない。coff-dullmify がなければ `failed` にする。
 
 ### 完了条件の確認手段
 
@@ -150,7 +148,7 @@ coff-compile:
 2. `sh .coff/test/coff-dullmify/review-tests.sh` が終了コード 0 で終わる。言語ごとに、fixture を写した workflow のうち、規則違反 5 本（stdout への直接の出力、`once` と `effect` の外のファイルの書き込み、`once` の外の時刻、`once` の中のファイルの書き込み、合図を捕まえる例外処理）、写しの誤り 2 本（工程の抜け、分岐の条件の逆転）、正しいもの 1 本を用意する。欠陥のある 7 本は、正しいものに欠陥を 1 つだけ入れて作る。それぞれについて、`review.md` の雛形に fixture のソース、workflow、GUIDE を埋めたプロンプトを `claude -p` に渡し、最初の行が前の 7 本で `不合格`、最後の 1 本で `合格` になることを確かめる。
 3. 確認手段 6 のビルドの後、coff リポジトリのルートを作業ディレクトリにして行う。言語ごとに `mktemp -d` で空の一時ディレクトリを作り、`claude -p --permission-mode default --output-format stream-json --verbose "/coff-dullmify <fixture の絶対パス> -o <一時ディレクトリ> --lang ruby"`（と `cpp`）を実行する。結果の `permission_denials` が空であることと、Agent ツールの呼び出しがあることを確かめる。`<一時ディレクトリ>/SKILL.md` の `allowed-tools` が `Write` と起動スクリプトの規則の 1 行だけであることと、本文が `templates/thin-skill.md` と一致することと、`scripts/` に `run`、ランタイム、workflow（C++ では加えて `json.hpp`）があることと、workflow に工程ごとのコメントがあることを確かめる。失敗は、別の空の一時ディレクトリに向けて `CXX=false` を設定した同じコマンドで `--lang cpp` を変換し、`--discard` を除く `assemble.sh` の呼び出しが 3 回あることと、失敗が報告され、そのディレクトリが空のままであることで確かめる。Codex では、使い捨ての git リポジトリの `.agents/skills/` を `--dir` で指して `gh skill install --from-local <coff のリポジトリ> coff-dullmify --agent codex` で入れ、そのリポジトリを作業ディレクトリにして（stdin は `/dev/null` にする）`codex exec -s workspace-write "Use the skill coff-dullmify with arguments: <fixture の絶対パス> -o <一時ディレクトリ> --lang ruby"`（と `cpp`）で変換し、出力にサブエージェントの起動（`collab:`）があることと、`allowed-tools` と本文について同じ確認を行う。`CXX=false` での失敗も、Codex で同じく確かめる。あわせて、`<outdir>` にほかのファイルを置いた状態で `assemble.sh --discard <outdir>` を呼び、`SKILL.md` と `scripts/` だけが消えることを確かめる。
 4. 3 で Claude Code が変換した出力（3 の一時ディレクトリを消さずに残しておく）を、言語ごとに使い捨ての git リポジトリの `.claude/skills/prefecture/` に置き、`claude -p --permission-mode default --output-format json "/prefecture <prefecture.input の内容>"` の結果で、`permission_denials` が空であることと、最後の応答に `prefecture.expected` の 1 行が含まれることを確かめる。同じ出力を `.agents/skills/prefecture/` に置き、`codex exec -s workspace-write "Use the skill prefecture with arguments: <prefecture.input の内容>"` の最後の応答にも同じ 1 行が含まれることを確かめる。暴走の抑止は、fixture の写しに「最初の市の名前を得た後にコマンド `false` を実行し、非 0 なら失敗にする」工程を足したソースを作業ディレクトリの下の一時ディレクトリに置き（作業ディレクトリの外のソースは Read に承認が要る。終わったら消す）、3 と同じコマンドで Ruby に変換し、上と同じ配置で `claude -p --permission-mode default --output-format stream-json --verbose` で動かして、`{"failed":…}` を返した `scripts/run` の呼び出しより後にツール呼び出し（Bash、Write、Edit。拒否されたものも数える）がなく、最後の応答に `failed` の値が逐語で含まれることで確かめる。
-5. 確認手段 6 のビルドの後、新しいセッションの対話で行う。fixture の写しに `coff-dullmify: ruby` を足して一時的に `.coff/src/prefecture.skill.md` に置き、`/coff-compile --out <一時ディレクトリ> prefecture` の後に `<一時ディレクトリ>/skills/prefecture/` の `scripts/` と SKILL.md（英訳された description、フッタ、`coff-*` キーがないこと、本文が定型と一致すること）を確かめる。同じコマンドをもう一度実行して何も報告されない（skip）ことを確かめてから、写しを消す。
+5. 確認手段 6 のビルドの後、新しいセッションの対話で行う。fixture の写しに `coff-dullmify: ruby` を足して一時的に `.coff/src/prefecture.skill.md` に置き、`/coff-compile --out <一時ディレクトリ> prefecture` の後に `<一時ディレクトリ>/skills/prefecture/` の `scripts/` と SKILL.md（英訳された description、フッタ、`coff-*` キーがないこと、本文が定型と一致すること）を確かめる。同じコマンドをもう一度実行して何も報告されない（skip）ことを確かめる。続けて `.claude/skills/coff-dullmify/review.md` の末尾に空行を 1 つ足して同じコマンドを実行し、prefecture が作り直される（`compiled`）ことを確かめてから、足した空行と写しを消す。
 6. `/compile coff-compile` で coff-compile の新しい成果物を先に作り、新しいセッションで `/compile --force coff-dullmify` を実行し、`diff -r -x SKILL.md .coff/src/coff-dullmify.skill .claude/skills/coff-dullmify` と `diff -r .claude/skills/coff-dullmify skills/coff-dullmify` がどちらも空であることを確かめる。`gh skill install --from-local . coff-dullmify --agent claude-code --dir <一時ディレクトリ>` で導入できることと、`gh skill install --from-local . --agent claude-code --dir <一時ディレクトリ> </dev/null` の一覧に coff-dullmify の下の別 skill が出ないことを確かめる。`grep -n coff-dullmify .coff/src/coff-init.skill.md .claude/skills/coff-init/SKILL.md` で導入対象に入っていることを確かめる。同梱ファイル（`json.hpp` と `LICENSE.MIT` を除く）のコメントとメッセージと本文が日本語であることを読んで確かめ、`langs/cpp/LICENSE.MIT` があることを確かめる。
 
 ### 調査記録

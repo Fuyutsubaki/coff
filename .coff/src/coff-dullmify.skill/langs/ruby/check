@@ -1,11 +1,5 @@
 #!/bin/sh
 
-# workflow と同じ Ruby で構文だけを検査する。
-set -u
-
-if [ "$#" -ne 1 ]; then
-  echo "使い方: sh check <workflow.rb>" >&2
-  exit 2
-fi
-
-exec ruby -c "$1"
+# workflow とランタイムを同じ Ruby で構文検査する。
+[ "$#" -eq 1 ] || { echo "workflow ファイルを一つ指定してください" >&2; exit 2; }
+ruby -c "$1"

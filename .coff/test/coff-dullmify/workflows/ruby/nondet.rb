@@ -1,10 +1,4 @@
 def workflow
-  Dullmify.arguments
-  if File.exist?("nondet.flag")
-    Dullmify.ask("変更後の問い", "A")
-  else
-    File.write("nondet.flag", "作成")
-    Dullmify.ask("最初の問い", "B")
-  end
-  "到達しない"
+  prompt = "時刻 #{Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)}"
+  Dullmify.ask(prompt, Dullmify.arguments)
 end
