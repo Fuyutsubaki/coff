@@ -26,17 +26,12 @@ language=$1
 source_file=$2
 outdir=$3
 language_dir=$skill_dir/langs/$language
-[ -f "$language_dir/GUIDE.md" ] || {
-  supported=$(find "$skill_dir/langs" -mindepth 2 -maxdepth 2 -name GUIDE.md -print 2>/dev/null | sed 's|/GUIDE.md$||; s|.*/||' | sort | tr '\n' ' ')
-  echo "対応していない言語です: $language（対応: ${supported% }）" >&2
-  exit 2
-}
 [ -f "$source_file" ] || { echo "ソースを読めません: $source_file" >&2; exit 2; }
 
 case "$language" in
   ruby) workflow=$outdir/scripts/workflow.rb ;;
   cpp) workflow=$outdir/scripts/workflow.cpp ;;
-  *) echo "言語の workflow 名を決められません: $language" >&2; exit 2 ;;
+  *) echo "対応していない言語です: $language（対応: ruby cpp）" >&2; exit 2 ;;
 esac
 [ -f "$workflow" ] || { echo "workflow がありません: $workflow" >&2; exit 1; }
 
@@ -50,12 +45,6 @@ for file in "$language_dir"/*; do
   esac
   cp -- "$file" "$outdir/scripts/$name" || exit 1
 done
-
-temporary=$(mktemp "$outdir/.SKILL.md.XXXXXX") || {
-  echo "薄い SKILL.md の一時ファイルを作れません" >&2
-  exit 1
-}
-trap 'rm -f -- "$temporary"' EXIT HUP INT TERM
 
 awk '
   NR == 1 {
@@ -82,13 +71,11 @@ awk '
     print
   }
   END { if (!closed) exit 4 }
-' "$source_file" > "$temporary" || {
+' "$source_file" > "$outdir/SKILL.md" || {
   echo "ソースの frontmatter を読めません" >&2
   exit 1
 }
-printf '\n' >> "$temporary"
-cat "$skill_dir/templates/thin-skill.md" >> "$temporary" || exit 1
-mv -f -- "$temporary" "$outdir/SKILL.md" || exit 1
-trap - EXIT HUP INT TERM
+printf '\n' >> "$outdir/SKILL.md"
+cat "$skill_dir/templates/thin-skill.md" >> "$outdir/SKILL.md" || exit 1
 
 echo "組み立てました: $outdir"

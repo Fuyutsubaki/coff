@@ -27,20 +27,26 @@ module Dullmify
       prepare_answer
       Dir.chdir(read_required("cwd"))
       Dullmify.runtime = self
-      first = invoke_workflow
-      return emit_signal(first) unless first[0] == :returned
-
-      report = normalize_report(first[1])
-      ensure_all_records_consumed
-      @cursor = 0
-      @verifying = true
-      second = invoke_workflow
-      return emit_signal(second) unless second[0] == :returned
-
-      second_report = normalize_report(second[1])
-      ensure_all_records_consumed
-      nondeterministic!("確認の再実行で report が変わりました") unless report == second_report
-      finish({ "done" => true, "report" => report })
+      # 中断の合図は workflow の中からも、report の検査や確認の再実行からも投げられる。
+      outcome = catch(SIGNAL) do
+        report = normalize_report(Object.new.send(:workflow))
+        ensure_all_records_consumed
+        @cursor = 0
+        @verifying = true
+        second_report = normalize_report(Object.new.send(:workflow))
+        ensure_all_records_consumed
+        nondeterministic!("確認の再実行で report が変わりました") unless report == second_report
+        [:done, report]
+      end
+      case outcome[0]
+      when :done
+        finish({ "done" => true, "report" => outcome[1] })
+      when :ask
+        emit({ "run" => @run_dir, "prompt" => outcome[1], "input" => outcome[2],
+               "write" => File.join(@run_dir, "answer") })
+      else
+        failed!(outcome[1])
+      end
     rescue SignalException
       # 外から終了された run は、次の continue で再開できるよう残す。
       raise
@@ -139,30 +145,12 @@ module Dullmify
 
     private
 
-    def invoke_workflow
-      catch(SIGNAL) { [:returned, Object.new.send(:workflow)] }
-    end
-
-    def emit_signal(signal)
-      case signal[0]
-      when :ask
-        emit({ "run" => @run_dir, "prompt" => signal[1], "input" => signal[2],
-               "write" => File.join(@run_dir, "answer") })
-      when :failed
-        failed!(signal[1])
-      else
-        failed!("ランタイムの中断合図が不正です")
-      end
-    end
-
     def recorded(type, key, reserve:)
       reject_nested!
       key = normalize(key)
       if (record = replay(type, key))
-        if !record.key?("result")
-          reason = type == "effect" ? "前回の副作用が途中で中断されました" : "未完了の記録があります"
-          throw SIGNAL, [:failed, reason]
-        end
+        # 結果のない記録は、実行前に予約した effect が途中で殺された場合だけにできる。
+        throw SIGNAL, [:failed, "前回の副作用が途中で中断されました"] unless record.key?("result")
         return record.fetch("result")
       end
       nondeterministic!("確認の再実行で新しい #{type} が現れました") if @verifying

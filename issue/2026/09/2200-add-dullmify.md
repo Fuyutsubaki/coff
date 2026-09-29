@@ -95,7 +95,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
   - C++ の `once` と `effect` は、戻り値が nlohmann/json と往復できる型に限るテンプレートにする（合わない型はコンパイルで弾かれる）。`command` の fork と exec はランタイムが持つ（C++ に標準のプロセス起動がないため）。
 - `fail` も、未回答の問いの合図と同じく workflow の例外処理に捕まらない形で抜ける。Ruby は `Dullmify.fail` とし、`Kernel#fail` は上書きしない。workflow の例外は、Ruby は `SignalException` を除くすべて、C++ は `catch (...)` まで含めて failed にする。
 - report は workflow 本体の戻り値の文字列とする。done に達したときだけ、記録を消す前に同じプロセスで照合の位置を先頭に戻して `workflow` をもう一度呼び、記録をすべて消費して同じ report になることを確かめてから done を出す。2 回目は記録を超える補助関数の呼び出し（`once`、`effect`、`ask`）を実行せず非決定として failed にし、2 回目だけで出た例外も failed にする。そのため GUIDE で、workflow の外（グローバル変数、static）に状態を持つことを禁じる（最後の問いから done までの区間の非決定を実行で見つける。React の StrictMode にあたる）。食い違えば非決定として failed にする。
-- 未回答の問いで workflow を抜ける合図は、生成コードの例外処理に捕まらない形にする。Ruby では `StandardError` を継承しない例外、C++ では `std::exception` を継承しない型にする。後始末（Ruby の `ensure`、C++ のデストラクタ）から補助関数を呼ばないことは GUIDE の規則と点検で止め、ランタイムは防衛しない。すり抜けたときは、C++ は異常終了して JSON を出さず、薄い SKILL.md の「JSON でない出力は表示して止まる」で止まる。
+- 未回答の問いで workflow を抜ける合図は、生成コードの例外処理に捕まらない形にする。Ruby では例外ではなく `throw`（`rescue` では捕まらず、ランタイムの `catch` だけが受ける）、C++ では `std::exception` を継承しない型にする。後始末（Ruby の `ensure`、C++ のデストラクタ）から補助関数を呼ばないことは GUIDE の規則と点検で止め、ランタイムは防衛しない。すり抜けたときは、C++ は異常終了して JSON を出さず、薄い SKILL.md の「JSON でない出力は表示して止まる」で止まる。
 
 検査と点検:
 
@@ -140,7 +140,7 @@ coff-compile:
 - 「dullmify ビルド」の節に書くのは、起動、`description` の英訳とフッタ、置き換え、lint をかけないこと、`failed` にする条件だけで、薄い SKILL.md の定型や起動スクリプトの規約を写さない。
 - `coff-dullmify: <lang>` のソースでは、coff-compile の Lint（§2）を行わない（候補が出ないので §3、§4 も起きない）。「生成物から消しても実行 LLM が手順を完遂できるか」という基準は、実行時にソースを読まない dullmify の成果物には当たらない。
 - `coff-dullmify: <lang>` は skill 型の 1 ファイルのソースだけに書け、ほかに付いていれば `failed` にする（同梱ファイルの同期と `scripts/` の置き換えが衝突するため）。coff-compile は `/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を Skill ツールで起動し（SKILL.md を読んで実行する形では coff-dullmify の事前承認が効かない）、一時ディレクトリの SKILL.md の `description` だけを英訳して（`coff-translate: false` なら訳さない）フッタを付け、実体の出力先を一時ディレクトリの内容で置き換える。本文の英訳とコメント除去は行わない。`--ref` や `--agent` の参照 stub は他のソースと同じく正本を指し、`scripts/` は正本の隣にだけ置く。失敗したとき、または coff-dullmify がないときは `failed: <理由>` を報告し、成果物に触れない。
-- dullmify のソースでは、skip 判定とフッタの md5 を、ソースと `.claude/skills/coff-dullmify/` の同梱ファイル一式（パスと内容）をつないだ内容から求める。ランタイムや定型だけが変わっても作り直され、`--force` は要らない。coff-dullmify がなければ `failed` にする。
+- dullmify のソースでは、skip 判定とフッタの md5 を、ソースと `.claude/skills/coff-dullmify/` のファイル一式（`SKILL.md` を含むパスと内容）をつないだ内容から求める。ランタイムや定型だけが変わっても作り直され、`--force` は要らない。coff-dullmify がなければ `failed` にする。
 
 ### 完了条件の確認手段
 
@@ -175,6 +175,7 @@ coff-compile:
 8. 答えを記録してから workflow を再実行する方式では、再実行中のコマンドがエージェントのコマンドタイムアウトを超えて殺されると（調査記録 2、3）、答えは記録済みなのに完走していない run が残る。答えはファイルで渡し、`continue` は取り込んだ後に先頭から再実行するので、同じ `continue` を呼び直せば続きから進む。Ruby で `rescue Exception` は SIGTERM の `SignalException` も捕まえるので、ランタイムが殺されたときに run を消さないよう注意する（2026-09-27 確認）。
 9. codex-cli 0.153.4 では `multi_agent` が既定で有効（`codex features list`）で、`codex exec -s read-only` から `spawn_agent` でサブエージェントを起動し、その応答を受け取れた。出力には `collab:` の行が出る（2026-09-28 確認）。同じ版の `codex exec -s workspace-write` は、手元に bubblewrap がなくても同梱のものを使って動き、`spawn_agent` も使えた（廃棄した以前の実装で確かめた。2026-09-28）。
 10. glibc の `std::tmpfile` は `$TMPDIR` を無視して `/tmp` に作る（strace で `openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600)` を確認。Ubuntu 24.04、2026-09-28）。サンドボックスの中では `/tmp` の直下に書けない（調査記録 2）ので、コマンド実行の一時ファイルは `std::tmpfile` を使わず、run ディレクトリに `mkstemp` で作ってすぐ消す。
+11. 6a673ce の実装に対して確認手段 1〜6 を行い、すべて通った（2026-09-29）。差分レビューの指摘を直したあと、確認手段 1 と、bad_branch の点検を両言語で 2 回ずつ行い直した。問い直しのループを抜ける条件を逆にした題材は、Ruby で点検役が 3 回のうち 2 回見落とした。そのため題材は、形式が不正なら失敗する条件を逆にしたものにした（2026-09-29）。
 
 ### 参考
 

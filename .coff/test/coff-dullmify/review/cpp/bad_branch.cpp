@@ -28,12 +28,12 @@ std::string workflow() {
           valid = true;
       if (valid) break;
     }
-    if (!valid) dullmify::fail("都道府県名の形式が不正です");
+    if (valid) dullmify::fail("都道府県名の形式が不正です");
     prefectures.push_back(answer);
   }
 
   // 都道府県と地域の確認 / 手順 3
-  const std::map<std::string, std::string> region_by_prefecture{{"神奈川県", "東北"}, {"宮城県", "関東"}};
+  const std::map<std::string, std::string> region_by_prefecture{{"神奈川県", "関東"}, {"宮城県", "東北"}};
   std::vector<std::string> regions;
   for (const auto &prefecture : prefectures) {
     const auto found = region_by_prefecture.find(prefecture);

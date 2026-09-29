@@ -149,7 +149,9 @@ test_strict() {
   continue_run "$skill" "$run" >/dev/null
   printf '%s\n' "了承" > "$run/answer"
   output=$(continue_run "$skill" "$run")
-  assert_json_key "$output" failed
+  reason=$(printf '%s\n' "$output" | json_get failed)
+  [ "$reason" = "workflow が非決定です: 確認の再実行で report が変わりました" ] ||
+    fail_test "$language: done 前の非決定の理由が違います: $output"
   [ ! -e "$run" ] || fail_test "$language: done 前の非決定後に run が残っています"
   pass "$language の done 前確認"
 }

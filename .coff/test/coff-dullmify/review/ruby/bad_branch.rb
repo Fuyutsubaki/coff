@@ -11,12 +11,12 @@ def workflow
       answer = Dullmify.ask(prompt, city)
       break if answer.match?(/[都道府県]\z/)
     end
-    Dullmify.fail("都道府県名の形式が不正です") unless answer.match?(/[都道府県]\z/)
+    Dullmify.fail("都道府県名の形式が不正です") if answer.match?(/[都道府県]\z/)
     answer
   end
 
   # 都道府県と地域の確認 / 手順 3
-  region_by_prefecture = { "神奈川県" => "東北", "宮城県" => "関東" }
+  region_by_prefecture = { "神奈川県" => "関東", "宮城県" => "東北" }
   regions = prefectures.map do |prefecture|
     region_by_prefecture[prefecture] || Dullmify.fail("地域の辞書にない都道府県です: #{prefecture}")
   end

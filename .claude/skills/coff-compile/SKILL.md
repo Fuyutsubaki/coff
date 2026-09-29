@@ -22,7 +22,7 @@ How to write a directory source `.coff/src/<name>.skill/`:
 - Never name a bundled file `SKILL.md`.
 - If the same `<name>` exists in both forms (`<name>.skill.md` and `<name>.skill/`), it is an error. This check comes before the bare-name ambiguity check.
 
-A single-file skill source that declares `coff-dullmify: <lang>` goes through the "dullmify build" instead of §2–§4.
+A single-file skill source that declares `coff-dullmify: <lang>` goes through the "dullmify build" instead of §2–§5.
 
 ## Options
 
@@ -70,7 +70,7 @@ For agent placement, the real body (the canonical copy) lives in exactly one pla
 
 `coff-dullmify: <lang>` is accepted only on a single-file skill source. If it appears on another type or on a directory source, report `failed: <reason>` and leave the output untouched.
 
-For such a source, compute the `src_md5` used by §1's skip detection and by the footer from the source joined with coff-dullmify's whole set of bundled files. A change to coff-dullmify's runtime or template alone then triggers a rebuild.
+For such a source, compute the `src_md5` used by §1's skip detection and by the footer from the source joined with all of coff-dullmify's files (including its `SKILL.md`). A change to coff-dullmify's procedure, runtime, or template alone then triggers a rebuild.
 
 ```bash
 dullmify_dir=.claude/skills/coff-dullmify
@@ -220,4 +220,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way. Bundled-file sync is the one exception: if it stops midway, the next run finds the difference and repairs it.
 - When a directory source is turned back into a single-file source, remove the bundled files left in the output by hand.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"ae4eec39ed9beaa6190d97c99a450974"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"f6c554ab73ca1a1aca1954b0e4a527ec"} -->

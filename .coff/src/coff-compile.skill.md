@@ -33,7 +33,7 @@ lint:
 - 同梱ファイルに `SKILL.md` という名前を使わない。 <!-- `gh skill` は入れ子の SKILL.md を別の skill として見つけ、導入時に frontmatter を注入する -->
 - 同じ `<name>` が両方の形（`<name>.skill.md` と `<name>.skill/`）にあればエラー。ベース名の曖昧さの判定より先に見る。
 
-1 ファイルの skill ソースで `coff-dullmify: <lang>` を宣言すると、§2〜§4 の代わりに「dullmify ビルド」を行う。
+1 ファイルの skill ソースで `coff-dullmify: <lang>` を宣言すると、§2〜§5 の代わりに「dullmify ビルド」を行う。
 
 
 ## オプション
@@ -84,7 +84,7 @@ agent 向けの実体（正本）はリポジトリに 1 箇所とし、他の a
 
 frontmatter に `coff-dullmify: <lang>` があるソースは、skill 型の 1 ファイルのソースだけを認める。ほかの型やディレクトリのソースにあれば `failed: <理由>` を報告し、成果物に触れない。
 
-このソースでは、§1 の skip 判定とフッタに使う `src_md5` を、ソースと coff-dullmify の同梱ファイル一式をつないだ内容から求める。coff-dullmify のランタイムや定型だけが変わっても、作り直しの対象になる。 <!-- ソースだけの md5 では、ランタイムの変更を利用者が --force で拾う必要があり、忘れると古いランタイムが残る -->
+このソースでは、§1 の skip 判定とフッタに使う `src_md5` を、ソースと coff-dullmify のファイル一式（`SKILL.md` を含む）をつないだ内容から求める。coff-dullmify の手順、ランタイム、定型のどれかだけが変わっても、作り直しの対象になる。 <!-- ソースだけの md5 では、ランタイムの変更を利用者が --force で拾う必要があり、忘れると古いランタイムが残る -->
 
 ```bash
 dullmify_dir=.claude/skills/coff-dullmify

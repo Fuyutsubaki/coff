@@ -7,7 +7,9 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || {
 }
 
 start_output() {
-  printf '{"run":"%s","write":"%s/args"}\n' "$1" "$1"
+  # パスに含まれうる \ と " を JSON の文字列としてエスケープする。
+  escaped=$(printf '%s' "$1" | sed 's/[\\"]/\\&/g')
+  printf '{"run":"%s","write":"%s/args"}\n' "$escaped" "$escaped"
 }
 
 workflow_key() {

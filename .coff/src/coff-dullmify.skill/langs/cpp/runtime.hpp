@@ -189,10 +189,8 @@ class Runtime {
     reject_nested();
     key = sanitize_json(key);
     if (json *record = replay(type, key)) {
-      if (!record->contains("result")) {
-        throw Failure{type == "effect" ? "前回の副作用が途中で中断されました"
-                                         : "未完了の記録があります"};
-      }
+      // 結果のない記録は、実行前に予約した effect が途中で殺された場合だけにできる。
+      if (!record->contains("result")) throw Failure{"前回の副作用が途中で中断されました"};
       return record->at("result");
     }
     if (verifying_) nondeterministic("確認の再実行で新しい " + type + " が現れました");
@@ -478,7 +476,10 @@ inline CommandResult command(const std::vector<std::string> &argv,
 
 inline void emit(const json &value) { std::cout << dump_json(value) << std::endl; }
 
-inline int execute(const fs::path &run_dir) {
+inline int execute(const fs::path &run_argument) {
+  // 作業ディレクトリを移したあとで片付けるので、先に絶対パスにしておく。
+  std::error_code absolute_error;
+  const fs::path run_dir = fs::absolute(run_argument, absolute_error);
   try {
     Runtime state(run_dir);
     state.prepare_answer();
