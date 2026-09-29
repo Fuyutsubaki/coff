@@ -36,6 +36,8 @@ make_skill() {
   workflow_name=$2
   destination=$(mktemp -d "$temporary/skill-$language-$workflow_name.XXXXXX")
   cp -R "$source_dir/langs/$language/." "$destination/"
+  rm -f "$destination/GUIDE.md" "$destination/check"
+  cp "$source_dir/templates/run" "$destination/run"
   case "$language" in
     ruby) cp "$test_dir/workflows/ruby/$workflow_name.rb" "$destination/workflow.rb" ;;
     cpp) cp "$test_dir/workflows/cpp/$workflow_name.cpp" "$destination/workflow.cpp" ;;
@@ -62,8 +64,11 @@ test_ok() {
   mkdir -p "$work"
   started=$(start_run "$skill" "$work")
   run=$(printf '%s\n' "$started" | json_get run)
-  repeated=$(continue_run "$skill" "$run")
-  [ "$started" = "$repeated" ] || fail_test "$language: args 未作成時の出力が変わりました"
+  set +e
+  continue_run "$skill" "$run" >/dev/null 2>"$temporary/no-args-$language.err"
+  status=$?
+  set -e
+  [ "$status" -eq 2 ] || fail_test "$language: args 未作成時の終了コードが $status です"
   [ ! -e "$run/records.jsonl" ] || fail_test "$language: args 未作成時に記録ができました"
 
   printf '%s\n' "引数" > "$run/args"

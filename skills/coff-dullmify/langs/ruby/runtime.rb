@@ -29,11 +29,11 @@ module Dullmify
       Dullmify.runtime = self
       # 中断の合図は workflow の中からも、report の検査や確認の再実行からも投げられる。
       outcome = catch(SIGNAL) do
-        report = normalize_report(Object.new.send(:workflow))
+        report = check_report(Object.new.send(:workflow))
         ensure_all_records_consumed
         @cursor = 0
         @verifying = true
-        second_report = normalize_report(Object.new.send(:workflow))
+        second_report = check_report(Object.new.send(:workflow))
         ensure_all_records_consumed
         nondeterministic!("確認の再実行で report が変わりました") unless report == second_report
         [:done, report]
@@ -63,17 +63,15 @@ module Dullmify
 
     def ask(prompt, input = "")
       reject_nested!
-      prompt = text(prompt)
-      input = text(input)
       key = normalize([prompt, input])
       if (record = replay("ask", key))
-        throw SIGNAL, [:ask, prompt, input] unless record.key?("result")
+        throw SIGNAL, [:ask, *key] unless record.key?("result")
         return record.fetch("result")
       end
       nondeterministic!("確認の再実行で新しい問いが現れました") if @verifying
       @records << { "type" => "ask", "key" => key }
       save_records
-      throw SIGNAL, [:ask, prompt, input]
+      throw SIGNAL, [:ask, *key]
     end
 
     def once(key, &block)
@@ -85,7 +83,7 @@ module Dullmify
     end
 
     def fail(reason)
-      throw SIGNAL, [:failed, text(reason)]
+      throw SIGNAL, [:failed, reason]
     end
 
     def now
@@ -97,18 +95,14 @@ module Dullmify
     end
 
     def env(name)
-      name = text(name)
       once(["env", name]) { ENV[name] }
     end
 
     def read(path)
-      path = text(path)
-      once(["read", path]) { File.exist?(path) ? clean_text(File.binread(path)) : nil }
+      once(["read", path]) { File.exist?(path) ? File.binread(path) : nil }
     end
 
     def write(path, content)
-      path = text(path)
-      content = text(content)
       effect(["write", path, content]) do
         parent = File.dirname(path)
         FileUtils.mkdir_p(parent) unless parent == "."
@@ -119,13 +113,11 @@ module Dullmify
     end
 
     def command(argv, stdin = "")
-      argv = Array(argv).map { |part| text(part) }
-      stdin = text(stdin)
       effect(["command", argv, stdin]) do
         begin
           stdout, stderr, status = Open3.capture3(*argv, stdin_data: stdin)
           { "exit_code" => status.exitstatus || 128 + status.termsig.to_i,
-            "stdout" => clean_text(stdout), "stderr" => clean_text(stderr) }
+            "stdout" => stdout, "stderr" => stderr }
         rescue SystemCallError => e
           { "exit_code" => 127, "stdout" => "",
             "stderr" => "コマンドを起動できません: #{e.message}" }
@@ -135,7 +127,7 @@ module Dullmify
 
     def save_records
       temporary = File.join(@run_dir, ".records-#{Process.pid}.tmp")
-      body = @records.map { |record| JSON.generate(sanitize(record)) }.join("\n")
+      body = @records.map { |record| JSON.generate(record) }.join("\n")
       body << "\n" unless body.empty?
       File.binwrite(temporary, body)
       File.rename(temporary, @records_path)
@@ -199,9 +191,9 @@ module Dullmify
       throw SIGNAL, [:failed, "workflow が非決定です: #{detail}"]
     end
 
-    def normalize_report(value)
+    def check_report(value)
       throw SIGNAL, [:failed, "report は文字列でなければなりません"] unless value.is_a?(String)
-      clean_text(value)
+      value
     end
 
     def normalize(value)
@@ -215,13 +207,9 @@ module Dullmify
       when String then clean_text(value)
       when Symbol then clean_text(value.to_s)
       when Array then value.map { |item| sanitize(item) }
-      when Hash then value.each_with_object({}) { |(key, item), out| out[text(key)] = sanitize(item) }
+      when Hash then value.each_with_object({}) { |(key, item), out| out[clean_text(key.to_s)] = sanitize(item) }
       else value
       end
-    end
-
-    def text(value)
-      clean_text(value.to_s)
     end
 
     def clean_text(value)
@@ -266,7 +254,7 @@ module Dullmify
 
     def failed!(reason)
       FileUtils.rm_rf(@run_dir)
-      emit({ "failed" => text(reason) })
+      emit({ "failed" => reason.to_s })
     end
   end
 

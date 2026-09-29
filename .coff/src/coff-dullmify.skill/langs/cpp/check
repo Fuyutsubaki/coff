@@ -1,6 +1,5 @@
 #!/bin/sh
 
 # workflow とランタイムを、実行時と同じ規格と include パスで構文検査する。
-[ "$#" -eq 1 ] || { echo "workflow ファイルを一つ指定してください" >&2; exit 2; }
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 "${CXX:-c++}" -std=c++17 -I"$script_dir" -fsyntax-only "$1"

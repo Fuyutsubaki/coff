@@ -123,7 +123,7 @@ inline json sanitize_json(const json &value) {
 }
 
 inline std::string dump_json(const json &value) {
-  return sanitize_json(value).dump(-1, ' ', false, json::error_handler_t::replace);
+  return value.dump(-1, ' ', false, json::error_handler_t::replace);
 }
 
 inline std::string trim_one_newline(std::string value) {
@@ -154,7 +154,7 @@ class Runtime {
     const fs::path answer_path = run_dir_ / "answer";
     if (!fs::exists(answer_path)) return;
     for (auto &record : records_) {
-      if (record.value("type", "") == "ask" && !record.contains("result")) {
+      if (record["type"] == "ask" && !record.contains("result")) {
         record["result"] = sanitize_utf8(trim_one_newline(read_binary(answer_path)));
         save_records();
         break;
@@ -166,22 +166,21 @@ class Runtime {
 
   std::string arguments() {
     reject_nested();
-    return sanitize_utf8(trim_one_newline(read_binary(run_dir_ / "args")));
+    return trim_one_newline(read_binary(run_dir_ / "args"));
   }
 
-  std::string ask(std::string prompt, std::string input) {
+  std::string ask(const std::string &prompt, const std::string &input) {
     reject_nested();
-    prompt = sanitize_utf8(prompt);
-    input = sanitize_utf8(input);
-    const json key = json::array({prompt, input});
+    const json key = sanitize_json(json::array({prompt, input}));
+    const Control signal{Control::Kind::ask, key[0], key[1], ""};
     if (json *record = replay("ask", key)) {
-      if (!record->contains("result")) throw Control{Control::Kind::ask, prompt, input, ""};
+      if (!record->contains("result")) throw signal;
       return record->at("result").get<std::string>();
     }
     if (verifying_) nondeterministic("確認の再実行で新しい問いが現れました");
     records_.push_back(json{{"type", "ask"}, {"key", key}});
     save_records();
-    throw Control{Control::Kind::ask, prompt, input, ""};
+    throw signal;
   }
 
   json recorded(const std::string &type, json key,
@@ -272,13 +271,12 @@ class Runtime {
     } catch (const std::exception &error) {
       throw Failure{"記録を読めません: " + std::string(error.what())};
     }
-    if (!stream.eof()) throw Failure{"記録を最後まで読めません"};
   }
 
   json *replay(const std::string &type, const json &key) {
     if (cursor_ == records_.size()) return nullptr;
     json &record = records_.at(cursor_);
-    if (record.value("type", "") != type || !record.contains("key") || record["key"] != key)
+    if (record["type"] != type || record["key"] != key)
       nondeterministic("記録と補助関数の呼び出しが一致しません");
     ++cursor_;
     return &record;
@@ -306,7 +304,7 @@ inline std::string ask(const std::string &prompt, const std::string &input = "")
 }
 
 [[noreturn]] inline void fail(const std::string &reason) {
-  throw Control{Control::Kind::failed, "", "", sanitize_utf8(reason)};
+  throw Control{Control::Kind::failed, "", "", reason};
 }
 
 template <class Function>
@@ -361,7 +359,7 @@ inline std::string random(std::size_t length) {
 inline std::optional<std::string> env(const std::string &name) {
   json value = runtime().recorded("once", json::array({"env", name}), [name] {
     const char *found = std::getenv(name.c_str());
-    return found ? json(sanitize_utf8(found)) : json(nullptr);
+    return found ? json(found) : json(nullptr);
   }, false);
   if (value.is_null()) return std::nullopt;
   return value.get<std::string>();
@@ -371,7 +369,7 @@ inline std::optional<std::string> read(const fs::path &path) {
   const std::string name = path.string();
   json value = runtime().recorded("once", json::array({"read", name}), [path] {
     if (!fs::exists(path)) return json(nullptr);
-    return json(sanitize_utf8(read_binary(path)));
+    return json(read_binary(path));
   }, false);
   if (value.is_null()) return std::nullopt;
   return value.get<std::string>();
@@ -379,12 +377,11 @@ inline std::optional<std::string> read(const fs::path &path) {
 
 inline void write(const fs::path &path, const std::string &content) {
   const std::string name = path.string();
-  const std::string clean = sanitize_utf8(content);
-  effect(json::array({"write", name, clean}), [path, clean] {
+  effect(json::array({"write", name, content}), [path, content] {
     if (!path.parent_path().empty()) fs::create_directories(path.parent_path());
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("ファイルを開けません: " + path.string());
-    stream.write(clean.data(), static_cast<std::streamsize>(clean.size()));
+    stream.write(content.data(), static_cast<std::streamsize>(content.size()));
     if (!stream) throw std::runtime_error("ファイルを書けません: " + path.string());
   });
 }
@@ -419,7 +416,7 @@ inline std::string read_fd(int fd) {
     if (count <= 0) break;
     output.append(buffer.data(), static_cast<std::size_t>(count));
   }
-  return sanitize_utf8(output);
+  return output;
 }
 
 inline CommandResult run_command(const std::vector<std::string> &argv,
@@ -470,8 +467,8 @@ inline CommandResult run_command(const std::vector<std::string> &argv,
 
 inline CommandResult command(const std::vector<std::string> &argv,
                              const std::string &stdin_text = "") {
-  return effect(json::array({"command", argv, sanitize_utf8(stdin_text)}),
-                [&] { return run_command(argv, sanitize_utf8(stdin_text)); });
+  return effect(json::array({"command", argv, stdin_text}),
+                [&] { return run_command(argv, stdin_text); });
 }
 
 inline void emit(const json &value) { std::cout << dump_json(value) << std::endl; }
@@ -487,10 +484,10 @@ inline int execute(const fs::path &run_argument) {
     current_runtime = &state;
     std::string first;
     try {
-      first = sanitize_utf8(::workflow());
+      first = ::workflow();
       state.ensure_consumed();
       state.reset_for_verification();
-      const std::string second = sanitize_utf8(::workflow());
+      const std::string second = ::workflow();
       state.ensure_consumed();
       if (first != second) throw Failure{"workflow が非決定です: 確認の再実行で report が変わりました"};
     } catch (const Control &signal) {
@@ -511,12 +508,12 @@ inline int execute(const fs::path &run_argument) {
     current_runtime = nullptr;
     std::error_code ignored;
     fs::remove_all(run_dir, ignored);
-    emit(json{{"failed", sanitize_utf8(failure.reason)}});
+    emit(json{{"failed", failure.reason}});
   } catch (const std::exception &error) {
     current_runtime = nullptr;
     std::error_code ignored;
     fs::remove_all(run_dir, ignored);
-    emit(json{{"failed", "workflow で例外が発生しました: " + sanitize_utf8(error.what())}});
+    emit(json{{"failed", "workflow で例外が発生しました: " + std::string(error.what())}});
   } catch (...) {
     current_runtime = nullptr;
     std::error_code ignored;
@@ -529,11 +526,7 @@ inline int execute(const fs::path &run_argument) {
 }  // dullmify 名前空間
 
 #ifndef DULLMIFY_NO_MAIN
-int main(int argc, char **argv) {
-  if (argc != 2) {
-    std::cerr << "run ディレクトリを一つ指定してください" << std::endl;
-    return 2;
-  }
+int main(int, char **argv) {
   return dullmify::execute(argv[1]);
 }
 #endif

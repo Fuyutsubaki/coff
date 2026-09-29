@@ -1,0 +1,41 @@
+#!/bin/sh
+
+# 共通の run から、照合済みの run ディレクトリとキーを受け、ビルド済みのバイナリを起動する。
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
+run_dir=$1
+key=$2
+
+temporary_root=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd -P) || {
+  echo "一時ディレクトリの場所を解決できません" >&2
+  exit 2
+}
+uid=$(id -u) || { echo "利用者 ID を取得できません" >&2; exit 2; }
+cache_dir=$temporary_root/coff-dullmify-$uid
+if [ ! -e "$cache_dir" ]; then
+  (umask 077 && mkdir "$cache_dir") || { echo "C++ キャッシュを作れません" >&2; exit 2; }
+fi
+# 自分が所有する（シンボリックリンクでない）ディレクトリなら権限を 700 に直し、他人のものなら使わない。
+if [ -L "$cache_dir" ] || ! find "$cache_dir" -prune -type d -user "$uid" 2>/dev/null | grep -Fqx "$cache_dir" || ! chmod 700 "$cache_dir"; then
+  echo "C++ キャッシュの所有者が自分ではありません: $cache_dir" >&2
+  exit 2
+fi
+
+binary=$cache_dir/workflow-$key
+if [ ! -x "$binary" ]; then
+  temporary_binary=$(mktemp "$cache_dir/.workflow.XXXXXX") || {
+    echo "一時バイナリを作れません" >&2
+    exit 2
+  }
+  if ! "${CXX:-c++}" -std=c++17 -I"$script_dir" "$script_dir/workflow.cpp" -o "$temporary_binary"; then
+    rm -f -- "$temporary_binary"
+    rm -rf -- "$run_dir"
+    printf '%s\n' '{"failed":"C++ workflow をビルドできませんでした"}'
+    exit 0
+  fi
+  chmod 700 "$temporary_binary" && mv -f -- "$temporary_binary" "$binary" || {
+    rm -f -- "$temporary_binary"
+    echo "C++ バイナリをキャッシュできません" >&2
+    exit 2
+  }
+fi
+exec "$binary" "$run_dir"

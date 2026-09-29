@@ -8,12 +8,22 @@ skill_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || {
   exit 2
 }
 
+# <outdir> は dullmify 専用とし、dullmify が書く SKILL.md と scripts/ 以外があれば触れない。
+only_dullmify_output() {
+  for entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    case "${entry##*/}" in
+      SKILL.md|scripts) ;;
+      *) echo "出力先に dullmify が書いたもの以外があります: $entry" >&2; return 1 ;;
+    esac
+  done
+}
+
 if [ "${1-}" = "--discard" ]; then
-  [ "$#" -eq 2 ] || { echo "--discard には出力先を一つ指定してください" >&2; exit 2; }
-  outdir=$2
-  [ -n "$outdir" ] && [ "$outdir" != "/" ] || { echo "片付ける出力先が不正です" >&2; exit 2; }
-  rm -f -- "$outdir/SKILL.md"
-  rm -rf -- "$outdir/scripts"
+  outdir=${2-}
+  [ -d "$outdir" ] || exit 0
+  only_dullmify_output "$outdir" || exit 2
+  rm -rf -- "$outdir"
   exit 0
 fi
 
@@ -34,6 +44,7 @@ case "$language" in
   *) echo "対応していない言語です: $language（対応: ruby cpp）" >&2; exit 2 ;;
 esac
 [ -f "$workflow" ] || { echo "workflow がありません: $workflow" >&2; exit 1; }
+only_dullmify_output "$outdir" || exit 2
 
 # 構文エラーの出力は、修正に使えるようそのまま呼び出し元へ返す。
 sh "$language_dir/check" "$workflow" || exit 1
@@ -45,6 +56,7 @@ for file in "$language_dir"/*; do
   esac
   cp -- "$file" "$outdir/scripts/$name" || exit 1
 done
+cp -- "$skill_dir/templates/run" "$outdir/scripts/run" || exit 1
 
 awk '
   NR == 1 {

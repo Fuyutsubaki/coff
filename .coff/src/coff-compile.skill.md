@@ -41,7 +41,7 @@ lint:
 引数で以下を受け付ける:
 
 - `--lint-only`: lint だけ実行してそこで止める。コンパイル前の確認も行わない。
-- `--force`: md5 一致によるスキップを無視して、対象すべてを処理する（以下のスニペットでは `force=1`）。
+- `--force`: md5 一致によるスキップを無視して、対象すべてを処理する。
 - `--out <root>`: 出力ルート（既定 `.claude`）を置き換える。種別ごとのサブレイアウト（`skills/<name>/` など）はルート配下でそのまま使う。
 - `--ref`: `--out` と併用して、コンパイル済み本文の複製ではなく正本への参照 stub を出力する。`--out` なしで指定されたらエラーとして中断する。
 - `--agent <name>`: agent 名から `--out` と `--ref` を決めるプリセット（後述の表）。複数指定は各プリセットの出力を合算する。明示の `--out` / `--ref` と同時に指定されたらエラーとして中断する。
@@ -208,14 +208,13 @@ d. **出力を書き、フッタを付ける。** フッタは最終行に置き
    done
    ```
 
-e. **同梱ファイルを同期する。** ディレクトリのソースについて、実体の出力先のディレクトリ `out` の `SKILL.md` 以外を、`bundle` の同梱ファイルと一致させる。`SKILL.md` が skip か compiled で終わったときだけ行い、`body` が空（参照 stub だけ）なら行わない。 <!-- stub は正本を指し、同梱ファイルは正本の隣にある --> `--force` のときは差がなくても写し直す。写したら、skip だったソースも `compiled` と報告する。
+e. **同梱ファイルを同期する。** ディレクトリのソースについて、実体の出力先のディレクトリ `out` の `SKILL.md` 以外を、`bundle` の同梱ファイルと一致させる。`SKILL.md` が skip か compiled で終わったときだけ行い、`body` が空（参照 stub だけ）なら行わない。 <!-- stub は正本を指し、同梱ファイルは正本の隣にある --> 写したら、skip だったソースも `compiled` と報告する。
 
    ```bash
    out=$(dirname "$body")
-   if [ "$force" = 1 ] || ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
+   if ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
      (cd "$out" && find . -mindepth 1 ! -name SKILL.md -delete)
      (cd "$bundle" && tar -cf - --exclude=SKILL.md .) | (cd "$out" && tar -xf -)
-     diff -r -x SKILL.md "$bundle" "$out" >/dev/null || echo "failed: $name: bundled files differ after sync"
    fi
    ```
 

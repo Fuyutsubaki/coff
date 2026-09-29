@@ -29,7 +29,7 @@ A single-file skill source that declares `coff-dullmify: <lang>` goes through th
 Args (any order, combinable):
 
 - `--lint-only`: run lint only and stop. The pre-compile confirmation is also skipped.
-- `--force`: ignore md5-match skip and process all targets (`force=1` in the snippets below).
+- `--force`: ignore md5-match skip and process all targets.
 - `--out <root>`: replace the default output root `.claude`. The per-type sublayout (`skills/<name>/` etc.) stays the same under the new root.
 - `--ref`: use together with `--out`; write a reference stub pointing at the canonical file instead of a copy of the compiled body. `--ref` without `--out` is an error; abort.
 - `--agent <name>`: preset that derives `--out` and `--ref` from the agent name (table below). Multiple `--agent` flags aggregate each preset's outputs. Combining with explicit `--out` / `--ref` is an error; abort.
@@ -194,14 +194,13 @@ d. **Write the output and append the footer.** Footer goes on the last line, aft
    done
    ```
 
-e. **Sync the bundled files.** For a directory source, make everything except `SKILL.md` in the body output directory `out` match the bundled files in `bundle`. Do this only when `SKILL.md` ended as skip or compiled, and not when `body` is empty (reference stub only). With `--force`, recopy even when nothing differs. If anything was copied, report the source as `compiled` even when it was skipped.
+e. **Sync the bundled files.** For a directory source, make everything except `SKILL.md` in the body output directory `out` match the bundled files in `bundle`. Do this only when `SKILL.md` ended as skip or compiled, and not when `body` is empty (reference stub only). If anything was copied, report the source as `compiled` even when it was skipped.
 
    ```bash
    out=$(dirname "$body")
-   if [ "$force" = 1 ] || ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
+   if ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
      (cd "$out" && find . -mindepth 1 ! -name SKILL.md -delete)
      (cd "$bundle" && tar -cf - --exclude=SKILL.md .) | (cd "$out" && tar -xf -)
-     diff -r -x SKILL.md "$bundle" "$out" >/dev/null || echo "failed: $name: bundled files differ after sync"
    fi
    ```
 
@@ -220,4 +219,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way. Bundled-file sync is the one exception: if it stops midway, the next run finds the difference and repairs it.
 - When a directory source is turned back into a single-file source, remove the bundled files left in the output by hand.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"f6c554ab73ca1a1aca1954b0e4a527ec"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"9525d3803d48eb7551870f0e1ea11915"} -->

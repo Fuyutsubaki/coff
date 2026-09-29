@@ -1,22 +1,18 @@
 #!/bin/sh
 
-# skill の配置場所と run の開始場所を、呼び出しごとに確定する。
+# 言語に依らない起動スクリプト。run の用意とキーの照合を行い、ランタイムの起動は同じ場所の launch に任せる。
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || {
   echo "起動スクリプトの場所を解決できません" >&2
   exit 2
 }
 
-start_output() {
-  ruby -rjson -e 'puts JSON.generate({"run" => ARGV[0], "write" => File.join(ARGV[0], "args")})' "$1"
-}
-
+# scripts/ の全ファイルを名前順につなぎ、置き場所に依らないキーにする。
 workflow_key() {
-  cat "$script_dir/workflow.rb" "$script_dir/runtime.rb" | cksum
+  (cd "$script_dir" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s\n' "$f"; cat "$f"; done) | cksum
 }
 
 case "${1-}" in
   start)
-    [ "$#" -eq 1 ] || { echo "start に引数は指定できません" >&2; exit 2; }
     temporary_root=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd -P) || {
       echo "一時ディレクトリの場所を解決できません" >&2
       exit 2
@@ -28,19 +24,17 @@ case "${1-}" in
     : > "$run_dir/.dullmify-run" || { rm -rf -- "$run_dir"; echo "run の目印を作れません" >&2; exit 2; }
     pwd -P > "$run_dir/cwd" || { rm -rf -- "$run_dir"; echo "作業ディレクトリを記録できません" >&2; exit 2; }
     workflow_key > "$run_dir/workflow-key" || { rm -rf -- "$run_dir"; echo "workflow のキーを記録できません" >&2; exit 2; }
-    start_output "$run_dir"
+    # パスに含まれうる \ と " を JSON の文字列としてエスケープする。
+    escaped=$(printf '%s' "$run_dir" | sed 's/[\\"]/\\&/g')
+    printf '{"run":"%s","write":"%s/args"}\n' "$escaped" "$escaped"
     ;;
   continue)
-    [ "$#" -eq 2 ] || { echo "continue には run ディレクトリを一つ指定してください" >&2; exit 2; }
-    run_dir=$2
+    run_dir=${2-}
     [ -d "$run_dir" ] && [ -f "$run_dir/.dullmify-run" ] || {
       echo "dullmify が作った run ディレクトリではありません" >&2
       exit 2
     }
-    if [ ! -f "$run_dir/args" ]; then
-      start_output "$run_dir"
-      exit 0
-    fi
+    [ -f "$run_dir/args" ] || { echo "引数のファイルがありません: $run_dir/args" >&2; exit 2; }
     current_key=$(workflow_key) || current_key=
     saved_key=$(cat "$run_dir/workflow-key" 2>/dev/null) || saved_key=
     if [ -z "$current_key" ] || [ "$current_key" != "$saved_key" ]; then
@@ -48,7 +42,8 @@ case "${1-}" in
       printf '%s\n' '{"failed":"workflow またはランタイムが開始後に変わりました"}'
       exit 0
     fi
-    ruby "$script_dir/runtime.rb" "$run_dir"
+    set -- $current_key
+    exec sh "$script_dir/launch" "$run_dir" "$1-$2"
     ;;
   *)
     echo "使い方: sh scripts/run start | sh scripts/run continue <run>" >&2

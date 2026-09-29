@@ -1,5 +1,4 @@
 #!/bin/sh
 
 # workflow とランタイムを同じ Ruby で構文検査する。
-[ "$#" -eq 1 ] || { echo "workflow ファイルを一つ指定してください" >&2; exit 2; }
 ruby -c "$1"
