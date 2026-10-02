@@ -16,7 +16,7 @@ coff-dist: true
 
    ```bash
    # 対象: coff-detail-issue coff-issue-create coff-issue-polish coff-issue-done
-   #       coff-issue-list coff-compile coff-japanese-tech-writing
+   #       coff-issue-list coff-compile coff-dullmify coff-japanese-tech-writing
    #       coff-argument-gap-edit coff-review-diff-code
    gh skill install Fuyutsubaki/coff <name> --agent claude-code
    ```

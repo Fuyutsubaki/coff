@@ -1,18 +1,28 @@
 ---
 name: coff-compile
-description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` / `--ref` / `--agent` add destination override, reference stubs, and per-agent output.
+description: Build coff sources (`.coff/src/`) into runtime artifacts under `.claude/`. `.skill.md` / `.skill/` → skills, `.outputstyle.md` → output-styles, `.agent.md` → agents. No args = all; `<name>` for individual; `--lint-only` for pre-check only; `--force` to rebuild even unchanged sources. `--out` / `--ref` / `--agent` add destination override, reference stubs, and per-agent output.
 license: MIT
 ---
 
 ## Inputs / Outputs
 
-Each source type determines its output path. `<name>` is the source filename with the `.<type>.md` suffix stripped.
+Each source type determines its output path. `<name>` is the source filename with the `.<type>.md` suffix stripped, or the directory name with `.skill` stripped.
 
 | Source glob | Output path |
 |---|---|
 | `.coff/src/*.skill.md` | `.claude/skills/<name>/SKILL.md` |
+| `.coff/src/*.skill/SKILL.md` | `.claude/skills/<name>/SKILL.md`, plus the bundled files copied into the same directory |
 | `.coff/src/*.outputstyle.md` | `.claude/output-styles/<name>.md` |
 | `.coff/src/*.agent.md` | `.claude/agents/<name>.md` |
+
+How to write a directory source `.coff/src/<name>.skill/`:
+
+- `SKILL.md` is the skill source; lint and compile it under the same rules as a single-file source. A directory without `SKILL.md` is not a source.
+- Every other file (including `.md`) is a bundled file: copy it into the output directory as-is, with no translation and no comment stripping.
+- Never name a bundled file `SKILL.md`.
+- If the same `<name>` exists in both forms (`<name>.skill.md` and `<name>.skill/`), it is an error. This check comes before the bare-name ambiguity check.
+
+A single-file skill source that declares `coff-dullmify: <lang>` goes through the "dullmify build" instead of §2–§5.
 
 ## Options
 
@@ -20,10 +30,10 @@ Args (any order, combinable):
 
 - `--lint-only`: run lint only and stop. The pre-compile confirmation is also skipped.
 - `--force`: ignore md5-match skip and process all targets.
-- `--out <root>`: replace the default output root `.claude`. The per-type sublayout (`skills/<name>/SKILL.md` etc.) stays the same under the new root.
+- `--out <root>`: replace the default output root `.claude`. The per-type sublayout (`skills/<name>/` etc.) stays the same under the new root.
 - `--ref`: use together with `--out`; write a reference stub pointing at the canonical file instead of a copy of the compiled body. `--ref` without `--out` is an error; abort.
 - `--agent <name>`: preset that derives `--out` and `--ref` from the agent name (table below). Multiple `--agent` flags aggregate each preset's outputs. Combining with explicit `--out` / `--ref` is an error; abort.
-- `<path|name> [<path|name> ...]`: process only the specified sources. Accepts full path `.coff/src/foo.skill.md` or `.coff/src/foo.outputstyle.md`, bare name `foo`, or filename `foo.skill.md`. No args = all globs. If a bare name `foo` matches more than one source type (e.g. both `foo.skill.md` and `foo.outputstyle.md` exist), report it as ambiguous and require a full path or filename.
+- `<path|name> [<path|name> ...]`: process only the specified sources. Accepts full path `.coff/src/foo.skill.md` or `.coff/src/foo.outputstyle.md`, directory `.coff/src/foo.skill` (trailing `/` allowed), bare name `foo`, filename `foo.skill.md`, or directory name `foo.skill`. No args = all globs. If a bare name `foo` matches more than one source type (e.g. both `foo.skill.md` and `foo.outputstyle.md` exist), report it as ambiguous and require a full path or filename.
 
 Examples:
 - `/coff-compile --lint-only` — lint only (md5-matched files skipped).
@@ -51,22 +61,49 @@ For agent placement, the real body (the canonical copy) lives in exactly one pla
   ---
 
   This file is a reference. Read and follow `../../../.claude/skills/<name>/SKILL.md`.
-  <!--{"src":".coff/src/<name>.skill.md","md5":"<src md5>"} -->
+  <!--{"src":"<source path>","md5":"<src md5>"} -->
   ```
 
 - Build order is canonical → references. When writing a reference, if the canonical file does not exist, report it as an error.
 
-## 1. Identify build targets
+## dullmify build
 
-Determine the type from the source extension and derive the output path set `dsts`.
+`coff-dullmify: <lang>` is accepted only on a single-file skill source. If it appears on another type or on a directory source, report `failed: <reason>` and leave the output untouched.
+
+For such a source, compute the `src_md5` used by §1's skip detection and by the footer from the source joined with all of coff-dullmify's files (including its `SKILL.md`). A change to coff-dullmify's procedure, runtime, or template alone then triggers a rebuild.
 
 ```bash
+dullmify_dir=.claude/skills/coff-dullmify
+if [ ! -f "$dullmify_dir/SKILL.md" ]; then echo "failed: $name: coff-dullmify がありません"; continue; fi
+src_md5=$( (cat "$src"; cd "$dullmify_dir" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s\n' "$f"; cat "$f"; done) | md5sum | cut -d' ' -f1)
+```
+
+To build, create an empty temporary directory outside the repository and invoke `/coff-dullmify <src> -o <temp dir> --lang <lang>` with the Skill tool. If coff-dullmify is unavailable, the call fails, or no complete output is produced, report `failed: <reason>` and leave the body output untouched.
+
+On success, remove keys starting with `coff-` from the frontmatter of the temp dir's `SKILL.md` and turn only the `description` value into concise English (keep it untranslated when `coff-translate: false`). Do not translate the body and do not strip HTML/markdown comments. Append the usual footer using the `src_md5` above, then replace the body output directory with the temp dir's contents. If the replacement fails, keep the previous output.
+
+Reference stubs from `--ref` and `--agent` point at the canonical file as usual; the generated `scripts/` lives only in the body output.
+
+## 1. Identify build targets
+
+The source globs are `.coff/src/*.skill.md .coff/src/*.skill/SKILL.md .coff/src/*.outputstyle.md .coff/src/*.agent.md`. Determine the type from the source path and derive the output path set `dsts`. Take the body output as `body`, and for a directory source, the directory holding the bundled files as `bundle`.
+
+```bash
+bundle=
 case "$src" in
-  *.skill.md)       name=$(basename "$src" .skill.md);       dsts=".claude/skills/$name/SKILL.md" ;;
-  *.outputstyle.md) name=$(basename "$src" .outputstyle.md); dsts=".claude/output-styles/$name.md" ;;
-  *.agent.md)       name=$(basename "$src" .agent.md);       dsts=".claude/agents/$name.md" ;;
+  *.skill/SKILL.md) name=$(basename "$(dirname "$src")" .skill); bundle=$(dirname "$src"); dsts=".claude/skills/$name/SKILL.md" ;;
+  *.skill.md)       name=$(basename "$src" .skill.md);           dsts=".claude/skills/$name/SKILL.md" ;;
+  *.outputstyle.md) name=$(basename "$src" .outputstyle.md);     dsts=".claude/output-styles/$name.md" ;;
+  *.agent.md)       name=$(basename "$src" .agent.md);           dsts=".claude/agents/$name.md" ;;
   *) echo "unknown source type: $src"; continue ;;
 esac
+case "$src" in
+  *.skill.md|*.skill/SKILL.md)
+    if [ -e ".coff/src/$name.skill.md" ] && [ -e ".coff/src/$name.skill/SKILL.md" ]; then
+      echo "failed: $name: both $name.skill.md and $name.skill/ exist"; continue
+    fi ;;
+esac
+body=$dsts
 src_md5=$(md5sum "$src" | cut -d' ' -f1)
 verdict=skip
 for dst in $dsts; do
@@ -76,9 +113,9 @@ done
 echo $verdict
 ```
 
-Skip only when every output's md5 matches.
+Skip only when every output's md5 matches. For a directory source, step e of §5 runs even on skip.
 
-With `--out` / `--agent`, apply the root replacement and reference additions to this derivation. Reference outputs also join `dsts`; skip detection applies the same footer rule to every output.
+With `--out` / `--agent`, apply the root replacement and reference additions to this derivation. Reference outputs also join `dsts`; skip detection applies the same footer rule to every output. `body` is the body output after root replacement, and empty for reference-only output.
 
 Empty sources are reported as errors; continue to the next file.
 
@@ -157,6 +194,16 @@ d. **Write the output and append the footer.** Footer goes on the last line, aft
    done
    ```
 
+e. **Sync the bundled files.** For a directory source, make everything except `SKILL.md` in the body output directory `out` match the bundled files in `bundle`. Do this only when `SKILL.md` ended as skip or compiled, and not when `body` is empty (reference stub only). If anything was copied, report the source as `compiled` even when it was skipped.
+
+   ```bash
+   out=$(dirname "$body")
+   if ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
+     (cd "$out" && find . -mindepth 1 ! -name SKILL.md -delete)
+     (cd "$bundle" && tar -cf - --exclude=SKILL.md .) | (cd "$out" && tar -xf -)
+   fi
+   ```
+
 ## 6. Report
 
 Report each source as one of:
@@ -170,5 +217,6 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 
 - The source is only modified via lint approvals.
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
-- Both lint and compile are atomic: no partial writes if a step fails mid-way.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"1497ce715eac28ee5775bb1e1368313c"} -->
+- Both lint and compile are atomic: no partial writes if a step fails mid-way. Bundled-file sync is the one exception: if it stops midway, the next run finds the difference and repairs it.
+- When a directory source is turned back into a single-file source, remove the bundled files left in the output by hand.
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"9525d3803d48eb7551870f0e1ea11915"} -->
