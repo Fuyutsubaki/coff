@@ -4,13 +4,13 @@ require "fileutils"
 require "json"
 require "open3"
 require "securerandom"
-require "set"
 require "time"
 
 # 再実行される workflow に、記録付きの問いと副作用を提供する。
 module Dullmify
   SIGNAL = Object.new.freeze
 
+  # workflow から使わない内部実装。公開 API は Dullmify のモジュール関数だけである。
   class Runtime
     attr_reader :records
 
@@ -26,7 +26,6 @@ module Dullmify
     def execute
       prepare_answer
       Dir.chdir(read_required("cwd"))
-      Dullmify.runtime = self
       # 中断の合図は workflow の中からも、report の検査や確認の再実行からも投げられる。
       outcome = catch(SIGNAL) do
         report = check_report(Object.new.send(:workflow))
@@ -52,8 +51,6 @@ module Dullmify
       raise
     rescue Exception => e # rubocop:disable Lint/RescueException
       failed!("workflow で例外が発生しました: #{e.class}: #{e.message}")
-    ensure
-      Dullmify.runtime = nil
     end
 
     def arguments
@@ -125,6 +122,8 @@ module Dullmify
       end
     end
 
+    private
+
     def save_records
       temporary = File.join(@run_dir, ".records-#{Process.pid}.tmp")
       body = @records.map { |record| JSON.generate(record) }.join("\n")
@@ -132,10 +131,8 @@ module Dullmify
       File.binwrite(temporary, body)
       File.rename(temporary, @records_path)
     ensure
-      FileUtils.rm_f(temporary) if defined?(temporary)
+      FileUtils.rm_f(temporary) if temporary
     end
-
-    private
 
     def recorded(type, key, reserve:)
       reject_nested!
@@ -221,7 +218,7 @@ module Dullmify
     end
 
     def read_required(name)
-      File.binread(File.join(@run_dir, name)).sub(/\r?\n\z/, "")
+      trim_one_newline(File.binread(File.join(@run_dir, name)))
     end
 
     def load_records
@@ -258,15 +255,24 @@ module Dullmify
     end
   end
 
-  class << self
-    attr_writer :runtime
+  private_constant :SIGNAL, :Runtime
 
-    def runtime
-      @runtime || raise("Dullmify のランタイムが開始されていません")
+  class << self
+    def execute(run_dir)
+      @runtime = Runtime.new(run_dir)
+      @runtime.execute
+    ensure
+      @runtime = nil
     end
 
     %i[arguments ask once effect fail now random env read write command].each do |name|
       define_method(name) { |*args, &block| runtime.public_send(name, *args, &block) }
+    end
+
+    private
+
+    def runtime
+      @runtime || raise("Dullmify のランタイムが開始されていません")
     end
   end
 end
@@ -275,7 +281,7 @@ if $PROGRAM_NAME == __FILE__
   run_dir = ARGV.fetch(0)
   begin
     require_relative "workflow"
-    Dullmify::Runtime.new(run_dir).execute
+    Dullmify.execute(run_dir)
   rescue SignalException
     raise
   rescue Exception => e # rubocop:disable Lint/RescueException

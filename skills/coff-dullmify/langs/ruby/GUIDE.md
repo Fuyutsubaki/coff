@@ -1,6 +1,6 @@
 # Ruby workflow ガイド
 
-workflow は `workflow.rb` に書き、引数なしの `workflow` メソッドを定義する。戻り値は report の文字列にする。`runtime.rb` は `json` と `set` を読み込み済みである。
+workflow は `workflow.rb` に書き、引数なしの `workflow` メソッドを定義する。戻り値は report の文字列にする。`runtime.rb` は `json` を読み込み済みである。
 
 ## API
 

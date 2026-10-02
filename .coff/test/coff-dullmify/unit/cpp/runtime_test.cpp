@@ -29,14 +29,14 @@ struct TemporaryDirectory {
 
 TEST_CASE("記録の書き込み、読み戻し、型の往復") {
   TemporaryDirectory temporary;
-  dullmify::Runtime first(temporary.path);
-  dullmify::current_runtime = &first;
+  dullmify::detail::Runtime first(temporary.path);
+  dullmify::detail::current_runtime = &first;
   const std::string value = dullmify::once(dullmify::json::array({"key"}), [] { return std::string("value"); });
   CHECK(value == "value");
   CHECK(first.records().front().at("result") == "value");
 
-  dullmify::Runtime second(temporary.path);
-  dullmify::current_runtime = &second;
+  dullmify::detail::Runtime second(temporary.path);
+  dullmify::detail::current_runtime = &second;
   int calls = 0;
   const std::string replayed = dullmify::once(dullmify::json::array({"key"}), [&] {
     ++calls;
@@ -44,23 +44,23 @@ TEST_CASE("記録の書き込み、読み戻し、型の往復") {
   });
   CHECK(replayed == "value");
   CHECK(calls == 0);
-  dullmify::current_runtime = nullptr;
+  dullmify::detail::current_runtime = nullptr;
 }
 
 TEST_CASE("照合キーの食い違いを検出する") {
   TemporaryDirectory temporary;
-  dullmify::Runtime first(temporary.path);
-  dullmify::current_runtime = &first;
+  dullmify::detail::Runtime first(temporary.path);
+  dullmify::detail::current_runtime = &first;
   dullmify::once(dullmify::json::array({"a"}), [] { return 1; });
-  dullmify::Runtime second(temporary.path);
-  dullmify::current_runtime = &second;
-  CHECK_THROWS_AS(dullmify::once(dullmify::json::array({"b"}), [] { return 2; }), dullmify::Failure);
-  dullmify::current_runtime = nullptr;
+  dullmify::detail::Runtime second(temporary.path);
+  dullmify::detail::current_runtime = &second;
+  CHECK_THROWS_AS(dullmify::once(dullmify::json::array({"b"}), [] { return 2; }), dullmify::detail::Failure);
+  dullmify::detail::current_runtime = nullptr;
 }
 
 TEST_CASE("不正な UTF-8 を JSON にできる") {
   const std::string invalid("a\xFF" "b", 3);
-  const std::string encoded = dullmify::dump_json(dullmify::json{{"value", invalid}});
+  const std::string encoded = dullmify::detail::dump_json(dullmify::json{{"value", invalid}});
   dullmify::json parsed;
   CHECK_NOTHROW(parsed = dullmify::json::parse(encoded));
   CHECK(parsed.at("value") == "a�b");

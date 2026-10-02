@@ -111,7 +111,7 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 
 言語の前提:
 
-- Ruby は 3.0 以上の標準ライブラリ（json、open3、fileutils など）とバンドル gem の minitest だけを使う。workflow には `set` と `json` をランタイムが読み込んでおき、GUIDE に書く。
+- Ruby は 3.0 以上の標準ライブラリ（json、open3、fileutils など）とバンドル gem の minitest だけを使う。workflow には `json` をランタイムが読み込んでおき、GUIDE に書く。
 - C++ の `command` の一時ファイルは `std::tmpfile` ではなく、run ディレクトリに `mkstemp` で作ってすぐ消す（調査記録 10）。
 - C++ は C++17。`<filesystem>` を追加のリンク指定なしで使える環境（GCC 9 以上、Clang 9 以上、macOS 10.15 以上）を前提にし、コンパイラは `${CXX:-c++}` にする。`json.hpp` は `scripts/` にも複製し、workflow も `nlohmann::json` でデータを読み書きしてよい（GUIDE に書く）。
 - workflow の入口は Ruby では `workflow` メソッド、C++ では `std::string workflow()` とする。Ruby は `runtime.rb` が `workflow.rb` を読み込み、C++ は `workflow.cpp` が `runtime.hpp` を include して、ランタイムの `main` が `workflow()` を呼ぶ。C++ の単体テストのために、ランタイムの `main` を外してビルドできる形にする。

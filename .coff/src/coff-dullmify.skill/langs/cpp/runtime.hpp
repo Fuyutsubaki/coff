@@ -35,34 +35,37 @@ namespace dullmify {
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-// workflow の例外処理に誤って捕まらない制御合図。
-struct Control {
-  enum class Kind { ask, failed } kind;
+struct CommandResult {
+  int exit_code;
+  std::string stdout_text;
+  std::string stderr_text;
+
+  // effect が結果を記録に書くときと記録から読み戻すときに、nlohmann/json が ADL で見つけて呼ぶ。
+  // 利用者は直接呼ばない。クラス内の friend 定義にして、ADL でだけ見える場所にまとめている。
+  friend void to_json(json &value, const CommandResult &result) {
+    value = json{{"exit_code", result.exit_code}, {"stdout", result.stdout_text},
+                 {"stderr", result.stderr_text}};
+  }
+
+  friend void from_json(const json &value, CommandResult &result) {
+    value.at("exit_code").get_to(result.exit_code);
+    value.at("stdout").get_to(result.stdout_text);
+    value.at("stderr").get_to(result.stderr_text);
+  }
+};
+
+// workflow から使わない内部実装。公開 API は dullmify 直下の関数だけである。
+namespace detail {
+
+// workflow の例外処理に誤って捕まらない制御合図。問いは Ask、失敗は Failure で伝える。
+struct Ask {
   std::string prompt;
   std::string input;
-  std::string reason;
 };
 
 struct Failure {
   std::string reason;
 };
-
-struct CommandResult {
-  int exit_code;
-  std::string stdout_text;
-  std::string stderr_text;
-};
-
-inline void to_json(json &value, const CommandResult &result) {
-  value = json{{"exit_code", result.exit_code}, {"stdout", result.stdout_text},
-               {"stderr", result.stderr_text}};
-}
-
-inline void from_json(const json &value, CommandResult &result) {
-  value.at("exit_code").get_to(result.exit_code);
-  value.at("stdout").get_to(result.stdout_text);
-  value.at("stderr").get_to(result.stderr_text);
-}
 
 inline std::string sanitize_utf8(const std::string &source) {
   const std::string replacement = "\xEF\xBF\xBD";
@@ -106,6 +109,7 @@ inline std::string sanitize_utf8(const std::string &source) {
   return output;
 }
 
+// 記録に書く値と読み戻した値を一致させるため、記録する前に不正な UTF-8 を置き換える。
 inline json sanitize_json(const json &value) {
   if (value.is_string()) return sanitize_utf8(value.get<std::string>());
   if (value.is_array()) {
@@ -122,6 +126,7 @@ inline json sanitize_json(const json &value) {
   return value;
 }
 
+// report と失敗理由は記録を通らないので、出力時にも置き換える。
 inline std::string dump_json(const json &value) {
   return value.dump(-1, ' ', false, json::error_handler_t::replace);
 }
@@ -143,8 +148,9 @@ inline std::string read_binary(const fs::path &path) {
 
 class Runtime {
  public:
+  // run_dir は絶対パスで受ける。
   explicit Runtime(fs::path run_dir)
-      : run_dir_(fs::absolute(std::move(run_dir))), records_path_(run_dir_ / "records.jsonl") {
+      : run_dir_(std::move(run_dir)), records_path_(run_dir_ / "records.jsonl") {
     load_records();
   }
 
@@ -172,7 +178,7 @@ class Runtime {
   std::string ask(const std::string &prompt, const std::string &input) {
     reject_nested();
     const json key = sanitize_json(json::array({prompt, input}));
-    const Control signal{Control::Kind::ask, key[0], key[1], ""};
+    const Ask signal{key[0], key[1]};
     if (json *record = replay("ask", key)) {
       if (!record->contains("result")) throw signal;
       return record->at("result").get<std::string>();
@@ -207,7 +213,7 @@ class Runtime {
     json result;
     try {
       result = sanitize_json(operation());
-    } catch (const Control &) {
+    } catch (const Ask &) {
       throw;
     } catch (const Failure &) {
       throw;
@@ -238,6 +244,28 @@ class Runtime {
 
   const fs::path &run_dir() const { return run_dir_; }
 
+ private:
+  fs::path run_dir_;
+  fs::path records_path_;
+  std::vector<json> records_;
+  std::size_t cursor_ = 0;
+  bool inside_block_ = false;
+  bool verifying_ = false;
+
+  void load_records() {
+    if (!fs::exists(records_path_)) return;
+    std::ifstream stream(records_path_, std::ios::binary);
+    if (!stream) throw Failure{"記録を読めません: " + records_path_.string()};
+    std::string line;
+    try {
+      while (std::getline(stream, line)) records_.push_back(json::parse(line));
+    } catch (const std::exception &error) {
+      throw Failure{"記録を読めません: " + std::string(error.what())};
+    }
+    // 読み落とした記録があると副作用を二度行いかねないので、途中で止まった読み取りは失敗にする。
+    if (stream.bad()) throw Failure{"記録を読めません: " + records_path_.string()};
+  }
+
   void save_records() {
     const fs::path temporary = run_dir_ / (".records-" + std::to_string(::getpid()) + ".tmp");
     {
@@ -251,25 +279,6 @@ class Runtime {
     if (error) {
       fs::remove(temporary);
       throw Failure{"記録を置き換えられません: " + error.message()};
-    }
-  }
-
- private:
-  fs::path run_dir_;
-  fs::path records_path_;
-  std::vector<json> records_;
-  std::size_t cursor_ = 0;
-  bool inside_block_ = false;
-  bool verifying_ = false;
-
-  void load_records() {
-    if (!fs::exists(records_path_)) return;
-    std::ifstream stream(records_path_, std::ios::binary);
-    std::string line;
-    try {
-      while (std::getline(stream, line)) records_.push_back(json::parse(line));
-    } catch (const std::exception &error) {
-      throw Failure{"記録を読めません: " + std::string(error.what())};
     }
   }
 
@@ -296,94 +305,6 @@ inline Runtime *current_runtime = nullptr;
 inline Runtime &runtime() {
   if (!current_runtime) throw std::runtime_error("Dullmify のランタイムが開始されていません");
   return *current_runtime;
-}
-
-inline std::string arguments() { return runtime().arguments(); }
-inline std::string ask(const std::string &prompt, const std::string &input = "") {
-  return runtime().ask(prompt, input);
-}
-
-[[noreturn]] inline void fail(const std::string &reason) {
-  throw Control{Control::Kind::failed, "", "", reason};
-}
-
-template <class Function>
-auto once(const json &key, Function &&operation)
-    -> std::decay_t<std::invoke_result_t<Function>> {
-  using Result = std::decay_t<std::invoke_result_t<Function>>;
-  if constexpr (std::is_void_v<Result>) {
-    runtime().recorded("once", key, [&]() -> json { operation(); return nullptr; }, false);
-  } else {
-    json value = runtime().recorded("once", key, [&]() -> json { return json(operation()); }, false);
-    return value.template get<Result>();
-  }
-}
-
-template <class Function>
-auto effect(const json &key, Function &&operation)
-    -> std::decay_t<std::invoke_result_t<Function>> {
-  using Result = std::decay_t<std::invoke_result_t<Function>>;
-  if constexpr (std::is_void_v<Result>) {
-    runtime().recorded("effect", key, [&]() -> json { operation(); return nullptr; }, true);
-  } else {
-    json value = runtime().recorded("effect", key, [&]() -> json { return json(operation()); }, true);
-    return value.template get<Result>();
-  }
-}
-
-inline std::string now() {
-  return once(json::array({"now"}), [] {
-    const auto point = std::chrono::system_clock::now();
-    const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
-        point.time_since_epoch()) % 1000000;
-    const std::time_t seconds = std::chrono::system_clock::to_time_t(point);
-    std::tm utc{};
-    gmtime_r(&seconds, &utc);
-    std::ostringstream output;
-    output << std::put_time(&utc, "%Y-%m-%dT%H:%M:%S") << '.'
-           << std::setw(6) << std::setfill('0') << micros.count() << 'Z';
-    return output.str();
-  });
-}
-
-inline std::string random(std::size_t length) {
-  return once(json::array({"random", length}), [length] {
-    std::random_device source;
-    std::ostringstream output;
-    for (std::size_t i = 0; i < length; ++i)
-      output << std::hex << std::setw(2) << std::setfill('0') << (source() & 0xFF);
-    return output.str();
-  });
-}
-
-inline std::optional<std::string> env(const std::string &name) {
-  json value = runtime().recorded("once", json::array({"env", name}), [name] {
-    const char *found = std::getenv(name.c_str());
-    return found ? json(found) : json(nullptr);
-  }, false);
-  if (value.is_null()) return std::nullopt;
-  return value.get<std::string>();
-}
-
-inline std::optional<std::string> read(const fs::path &path) {
-  const std::string name = path.string();
-  json value = runtime().recorded("once", json::array({"read", name}), [path] {
-    if (!fs::exists(path)) return json(nullptr);
-    return json(read_binary(path));
-  }, false);
-  if (value.is_null()) return std::nullopt;
-  return value.get<std::string>();
-}
-
-inline void write(const fs::path &path, const std::string &content) {
-  const std::string name = path.string();
-  effect(json::array({"write", name, content}), [path, content] {
-    if (!path.parent_path().empty()) fs::create_directories(path.parent_path());
-    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-    if (!stream) throw std::runtime_error("ファイルを開けません: " + path.string());
-    stream.write(content.data(), static_cast<std::streamsize>(content.size()));
-    if (!stream) throw std::runtime_error("ファイルを書けません: " + path.string());
-  });
 }
 
 inline int temporary_fd(const fs::path &run_dir, const std::string &label) {
@@ -465,69 +386,145 @@ inline CommandResult run_command(const std::vector<std::string> &argv,
   return {exit_code, stdout_text, stderr_text};
 }
 
-inline CommandResult command(const std::vector<std::string> &argv,
-                             const std::string &stdin_text = "") {
-  return effect(json::array({"command", argv, stdin_text}),
-                [&] { return run_command(argv, stdin_text); });
-}
-
 inline void emit(const json &value) { std::cout << dump_json(value) << std::endl; }
 
+// 結果を一つの JSON に集め、片付けと出力は最後に一度だけ行う。
 inline int execute(const fs::path &run_argument) {
+  std::error_code ignored;
   // 作業ディレクトリを移したあとで片付けるので、先に絶対パスにしておく。
-  std::error_code absolute_error;
-  const fs::path run_dir = fs::absolute(run_argument, absolute_error);
+  const fs::path run_dir = fs::absolute(run_argument, ignored);
+  json outcome;
+  bool keep_run = false;
   try {
     Runtime state(run_dir);
+    struct Scope {
+      explicit Scope(Runtime &state) { current_runtime = &state; }
+      ~Scope() { current_runtime = nullptr; }
+    } scope(state);
     state.prepare_answer();
-    fs::current_path(trim_one_newline(read_binary(state.run_dir() / "cwd")));
-    current_runtime = &state;
-    std::string first;
+    fs::current_path(trim_one_newline(read_binary(run_dir / "cwd")));
     try {
-      first = ::workflow();
+      const std::string first = ::workflow();
       state.ensure_consumed();
       state.reset_for_verification();
       const std::string second = ::workflow();
       state.ensure_consumed();
       if (first != second) throw Failure{"workflow が非決定です: 確認の再実行で report が変わりました"};
-    } catch (const Control &signal) {
-      current_runtime = nullptr;
-      if (signal.kind == Control::Kind::ask) {
-        emit(json{{"run", state.run_dir().string()}, {"prompt", signal.prompt},
-                  {"input", signal.input}, {"write", (state.run_dir() / "answer").string()}});
-        return 0;
-      }
-      fs::remove_all(state.run_dir());
-      emit(json{{"failed", signal.reason}});
-      return 0;
+      outcome = json{{"done", true}, {"report", first}};
+    } catch (const Ask &signal) {
+      keep_run = true;
+      outcome = json{{"run", run_dir.string()}, {"prompt", signal.prompt},
+                     {"input", signal.input}, {"write", (run_dir / "answer").string()}};
     }
-    current_runtime = nullptr;
-    fs::remove_all(state.run_dir());
-    emit(json{{"done", true}, {"report", first}});
   } catch (const Failure &failure) {
-    current_runtime = nullptr;
-    std::error_code ignored;
-    fs::remove_all(run_dir, ignored);
-    emit(json{{"failed", failure.reason}});
+    outcome = json{{"failed", failure.reason}};
   } catch (const std::exception &error) {
-    current_runtime = nullptr;
-    std::error_code ignored;
-    fs::remove_all(run_dir, ignored);
-    emit(json{{"failed", "workflow で例外が発生しました: " + std::string(error.what())}});
+    outcome = json{{"failed", "workflow で例外が発生しました: " + std::string(error.what())}};
   } catch (...) {
-    current_runtime = nullptr;
-    std::error_code ignored;
-    fs::remove_all(run_dir, ignored);
-    emit(json{{"failed", "workflow で不明な例外が発生しました"}});
+    outcome = json{{"failed", "workflow で不明な例外が発生しました"}};
   }
+  if (!keep_run) fs::remove_all(run_dir, ignored);
+  emit(outcome);
   return 0;
+}
+
+}  // detail 名前空間
+
+inline std::string arguments() { return detail::runtime().arguments(); }
+inline std::string ask(const std::string &prompt, const std::string &input = "") {
+  return detail::runtime().ask(prompt, input);
+}
+
+[[noreturn]] inline void fail(const std::string &reason) { throw detail::Failure{reason}; }
+
+template <class Function>
+auto once(const json &key, Function &&operation)
+    -> std::decay_t<std::invoke_result_t<Function>> {
+  using Result = std::decay_t<std::invoke_result_t<Function>>;
+  if constexpr (std::is_void_v<Result>) {
+    detail::runtime().recorded("once", key, [&]() -> json { operation(); return nullptr; }, false);
+  } else {
+    json value = detail::runtime().recorded("once", key, [&]() -> json { return json(operation()); }, false);
+    return value.template get<Result>();
+  }
+}
+
+template <class Function>
+auto effect(const json &key, Function &&operation)
+    -> std::decay_t<std::invoke_result_t<Function>> {
+  using Result = std::decay_t<std::invoke_result_t<Function>>;
+  if constexpr (std::is_void_v<Result>) {
+    detail::runtime().recorded("effect", key, [&]() -> json { operation(); return nullptr; }, true);
+  } else {
+    json value = detail::runtime().recorded("effect", key, [&]() -> json { return json(operation()); }, true);
+    return value.template get<Result>();
+  }
+}
+
+inline std::string now() {
+  return once(json::array({"now"}), [] {
+    const auto point = std::chrono::system_clock::now();
+    const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
+        point.time_since_epoch()) % 1000000;
+    const std::time_t seconds = std::chrono::system_clock::to_time_t(point);
+    std::tm utc{};
+    gmtime_r(&seconds, &utc);
+    std::ostringstream output;
+    output << std::put_time(&utc, "%Y-%m-%dT%H:%M:%S") << '.'
+           << std::setw(6) << std::setfill('0') << micros.count() << 'Z';
+    return output.str();
+  });
+}
+
+inline std::string random(std::size_t length) {
+  return once(json::array({"random", length}), [length] {
+    std::random_device source;
+    std::ostringstream output;
+    for (std::size_t i = 0; i < length; ++i)
+      output << std::hex << std::setw(2) << std::setfill('0') << (source() & 0xFF);
+    return output.str();
+  });
+}
+
+inline std::optional<std::string> env(const std::string &name) {
+  const json value = once(json::array({"env", name}), [&]() -> json {
+    const char *found = std::getenv(name.c_str());
+    return found ? json(found) : json(nullptr);
+  });
+  if (value.is_null()) return std::nullopt;
+  return value.get<std::string>();
+}
+
+inline std::optional<std::string> read(const fs::path &path) {
+  const json value = once(json::array({"read", path.string()}), [&]() -> json {
+    if (!fs::exists(path)) return json(nullptr);
+    return json(detail::read_binary(path));
+  });
+  if (value.is_null()) return std::nullopt;
+  return value.get<std::string>();
+}
+
+inline void write(const fs::path &path, const std::string &content) {
+  effect(json::array({"write", path.string(), content}), [&] {
+    if (!path.parent_path().empty()) fs::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    if (!stream) throw std::runtime_error("ファイルを開けません: " + path.string());
+    stream.write(content.data(), static_cast<std::streamsize>(content.size()));
+    if (!stream) throw std::runtime_error("ファイルを書けません: " + path.string());
+  });
+}
+
+inline CommandResult command(const std::vector<std::string> &argv,
+                             const std::string &stdin_text = "") {
+  return effect(json::array({"command", argv, stdin_text}),
+                [&] { return detail::run_command(argv, stdin_text); });
 }
 
 }  // dullmify 名前空間
 
 #ifndef DULLMIFY_NO_MAIN
 int main(int, char **argv) {
-  return dullmify::execute(argv[1]);
+  return dullmify::detail::execute(argv[1]);
 }
 #endif
 

@@ -4,7 +4,7 @@ workflow は `workflow.cpp` に書き、先頭で `#include "runtime.hpp"` を�
 
 ## API
 
-すべて `dullmify` 名前空間にある。
+すべて `dullmify` 名前空間にある。`dullmify::detail` は内部実装なので使わない。
 
 - `arguments()` は skill の引数を一つの `std::string` で返す。
 - `ask(prompt, input = "")` は LLM にだけできる判断を問い、自由な文字列の答えを返す。形式が違う答えは workflow で判定し、理由を含む別の問いで問い直す。
