@@ -77,8 +77,8 @@ coff の skill は、手順の制御と LLM にしかできない判断（例: �
 - `continue` は毎回先頭から再実行して記録を消費するので、答えを取り込んだ後に殺されても同じ呼び出しで続きから進む（調査記録 8）。
 - 出力は stdout に JSON 1 行で、終了コードは 0。問いは `{"run":"<run>","prompt":"…","input":"…","write":"<run>/answer"}`（`input` は問いの対象で、`prompt` はそれについて何をどう答えるか）、終了は `{"done":true,"report":"…"}`、失敗は `{"failed":"<理由>"}` とし、done と failed では run ディレクトリを消す。workflow の例外、非決定も `{"failed":…}` で返す。答えのファイルがまだないときは記録に触れずに再実行して、同じ問いを出し直す。未回答の問いがないのに `answer` があれば、消して無視する。`continue` は、目印の確認、`args` の確認、キーの照合、`launch` の呼び出し（C++ はビルドを含む）の順に行う。作業ディレクトリは `start` で起動スクリプトが記録する。stdout はこの規約だけに使い、workflow は stdout にも stderr にも直接書かない（ランタイムでは強制せず、GUIDE の規則と点検で止める）。
 - 出力する文字列の不正な UTF-8 は U+FFFD に置き換え、出力を常に正しい JSON にする（nlohmann/json の `dump` は既定では例外を投げるので `error_handler_t::replace` を使う。Ruby は `scrub`）。置き換えは、記録するとき（照合キー、結果、取り込んだ答え）と出力するときだけで行い、便利関数の中では行わない。Ruby は文字列の操作が不正な UTF-8 で例外になるので、`arguments` の値も置き換える。
-- C++ のビルドの失敗は、固定の文言の `{"failed":…}` を出し、コンパイラの出力は stderr にそのまま流す。このとき run を消す。コンパイラのフラグ（`-std=c++17` と `-I`）は `run` と `check` で同じものを使う。
-- 終了コード 2 は、`start` が作った空の目印のファイル `<run>/.dullmify-run` がない run と、`args` がない run と、起動スクリプトが run やビルドの作業場所を用意できないときだけに使い、stderr に理由を書く。
+- C++ のビルドの失敗は、固定の文言の `{"failed":…}` を出し、コンパイラの出力は stderr にそのまま流す。このとき run を消す。コンパイラのフラグ（`-std=c++17` と `-I`）は `launch` と `check` で同じものを使う。
+- 終了コード 2 は、規約の JSON を返せない起動の失敗に使い、stderr に理由を書く。使い方の誤り、`start` が作った空の目印のファイル `<run>/.dullmify-run` がない run、`args` がない run、run やビルドの作業場所を用意できないとき（キャッシュが他人のものであるときを含む）がこれに当たる。workflow の結果は、failed も含めて JSON と終了コード 0 で返す。
 - run ディレクトリは `${TMPDIR:-/tmp}` の下に作り、その絶対パスを `start` と問いの出力で LLM に渡し直す。サンドボックスの有無で `$TMPDIR` の解決先が変わるので、呼び出しごとに解決し直さない（調査記録 2、4）。
 - run の開始時の作業ディレクトリを記録し、再実行のたびにそこへ移ってから workflow を実行する。補助関数に渡す相対パスはこの作業ディレクトリが基準になる。
 
@@ -134,14 +134,14 @@ dullmify:
 - ソース、GUIDE、`review.md` はファイルを読むツールで読ませる（`cd … && cat …` のような複合コマンドは承認で止まる）。作業ディレクトリの外のソースは Read に承認が要る。失敗したときに原因を別のコマンドで調べさせない（承認で止まり、回数の規則も崩れる）。
 - 太いソースの `description` をバッククォートで始めない。YAML の素のスカラーとして読めず、`gh skill install` が frontmatter の注入で失敗する。
 - coff-dullmify 自身も Claude Code と Codex の両方で動くよう、本文では同梱ファイルを SKILL.md のディレクトリ基準の相対パスで指す。`allowed-tools` で事前承認するのは `Write` と `sh ${CLAUDE_SKILL_DIR}/assemble.sh *` にし、`assemble.sh` は絶対パスの単独のコマンドとして呼ばせる。
-- LLM が書くのは workflow 本体だけで、`<outdir>/scripts/` に GUIDE が定めるファイル名で、`Write` で全体を書く（直すときも `Write` で書き直し、`Edit` は使わない。事前承認が `Write` だけなので。heredoc でも渡さない。調査記録 6）。`<outdir>/SKILL.md` と `<outdir>/scripts/` は `assemble.sh` のもので、`<outdir>` のほかのファイルには触れない。`assemble.sh <lang> <source> <outdir>` は、`<outdir>/scripts/workflow.*` をその場で構文検査し、通らなければ理由（コンパイラの出力を含む）を出して、何も消さずに非 0 で終わる。通れば、`langs/<lang>/` の `GUIDE.md` と `check` 以外（起動スクリプト、ランタイム、C++ では `json.hpp` と `LICENSE.MIT`）を `scripts/` に写し、ソースの frontmatter と定型から薄い SKILL.md を書く。frontmatter の `allowed-tools` は、続くリストの行も含めて置き換える。
+- LLM が書くのは workflow 本体だけで、`<outdir>/scripts/` に GUIDE が定めるファイル名で、`Write` で全体を書く（直すときも `Write` で書き直し、`Edit` は使わない。事前承認が `Write` だけなので。heredoc でも渡さない。調査記録 6）。`<outdir>/SKILL.md` と `<outdir>/scripts/` は `assemble.sh` のもので、`<outdir>` のほかのファイルには触れない。`assemble.sh <lang> <source> <outdir>` は、`<outdir>/scripts/workflow.*` をその場で構文検査し、通らなければ理由（コンパイラの出力を含む）を出して、何も消さずに非 0 で終わる。通れば、`langs/<lang>/` の `GUIDE.md` と `check` 以外（`launch`、ランタイム、C++ では `json.hpp` と `LICENSE.MIT`）と、言語に依らない起動スクリプト `templates/run` を `scripts/` に写し、ソースの frontmatter と定型から薄い SKILL.md を書く。frontmatter の `allowed-tools` は、続くリストの行も含めて置き換える。
 - 生成コードには、ソースの工程（番号付きの手順の 1 項目。手順がなければ段落）ごとに、節の見出しと工程の番号をソースの言語でコメントする。
 - fixture は `.coff/test/coff-dullmify/fixtures/prefecture.skill.md` とし、複数の問い、問いを含むループ、辞書による分岐、コマンド実行、ファイルの書き込みを通り、中身の決まった report を返すものにする。description は日本語で書く。同じディレクトリに、skill の引数 `prefecture.input` と、期待する report `prefecture.expected`（1 行）を置く。答えの紛れない入力を使い、report の 1 行の形式をソースに文字どおり書く。
 - テストと確認の出力は、リポジトリの外（`mktemp -d`）に置く。`gh skill` はリポジトリ内の入れ子の `skills/<name>/SKILL.md` も skill として見つけうる。
 
 coff-compile:
 
-- 「dullmify ビルド」の節に書くのは、起動、`description` の英訳とフッタ、置き換え、lint をかけないこと、`failed` にする条件だけで、薄い SKILL.md の定型や起動スクリプトの規約を写さない。
+- 「dullmify ビルド」の節に書くのは、起動、`description` の英訳とフッタ、置き換え、lint をかけないこと、`failed` にする条件、skip 判定とフッタに使う `src_md5` の求め方だけで、薄い SKILL.md の定型や起動スクリプトの規約を写さない。
 - `coff-dullmify: <lang>` のソースでは、coff-compile の Lint（§2）を行わない（候補が出ないので §3、§4 も起きない）。「生成物から消しても実行 LLM が手順を完遂できるか」という基準は、実行時にソースを読まない dullmify の成果物には当たらない。
 - `coff-dullmify: <lang>` は skill 型の 1 ファイルのソースだけに書け、ほかに付いていれば `failed` にする（同梱ファイルの同期と `scripts/` の置き換えが衝突するため）。coff-compile は `/coff-dullmify <src> -o <一時ディレクトリ> --lang <lang>` を Skill ツールで起動し（SKILL.md を読んで実行する形では coff-dullmify の事前承認が効かない）、一時ディレクトリの SKILL.md の `description` だけを英訳して（`coff-translate: false` なら訳さない）フッタを付け、実体の出力先を一時ディレクトリの内容で置き換える。本文の英訳とコメント除去は行わない。`--ref` や `--agent` の参照 stub は他のソースと同じく正本を指し、`scripts/` は正本の隣にだけ置く。失敗したとき、または coff-dullmify がないときは `failed: <理由>` を報告し、成果物に触れない。
 - dullmify のソースでは、skip 判定とフッタの md5 を、ソースと `.claude/skills/coff-dullmify/` のファイル一式（`SKILL.md` を含むパスと内容）をつないだ内容から求める。ランタイムや定型だけが変わっても作り直され、`--force` は要らない。coff-dullmify がなければ `failed` にする。

@@ -111,8 +111,11 @@ module Dullmify
 
     def command(argv, stdin = "")
       effect(["command", argv, stdin]) do
+        next { "exit_code" => 127, "stdout" => "", "stderr" => "コマンドが空です" } if argv.empty?
+
         begin
-          stdout, stderr, status = Open3.capture3(*argv, stdin_data: stdin)
+          # [名前, argv0] の形にすると、要素が 1 つでもシェルを通さない。
+          stdout, stderr, status = Open3.capture3([argv[0], argv[0]], *argv[1..], stdin_data: stdin)
           { "exit_code" => status.exitstatus || 128 + status.termsig.to_i,
             "stdout" => stdout, "stderr" => stderr }
         rescue SystemCallError => e

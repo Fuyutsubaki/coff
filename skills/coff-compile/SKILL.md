@@ -61,7 +61,7 @@ For agent placement, the real body (the canonical copy) lives in exactly one pla
   ---
 
   This file is a reference. Read and follow `../../../.claude/skills/<name>/SKILL.md`.
-  <!--{"src":"<source path>","md5":"<src md5>"} -->
+  <!--{"src":"<ソースのパス>","md5":"<src md5>"} -->
   ```
 
 - Build order is canonical → references. When writing a reference, if the canonical file does not exist, report it as an error.
@@ -89,6 +89,7 @@ Reference stubs from `--ref` and `--agent` point at the canonical file as usual;
 The source globs are `.coff/src/*.skill.md .coff/src/*.skill/SKILL.md .coff/src/*.outputstyle.md .coff/src/*.agent.md`. Determine the type from the source path and derive the output path set `dsts`. Take the body output as `body`, and for a directory source, the directory holding the bundled files as `bundle`.
 
 ```bash
+[ -e "$src" ] || continue   # 一致しない glob はそのまま残るので飛ばす
 bundle=
 case "$src" in
   *.skill/SKILL.md) name=$(basename "$(dirname "$src")" .skill); bundle=$(dirname "$src"); dsts=".claude/skills/$name/SKILL.md" ;;
@@ -198,7 +199,9 @@ e. **Sync the bundled files.** For a directory source, make everything except `S
 
    ```bash
    out=$(dirname "$body")
-   if ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
+   # body が空だと out が "." になり、作業ツリーを消してしまうので確かめる
+   if [ -n "$bundle" ] && [ -n "$body" ] && [ -f "$out/SKILL.md" ] &&
+      ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
      (cd "$out" && find . -mindepth 1 ! -name SKILL.md -delete)
      (cd "$bundle" && tar -cf - --exclude=SKILL.md .) | (cd "$out" && tar -xf -)
    fi
@@ -219,4 +222,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way. Bundled-file sync is the one exception: if it stops midway, the next run finds the difference and repairs it.
 - When a directory source is turned back into a single-file source, remove the bundled files left in the output by hand.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"9525d3803d48eb7551870f0e1ea11915"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"c43ac6b51ec50637dfe3e40cff8a0898"} -->

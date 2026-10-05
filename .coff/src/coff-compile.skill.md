@@ -103,6 +103,7 @@ src_md5=$( (cat "$src"; cd "$dullmify_dir" && find . -type f | LC_ALL=C sort | w
 ソースの glob は `.coff/src/*.skill.md .coff/src/*.skill/SKILL.md .coff/src/*.outputstyle.md .coff/src/*.agent.md`。ソースのパスから種別を判定し、出力先の集合 `dsts` を導出する。実体の出力先を `body` に、ディレクトリのソースでは同梱ファイルのあるディレクトリを `bundle` に取る。
 
 ```bash
+[ -e "$src" ] || continue   # 一致しない glob はそのまま残るので飛ばす
 bundle=
 case "$src" in
   *.skill/SKILL.md) name=$(basename "$(dirname "$src")" .skill); bundle=$(dirname "$src"); dsts=".claude/skills/$name/SKILL.md" ;;
@@ -212,7 +213,9 @@ e. **同梱ファイルを同期する。** ディレクトリのソースにつ
 
    ```bash
    out=$(dirname "$body")
-   if ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
+   # body が空だと out が "." になり、作業ツリーを消してしまうので確かめる
+   if [ -n "$bundle" ] && [ -n "$body" ] && [ -f "$out/SKILL.md" ] &&
+      ! diff -rq -x SKILL.md "$bundle" "$out" >/dev/null 2>&1; then
      (cd "$out" && find . -mindepth 1 ! -name SKILL.md -delete)
      (cd "$bundle" && tar -cf - --exclude=SKILL.md .) | (cd "$out" && tar -xf -)
    fi

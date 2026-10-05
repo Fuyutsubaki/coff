@@ -41,6 +41,13 @@ class DullmifyRuntimeTest < Minitest::Test
     assert_includes signal.last, "非決定"
   end
 
+  def test_command_does_not_use_shell
+    runtime = runtime_class.new(@directory)
+    assert_equal 127, runtime.command(["echo $HOME"]).fetch("exit_code")
+    assert_equal "$HOME\n", runtime.command(["echo", "$HOME"]).fetch("stdout")
+    assert_equal 127, runtime.command([]).fetch("exit_code")
+  end
+
   def test_invalid_utf8_is_valid_json
     runtime = runtime_class.new(@directory)
     runtime.once(["bytes"]) { "a\xFFb".b }
