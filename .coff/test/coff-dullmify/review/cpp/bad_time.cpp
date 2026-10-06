@@ -12,6 +12,7 @@ std::string workflow(const std::string &arguments) {
   if (separator == std::string::npos || input.find("、", separator + 3) != std::string::npos)
     dullmify::fail("市名を二つ指定してください");
   const std::vector<std::string> cities{input.substr(0, separator), input.substr(separator + 3)};
+  if (cities[0].empty() || cities[1].empty()) dullmify::fail("市名を二つ指定してください");
 
   // 都道府県と地域の確認 / 手順 2
   std::vector<std::string> prefectures;

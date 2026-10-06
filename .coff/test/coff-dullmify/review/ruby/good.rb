@@ -1,7 +1,7 @@
 def workflow(arguments)
   # 都道府県と地域の確認 / 手順 1
-  cities = arguments.split("、")
-  Dullmify.fail("市名を二つ指定してください") unless cities.length == 2
+  cities = arguments.split("、", -1)
+  Dullmify.fail("市名を二つ指定してください") unless cities.length == 2 && cities.none?(&:empty?)
 
   # 都道府県と地域の確認 / 手順 2
   prefectures = cities.map do |city|
