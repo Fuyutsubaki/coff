@@ -67,69 +67,14 @@ struct Failure {
   std::string reason;
 };
 
-inline std::string sanitize_utf8(const std::string &source) {
-  const std::string replacement = "\xEF\xBF\xBD";
-  std::string output;
-  for (std::size_t i = 0; i < source.size();) {
-    const unsigned char first = static_cast<unsigned char>(source[i]);
-    if (first < 0x80) {
-      output.push_back(source[i++]);
-      continue;
-    }
-    std::size_t length = 0;
-    unsigned int codepoint = 0;
-    unsigned int minimum = 0;
-    if (first >= 0xC2 && first <= 0xDF) {
-      length = 2; codepoint = first & 0x1F; minimum = 0x80;
-    } else if (first >= 0xE0 && first <= 0xEF) {
-      length = 3; codepoint = first & 0x0F; minimum = 0x800;
-    } else if (first >= 0xF0 && first <= 0xF4) {
-      length = 4; codepoint = first & 0x07; minimum = 0x10000;
-    } else {
-      output += replacement;
-      ++i;
-      continue;
-    }
-    bool valid = i + length <= source.size();
-    for (std::size_t j = 1; valid && j < length; ++j) {
-      const unsigned char next = static_cast<unsigned char>(source[i + j]);
-      valid = (next & 0xC0) == 0x80;
-      if (valid) codepoint = (codepoint << 6) | (next & 0x3F);
-    }
-    valid = valid && codepoint >= minimum && codepoint <= 0x10FFFF &&
-            !(codepoint >= 0xD800 && codepoint <= 0xDFFF);
-    if (!valid) {
-      output += replacement;
-      ++i;
-      continue;
-    }
-    output.append(source, i, length);
-    i += length;
-  }
-  return output;
-}
-
-// 記録に書く値と読み戻した値を一致させるため、記録する前に不正な UTF-8 を置き換える。
-inline json sanitize_json(const json &value) {
-  if (value.is_string()) return sanitize_utf8(value.get<std::string>());
-  if (value.is_array()) {
-    json output = json::array();
-    for (const auto &item : value) output.push_back(sanitize_json(item));
-    return output;
-  }
-  if (value.is_object()) {
-    json output = json::object();
-    for (auto it = value.begin(); it != value.end(); ++it)
-      output[sanitize_utf8(it.key())] = sanitize_json(it.value());
-    return output;
-  }
-  return value;
-}
-
 // report と失敗理由は記録を通らないので、出力時にも置き換える。
 inline std::string dump_json(const json &value) {
   return value.dump(-1, ' ', false, json::error_handler_t::replace);
 }
+
+// 記録に書く値と読み戻した値を一致させるため、記録する前に不正な UTF-8 を置き換える。
+// 置き換えは json.hpp の dump に任せ、その結果を読み戻す。
+inline json sanitize_json(const json &value) { return json::parse(dump_json(value)); }
 
 inline std::string trim_one_newline(std::string value) {
   if (!value.empty() && value.back() == '\n') {
@@ -161,7 +106,7 @@ class Runtime {
     if (!fs::exists(answer_path)) return;
     for (auto &record : records_) {
       if (record["type"] == "ask" && !record.contains("result")) {
-        record["result"] = sanitize_utf8(trim_one_newline(read_binary(answer_path)));
+        record["result"] = sanitize_json(trim_one_newline(read_binary(answer_path)));
         save_records();
         break;
       }
