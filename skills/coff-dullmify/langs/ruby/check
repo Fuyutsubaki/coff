@@ -1,4 +1,4 @@
 #!/bin/sh
 
-# workflow とランタイムを同じ Ruby で構文検査する。
+# workflow を、実行時と同じ Ruby で構文検査する。
 ruby -c "$1"

@@ -1,4 +1,3 @@
-def workflow
-  Dullmify.arguments
+def workflow(arguments)
   "a\xFFb".b
 end

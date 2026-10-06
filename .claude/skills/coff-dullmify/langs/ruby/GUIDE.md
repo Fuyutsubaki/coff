@@ -1,10 +1,9 @@
 # Ruby workflow ガイド
 
-workflow は `workflow.rb` に書き、引数なしの `workflow` メソッドを定義する。戻り値は report の文字列にする。`runtime.rb` は `json` を読み込み済みである。
+workflow は `workflow.rb` に書き、skill の引数を一つの文字列で受け取る `workflow(arguments)` メソッドを定義する。戻り値は report の文字列にする。`runtime.rb` は `json` を読み込み済みである。
 
 ## API
 
-- `Dullmify.arguments` は skill の引数を一つの文字列で返す。
 - `Dullmify.ask(prompt, input = "")` は LLM にだけできる判断を問い、自由な文字列の答えを返す。形式が違う答えは workflow で判定し、理由を含む別の問いで問い直す。
 - `Dullmify.once(key) { ... }` は観測を一度だけ行い、JSON にできる結果を記録して返す。
 - `Dullmify.effect(key) { ... }` は世界を変える操作を一度だけ行う。実行前に予約を記録するため、途中で止まった run は再実行せず failed になる。
@@ -14,7 +13,7 @@ workflow は `workflow.rb` に書き、引数なしの `workflow` メソッド�
 
 ## 規則
 
-- workflow の制御は、`Dullmify.arguments` と補助関数が返した値だけで決める。
+- workflow の制御は、`arguments` と補助関数が返した値だけで決める。
 - 時刻、乱数、環境変数、ファイルの読み込みなどの観測は `once`、ファイルの書き込みとコマンド実行など世界を変える操作は `effect` の中だけで行う。できる限り便利関数を使う。
 - `once` の中では世界を変えない。`once` と `effect` のブロック内から、`fail` 以外の補助関数を呼ばない。
 - stdout と stderr に直接書かない。`puts`、`print`、`warn`、`p` を使わない。

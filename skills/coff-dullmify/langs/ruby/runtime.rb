@@ -25,14 +25,15 @@ module Dullmify
 
     def execute
       prepare_answer
+      arguments = clean_text(read_required("args"))
       Dir.chdir(read_required("cwd"))
       # 中断の合図は workflow の中からも、report の検査や確認の再実行からも投げられる。
       outcome = catch(SIGNAL) do
-        report = check_report(Object.new.send(:workflow))
+        report = check_report(Object.new.send(:workflow, arguments.dup))
         ensure_all_records_consumed
         @cursor = 0
         @verifying = true
-        second_report = check_report(Object.new.send(:workflow))
+        second_report = check_report(Object.new.send(:workflow, arguments.dup))
         ensure_all_records_consumed
         nondeterministic!("確認の再実行で report が変わりました") unless report == second_report
         [:done, report]
@@ -53,17 +54,12 @@ module Dullmify
       failed!("workflow で例外が発生しました: #{e.class}: #{e.message}")
     end
 
-    def arguments
-      reject_nested!
-      clean_text(trim_one_newline(File.binread(File.join(@run_dir, "args"))))
-    end
-
     def ask(prompt, input = "")
       reject_nested!
       key = normalize([prompt, input])
       if (record = replay("ask", key))
         throw SIGNAL, [:ask, *key] unless record.key?("result")
-        return record.fetch("result")
+        return copy(record.fetch("result"))
       end
       nondeterministic!("確認の再実行で新しい問いが現れました") if @verifying
       @records << { "type" => "ask", "key" => key }
@@ -143,7 +139,7 @@ module Dullmify
       if (record = replay(type, key))
         # 結果のない記録は、実行前に予約した effect が途中で殺された場合だけにできる。
         throw SIGNAL, [:failed, "前回の副作用が途中で中断されました"] unless record.key?("result")
-        return record.fetch("result")
+        return copy(record.fetch("result"))
       end
       nondeterministic!("確認の再実行で新しい #{type} が現れました") if @verifying
 
@@ -166,7 +162,7 @@ module Dullmify
       @records << record unless reserve
       save_records
       @cursor += 1
-      value
+      copy(value)
     end
 
     def replay(type, key)
@@ -210,6 +206,11 @@ module Dullmify
       when Hash then value.each_with_object({}) { |(key, item), out| out[clean_text(key.to_s)] = sanitize(item) }
       else value
       end
+    end
+
+    # workflow が返した値を破壊的に変えても記録が変わらないよう、記録とは別のオブジェクトを渡す。
+    def copy(value)
+      JSON.parse(JSON.generate(value))
     end
 
     def clean_text(value)
@@ -268,7 +269,7 @@ module Dullmify
       @runtime = nil
     end
 
-    %i[arguments ask once effect fail now random env read write command].each do |name|
+    %i[ask once effect fail now random env read write command].each do |name|
       define_method(name) { |*args, &block| runtime.public_send(name, *args, &block) }
     end
 

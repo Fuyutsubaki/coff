@@ -30,7 +30,7 @@
 
 extern char **environ;
 
-std::string workflow();
+std::string workflow(const std::string &arguments);
 
 namespace dullmify {
 
@@ -115,11 +115,6 @@ class Runtime {
     }
     std::error_code ignored;
     fs::remove(answer_path, ignored);
-  }
-
-  std::string arguments() {
-    reject_nested();
-    return trim_one_newline(read_binary(run_dir_ / "args"));
   }
 
   std::string ask(const std::string &prompt, const std::string &input) {
@@ -282,14 +277,14 @@ inline CommandResult run_command(const std::vector<std::string> &argv,
       ::posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, input.c_str(), O_RDONLY, 0) == 0 &&
       ::posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, output.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600) == 0 &&
       ::posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, error.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600) == 0;
-  std::vector<char *> arguments;
-  for (const auto &part : argv) arguments.push_back(const_cast<char *>(part.c_str()));
-  arguments.push_back(nullptr);
+  std::vector<char *> pointers;
+  for (const auto &part : argv) pointers.push_back(const_cast<char *>(part.c_str()));
+  pointers.push_back(nullptr);
   // SIGCHLD を無視する親から起動されると子が自動で回収され、終了コードを取れないので既定に戻す。
   std::signal(SIGCHLD, SIG_DFL);
   pid_t child = 0;
   const int spawned =
-      prepared ? ::posix_spawnp(&child, arguments[0], &actions, nullptr, arguments.data(), environ) : 0;
+      prepared ? ::posix_spawnp(&child, pointers[0], &actions, nullptr, pointers.data(), environ) : 0;
   ::posix_spawn_file_actions_destroy(&actions);
   if (!prepared) return {127, "", "コマンドの入出力を準備できません"};
   if (spawned != 0) return {127, "", "コマンドを起動できません: " + std::string(std::strerror(spawned))};
@@ -320,12 +315,13 @@ inline int execute(const fs::path &run_argument) {
       ~Scope() { current_runtime = nullptr; }
     } scope(state);
     state.prepare_answer();
+    const std::string arguments = trim_one_newline(read_binary(run_dir / "args"));
     fs::current_path(trim_one_newline(read_binary(run_dir / "cwd")));
     try {
-      const std::string first = ::workflow();
+      const std::string first = ::workflow(arguments);
       state.ensure_consumed();
       state.reset_for_verification();
-      const std::string second = ::workflow();
+      const std::string second = ::workflow(arguments);
       state.ensure_consumed();
       if (first != second) throw Failure{"workflow が非決定です: 確認の再実行で report が変わりました"};
       outcome = json{{"done", true}, {"report", first}};
@@ -348,7 +344,6 @@ inline int execute(const fs::path &run_argument) {
 
 }  // detail 名前空間
 
-inline std::string arguments() { return detail::runtime().arguments(); }
 inline std::string ask(const std::string &prompt, const std::string &input = "") {
   return detail::runtime().ask(prompt, input);
 }

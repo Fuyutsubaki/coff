@@ -1,6 +1,6 @@
-def workflow
+def workflow(arguments)
   # 都道府県と地域の確認 / 手順 1
-  cities = Dullmify.arguments.split("、")
+  cities = arguments.split("、")
   Dullmify.fail("市名を二つ指定してください") unless cities.length == 2
 
   # 都道府県と地域の確認 / 手順 2

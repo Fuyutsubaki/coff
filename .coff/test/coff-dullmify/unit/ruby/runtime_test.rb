@@ -31,6 +31,26 @@ class DullmifyRuntimeTest < Minitest::Test
     assert_equal "value", replayed
   end
 
+  def test_mutating_returned_value_does_not_change_record
+    first = runtime_class.new(@directory)
+    first.once(["key"]) { "値" } << "を変えた"
+    assert_equal "値", first.records.first.fetch("result")
+
+    replayed = runtime_class.new(@directory).once(["key"]) { flunk "記録済みのブロックが再実行された" }
+    assert_equal "値", replayed
+  end
+
+  def test_each_run_receives_fresh_arguments
+    Object.class_eval do
+      define_method(:workflow) { |arguments| arguments << "!" }
+      private :workflow
+    end
+    output, = capture_io { runtime_class.new(@directory).execute }
+    assert_equal({ "done" => true, "report" => "引数!" }, JSON.parse(output))
+  ensure
+    Object.send(:remove_method, :workflow)
+  end
+
   def test_key_mismatch_becomes_nondeterministic_failure
     runtime_class.new(@directory).once(["a"]) { 1 }
     signal = catch(Dullmify.const_get(:SIGNAL)) do

@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 
-std::string workflow() {
+std::string workflow(const std::string &arguments) {
   // 都道府県と地域の確認 / 手順 1
-  const std::string input = dullmify::arguments();
+  const std::string input = arguments;
   const std::size_t separator = input.find("、");
   if (separator == std::string::npos || input.find("、", separator + 3) != std::string::npos)
     dullmify::fail("市名を二つ指定してください");

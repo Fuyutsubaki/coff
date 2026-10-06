@@ -5,8 +5,9 @@
 
 #include <filesystem>
 #include <fstream>
+#include <map>
 
-std::string workflow() { return "単体テスト"; }
+std::string workflow(const std::string &) { return "単体テスト"; }
 
 namespace {
 
@@ -83,5 +84,31 @@ TEST_CASE("command はシェルを通さず、終了コードと出力を返す"
   CHECK(dullmify::command({"false"}).exit_code == 1);
   std::signal(SIGCHLD, SIG_DFL);
   CHECK_FALSE(fs::exists(temporary.path / ".command-stdout"));
+  dullmify::detail::current_runtime = nullptr;
+}
+
+TEST_CASE("ディレクトリを read すると failed になる") {
+  TemporaryDirectory temporary;
+  dullmify::detail::Runtime state(temporary.path);
+  dullmify::detail::current_runtime = &state;
+  CHECK_THROWS_AS(dullmify::read(temporary.path), dullmify::detail::Failure);
+  dullmify::detail::current_runtime = nullptr;
+}
+
+TEST_CASE("初回も再実行も、JSON を通した同じ値を返す") {
+  TemporaryDirectory temporary;
+  const auto observe = [] {
+    // 不正な UTF-8 は記録で置き換わるので、初回の値も置き換えた後のものになる。
+    return std::map<std::string, std::string>{{"text", std::string("a\xFF" "b", 3)}};
+  };
+  dullmify::detail::Runtime first(temporary.path);
+  dullmify::detail::current_runtime = &first;
+  const auto initial = dullmify::once(dullmify::json::array({"map"}), observe);
+
+  dullmify::detail::Runtime second(temporary.path);
+  dullmify::detail::current_runtime = &second;
+  const auto replayed = dullmify::once(dullmify::json::array({"map"}), observe);
+  CHECK(initial.at("text") == "a�b");
+  CHECK(initial == replayed);
   dullmify::detail::current_runtime = nullptr;
 }
