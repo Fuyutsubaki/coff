@@ -8,7 +8,7 @@ def workflow(arguments)
   prefectures = cities.map do |city|
     answer = nil
     4.times do |attempt|
-      prompt = attempt.zero? ? "都道府県名だけを答えてください" : "前の答え「#{answer}」は末尾が都・道・府・県のいずれでもありません。都道府県名だけを、末尾まで含めて答え直してください"
+      prompt = attempt.zero? ? "都道府県名だけを答えてください" : "前の答え「#{answer}」は末尾が都、道、府、県のいずれでもありません。都道府県名だけを、末尾まで含めて答え直してください"
       answer = Dullmify.ask(prompt, city)
       break if answer.match?(/[都道府県]\z/)
     end

@@ -17,4 +17,4 @@ Do the following round at most 3 times.
 4. Once assembly passes, fill the full text of the source, the workflow, and the GUIDE into the `review.md` template and hand it to a new subagent that does not inherit the conversation. Use Agent in Claude Code and `spawn_agent` in Codex. Have the reviewer judge only from what was passed. If the first line is `合格`, finish. If it is `不合格`, fix it in the next round using only the findings.
 
 Do all 3 rounds even if the cause looks environmental, and do not bypass the check or the review. If none of the 3 rounds passes, call `sh <absolute path>/assemble.sh --discard <outdir>` as a standalone command to remove `<outdir>` entirely, and report the failure reason.
-<!--{"src":".coff/src/coff-dullmify.skill/SKILL.md","md5":"e9e6ff04ac60e7f1d3a7d685f2ab0a03"} -->
+<!--{"src":".coff/src/coff-dullmify.skill/SKILL.md","md5":"b6be97a687dea0862cc9dbf642541af6"} -->

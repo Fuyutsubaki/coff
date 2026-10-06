@@ -17,4 +17,4 @@ allowed-tools: Write Bash(sh ${CLAUDE_SKILL_DIR}/assemble.sh *)
 3. この SKILL.md と同じディレクトリの `assemble.sh` の絶対パスを求め、`sh <絶対パス>/assemble.sh <lang> <source> <outdir>` を単独のコマンドとして呼ぶ。構文検査に落ちたら、その出力だけを使って次の回で直す。別の検査コマンドを使わない。
 4. 組み立てに通ったら、`review.md` の雛形へソース、workflow、GUIDE の全文を埋め、会話を継承しない新しいサブエージェントに渡す。Claude Code では Agent、Codex では `spawn_agent` を使う。点検役には渡した内容だけで判定させる。最初の行が `合格` なら終了する。`不合格` なら指摘だけを使って次の回で直す。
 
-原因が環境に見えても 3 回を行い、検査や点検を回避しない。3 回とも合格しなければ、`sh <絶対パス>/assemble.sh --discard <outdir>` を単独のコマンドとして呼んで `<outdir>` ごと片付け、失敗理由を報告する。
+原因が環境に見えても 3 回とも行い、検査や点検を回避しない。3 回とも合格しなければ、`sh <絶対パス>/assemble.sh --discard <outdir>` を単独のコマンドとして呼んで `<outdir>` ごと片付け、失敗理由を報告する。

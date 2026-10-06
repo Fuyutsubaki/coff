@@ -136,7 +136,7 @@ class Runtime {
     reject_nested();
     key = sanitize_json(key);
     if (json *record = replay(type, key)) {
-      // 結果のない記録は、実行前に予約した effect が途中で殺された場合だけにできる。
+      // 結果のない記録は、実行前に予約した effect が途中で殺された場合にだけ生じる。
       if (!record->contains("result")) throw Failure{"前回の副作用が途中で中断されました"};
       return record->at("result");
     }

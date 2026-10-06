@@ -137,7 +137,7 @@ module Dullmify
       reject_nested!
       key = normalize(key)
       if (record = replay(type, key))
-        # 結果のない記録は、実行前に予約した effect が途中で殺された場合だけにできる。
+        # 結果のない記録は、実行前に予約した effect が途中で殺された場合にだけ生じる。
         throw SIGNAL, [:failed, "前回の副作用が途中で中断されました"] unless record.key?("result")
         return copy(record.fetch("result"))
       end

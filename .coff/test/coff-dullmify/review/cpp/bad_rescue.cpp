@@ -20,7 +20,7 @@ std::string workflow(const std::string &arguments) {
     for (int attempt = 0; attempt < 4; ++attempt) {
       const std::string prompt =
           attempt == 0 ? std::string("都道府県名だけを答えてください")
-                       : "前の答え「" + answer + "」は末尾が都・道・府・県のいずれでもありません。都道府県名だけを、末尾まで含めて答え直してください";
+                       : "前の答え「" + answer + "」は末尾が都、道、府、県のいずれでもありません。都道府県名だけを、末尾まで含めて答え直してください";
       try {
         answer = dullmify::ask(prompt, city);
       } catch (...) {

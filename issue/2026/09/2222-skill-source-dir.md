@@ -27,7 +27,7 @@ coff-dullmify（issue/2026/09/2200-add-dullmify.md）は、言語ごとのラン
 4. ミラー同期は、`coff-dist` を宣言した skill の `.claude/skills/<name>/` と `skills/<name>/` をディレクトリごと一致させる（追加、更新、削除）。`coff-dist` は両方の形のソースから読む。
 
 - ソースと同名のディレクトリ（`.coff/src/<name>.skill.md` と `.coff/src/<name>/`）に同梱ファイルを置く案は採らない：一つの skill のソースがファイルとディレクトリに分かれる。
-- issue/2026/08/0501-coff-include-directive.md の `coff-include` で同梱する案は採らない：あれは別の skill を `references/` に写す仕組みで、skill 自身の手書きのファイルを置く場所にならない。
+- issue/2026/08/0501-coff-include-directive.md の `coff-include` で同梱する案は採らない：`coff-include` は別の skill を `references/` に写す仕組みで、skill 自身の手書きのファイルを置く場所にならない。
 - 対象外：既存のソースのディレクトリ化、参照 stub（`--ref`、`--agent codex`）への同梱（stub は正本を指し、同梱ファイルは正本の隣にある）、同梱ファイルの英訳、シンボリックリンク。
 
 ## 決めたこと
@@ -78,7 +78,7 @@ coff-dullmify（issue/2026/09/2200-add-dullmify.md）は、言語ごとのラン
 
 1. gh 2.95.0 での試作（2026-09-22、scratchpad の使い捨てリポジトリ）: `gh skill install --from-local . --agent claude-code --dir <dir> </dev/null` の一覧に、`.coff/src/x.skill/SKILL.md` は出なかった。コミットしていない `skills/u/SKILL.md` と `skills/u/sub/b.txt` は、`gh skill install --from-local . u` でサブディレクトリごと導入された。skill の中の入れ子の `SKILL.md` は別の skill として列挙される（issue/2026/09/2200-add-dullmify.md の調査記録 4）。
 
-2. 確認手段の実行（2026-09-25）: 3 は、issue/2026/09/2200-add-dullmify.md の実装に入る前に行い、`git status --short .claude skills` に出たのは coff-compile と compile の成果物とミラーだけで、2 回目の `/compile` は何も報告しなかった。1、2、5、4 は `zz-bundle-sample` で行い、`--out` と `/compile` の両方で `diff -r -x SKILL.md` が空、同梱ファイルの変更・追加・削除のたびに `compiled` が報告されて目印の行が残り、無変更では何も報告されず、ミラーの `diff -r` が空、`gh skill install --from-local` で同梱ファイルごと導入され、両方の形にあるときは引数なしでも名前指定でもエラーになって md5 が変わらなかった。レビュー後に §1 の `sync` 判定を廃して skip でも §5 e を行う形に直し、同じ確認を再実行して同じ結果を得た（2026-09-28）。
+2. 確認手段の実行（2026-09-25）: 3 は、issue/2026/09/2200-add-dullmify.md の実装に入る前に行い、`git status --short .claude skills` に出たのは coff-compile と compile の成果物とミラーだけで、2 回目の `/compile` は何も報告しなかった。1、2、5、4 は `zz-bundle-sample` で行い、`--out` と `/compile` の両方で `diff -r -x SKILL.md` が空、同梱ファイルの変更、追加、削除のたびに `compiled` が報告されて目印の行が残り、無変更では何も報告されず、ミラーの `diff -r` が空、`gh skill install --from-local` で同梱ファイルごと導入され、両方の形にあるときは引数なしでも名前指定でもエラーになって md5 が変わらなかった。レビュー後に §1 の `sync` 判定を廃して skip でも §5 e を行う形に直し、同じ確認を再実行して同じ結果を得た（2026-09-28）。
 
 ### 参考
 
