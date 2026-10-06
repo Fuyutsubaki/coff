@@ -65,3 +65,23 @@ TEST_CASE("不正な UTF-8 を JSON にできる") {
   CHECK_NOTHROW(parsed = dullmify::json::parse(encoded));
   CHECK(parsed.at("value") == "a�b");
 }
+
+TEST_CASE("command はシェルを通さず、終了コードと出力を返す") {
+  TemporaryDirectory temporary;
+  dullmify::detail::Runtime state(temporary.path);
+  dullmify::detail::current_runtime = &state;
+  CHECK(dullmify::command({"echo $HOME"}).exit_code == 127);
+  CHECK(dullmify::command({"echo", "$HOME"}).stdout_text == "$HOME\n");
+  CHECK(dullmify::command({}).exit_code == 127);
+  const auto piped = dullmify::command({"sh", "-c", "cat; echo err >&2; exit 3"}, "入力");
+  CHECK(piped.exit_code == 3);
+  CHECK(piped.stdout_text == "入力");
+  CHECK(piped.stderr_text == "err\n");
+  CHECK(dullmify::command({"sh", "-c", "kill -TERM $$"}).exit_code == 128 + SIGTERM);
+  // SIGCHLD を無視する親から起動されても、終了コードを取れる。
+  std::signal(SIGCHLD, SIG_IGN);
+  CHECK(dullmify::command({"false"}).exit_code == 1);
+  std::signal(SIGCHLD, SIG_DFL);
+  CHECK_FALSE(fs::exists(temporary.path / ".command-stdout"));
+  dullmify::detail::current_runtime = nullptr;
+}

@@ -22,7 +22,7 @@ How to write a directory source `.coff/src/<name>.skill/`:
 - Never name a bundled file `SKILL.md`.
 - If the same `<name>` exists in both forms (`<name>.skill.md` and `<name>.skill/`), it is an error. This check comes before the bare-name ambiguity check.
 
-A single-file skill source that declares `coff-dullmify: <lang>` goes through the "dullmify build" instead of §2–§5.
+A single-file skill source that declares `coff-dullmify: <lang>` goes through the "dullmify build" instead of §2–§5. Under `--lint-only`, do nothing for it and do not report it.
 
 ## Options
 
@@ -114,7 +114,7 @@ done
 echo $verdict
 ```
 
-Skip only when every output's md5 matches. For a directory source, step e of §5 runs even on skip.
+Skip only when every output's md5 matches. For a directory source, step e of §5 runs even on skip (but not under `--lint-only`).
 
 With `--out` / `--agent`, apply the root replacement and reference additions to this derivation. Reference outputs also join `dsts`; skip detection applies the same footer rule to every output. `body` is the body output after root replacement, and empty for reference-only output.
 
@@ -195,7 +195,7 @@ d. **Write the output and append the footer.** Footer goes on the last line, aft
    done
    ```
 
-e. **Sync the bundled files.** For a directory source, make everything except `SKILL.md` in the body output directory `out` match the bundled files in `bundle`. Do this only when `SKILL.md` ended as skip or compiled, and not when `body` is empty (reference stub only). If anything was copied, report the source as `compiled` even when it was skipped.
+e. **Sync the bundled files.** For a directory source, make everything except `SKILL.md` in the body output directory `out` match the bundled files in `bundle`. Do this only when `SKILL.md` ended as skip or compiled; not under `--lint-only`, and not when `body` is empty (reference stub only). If anything was copied, report the source as `compiled` even when it was skipped.
 
    ```bash
    out=$(dirname "$body")
@@ -222,4 +222,4 @@ Do not list skipped files. Do not list anything when `--lint-only` finds 0 candi
 - Do not touch the frontmatter `name` value or any identifier that forms an output path, even during lint.
 - Both lint and compile are atomic: no partial writes if a step fails mid-way. Bundled-file sync is the one exception: if it stops midway, the next run finds the difference and repairs it.
 - When a directory source is turned back into a single-file source, remove the bundled files left in the output by hand.
-<!--{"src":".coff/src/coff-compile.skill.md","md5":"c43ac6b51ec50637dfe3e40cff8a0898"} -->
+<!--{"src":".coff/src/coff-compile.skill.md","md5":"a538f727af00220dfe0f7f980e55d728"} -->

@@ -46,6 +46,9 @@ class DullmifyRuntimeTest < Minitest::Test
     assert_equal 127, runtime.command(["echo $HOME"]).fetch("exit_code")
     assert_equal "$HOME\n", runtime.command(["echo", "$HOME"]).fetch("stdout")
     assert_equal 127, runtime.command([]).fetch("exit_code")
+    piped = runtime.command(["sh", "-c", "cat; echo err >&2; exit 3"], "入力")
+    assert_equal({ "exit_code" => 3, "stdout" => "入力", "stderr" => "err\n" }, piped)
+    assert_equal 128 + Signal.list.fetch("TERM"), runtime.command(["sh", "-c", "kill -TERM $$"]).fetch("exit_code")
   end
 
   def test_invalid_utf8_is_valid_json

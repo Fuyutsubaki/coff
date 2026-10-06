@@ -3,10 +3,9 @@
 
 #include "json.hpp"
 
-#include <array>
 #include <cerrno>
+#include <csignal>
 #include <chrono>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -24,9 +23,12 @@
 #include <utility>
 #include <vector>
 
-#include <sys/types.h>
+#include <fcntl.h>
+#include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+extern char **environ;
 
 std::string workflow();
 
@@ -217,6 +219,7 @@ class Runtime {
       std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
       if (!stream) throw Failure{"記録の一時ファイルを作れません"};
       for (const auto &record : records_) stream << dump_json(record) << '\n';
+      stream.close();
       if (!stream) throw Failure{"記録を書けません"};
     }
     std::error_code error;
@@ -252,83 +255,53 @@ inline Runtime &runtime() {
   return *current_runtime;
 }
 
-inline int temporary_fd(const fs::path &run_dir, const std::string &label) {
-  std::string pattern = (run_dir / ("." + label + ".XXXXXX")).string();
-  std::vector<char> buffer(pattern.begin(), pattern.end());
-  buffer.push_back('\0');
-  const int fd = ::mkstemp(buffer.data());
-  if (fd >= 0) ::unlink(buffer.data());
-  return fd;
-}
-
-inline bool write_all(int fd, const std::string &content) {
-  std::size_t offset = 0;
-  while (offset < content.size()) {
-    const ssize_t count = ::write(fd, content.data() + offset, content.size() - offset);
-    if (count < 0 && errno == EINTR) continue;
-    if (count <= 0) return false;
-    offset += static_cast<std::size_t>(count);
-  }
-  return true;
-}
-
-inline std::string read_fd(int fd) {
-  ::lseek(fd, 0, SEEK_SET);
-  std::string output;
-  std::array<char, 4096> buffer{};
-  for (;;) {
-    const ssize_t count = ::read(fd, buffer.data(), buffer.size());
-    if (count < 0 && errno == EINTR) continue;
-    if (count <= 0) break;
-    output.append(buffer.data(), static_cast<std::size_t>(count));
-  }
-  return output;
-}
-
 inline CommandResult run_command(const std::vector<std::string> &argv,
                                  const std::string &stdin_text) {
   if (argv.empty()) return {127, "", "コマンドが空です"};
-  const int input_fd = temporary_fd(runtime().run_dir(), "stdin");
-  const int output_fd = temporary_fd(runtime().run_dir(), "stdout");
-  const int error_fd = temporary_fd(runtime().run_dir(), "stderr");
-  if (input_fd < 0 || output_fd < 0 || error_fd < 0) {
-    if (input_fd >= 0) ::close(input_fd);
-    if (output_fd >= 0) ::close(output_fd);
-    if (error_fd >= 0) ::close(error_fd);
-    return {127, "", "コマンド用の一時ファイルを作れません"};
+  // 入出力は run ディレクトリのファイルを通すので、大きくてもパイプが詰まらない。
+  const fs::path input = runtime().run_dir() / ".command-stdin";
+  const fs::path output = runtime().run_dir() / ".command-stdout";
+  const fs::path error = runtime().run_dir() / ".command-stderr";
+  struct Cleanup {
+    const fs::path *paths[3];
+    ~Cleanup() {
+      std::error_code ignored;
+      for (const fs::path *path : paths) fs::remove(*path, ignored);
+    }
+  } cleanup{{&input, &output, &error}};
+  {
+    std::ofstream stream(input, std::ios::binary | std::ios::trunc);
+    stream.write(stdin_text.data(), static_cast<std::streamsize>(stdin_text.size()));
+    stream.close();
+    if (!stream) return {127, "", "コマンドの標準入力を準備できません"};
   }
-  if (!write_all(input_fd, stdin_text) || ::lseek(input_fd, 0, SEEK_SET) < 0) {
-    ::close(input_fd); ::close(output_fd); ::close(error_fd);
-    return {127, "", "コマンドの標準入力を準備できません"};
-  }
-  const pid_t child = ::fork();
-  if (child < 0) {
-    ::close(input_fd); ::close(output_fd); ::close(error_fd);
-    return {127, "", "コマンドを起動できません: " + std::string(std::strerror(errno))};
-  }
-  if (child == 0) {
-    ::dup2(input_fd, STDIN_FILENO);
-    ::dup2(output_fd, STDOUT_FILENO);
-    ::dup2(error_fd, STDERR_FILENO);
-    ::close(input_fd); ::close(output_fd); ::close(error_fd);
-    std::vector<char *> arguments;
-    for (const auto &part : argv) arguments.push_back(const_cast<char *>(part.c_str()));
-    arguments.push_back(nullptr);
-    ::execvp(arguments[0], arguments.data());
-    const std::string message = "コマンドを起動できません: " + std::string(std::strerror(errno)) + "\n";
-    write_all(STDERR_FILENO, message);
-    ::_exit(127);
-  }
-  ::close(input_fd);
+
+  posix_spawn_file_actions_t actions;
+  if (::posix_spawn_file_actions_init(&actions) != 0) return {127, "", "コマンドの起動を準備できません"};
+  const bool prepared =
+      ::posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, input.c_str(), O_RDONLY, 0) == 0 &&
+      ::posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, output.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600) == 0 &&
+      ::posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, error.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600) == 0;
+  std::vector<char *> arguments;
+  for (const auto &part : argv) arguments.push_back(const_cast<char *>(part.c_str()));
+  arguments.push_back(nullptr);
+  // SIGCHLD を無視する親から起動されると子が自動で回収され、終了コードを取れないので既定に戻す。
+  std::signal(SIGCHLD, SIG_DFL);
+  pid_t child = 0;
+  const int spawned =
+      prepared ? ::posix_spawnp(&child, arguments[0], &actions, nullptr, arguments.data(), environ) : 0;
+  ::posix_spawn_file_actions_destroy(&actions);
+  if (!prepared) return {127, "", "コマンドの入出力を準備できません"};
+  if (spawned != 0) return {127, "", "コマンドを起動できません: " + std::string(std::strerror(spawned))};
+
   int status = 0;
-  while (::waitpid(child, &status, 0) < 0 && errno == EINTR) {}
-  const std::string stdout_text = read_fd(output_fd);
-  const std::string stderr_text = read_fd(error_fd);
-  ::close(output_fd); ::close(error_fd);
+  pid_t waited = 0;
+  while ((waited = ::waitpid(child, &status, 0)) < 0 && errno == EINTR) {}
+  if (waited < 0) return {127, "", "コマンドの終了を待てません: " + std::string(std::strerror(errno))};
   int exit_code = 127;
   if (WIFEXITED(status)) exit_code = WEXITSTATUS(status);
   else if (WIFSIGNALED(status)) exit_code = 128 + WTERMSIG(status);
-  return {exit_code, stdout_text, stderr_text};
+  return {exit_code, read_binary(output), read_binary(error)};
 }
 
 inline void emit(const json &value) { std::cout << dump_json(value) << std::endl; }
@@ -382,28 +355,31 @@ inline std::string ask(const std::string &prompt, const std::string &input = "")
 
 [[noreturn]] inline void fail(const std::string &reason) { throw detail::Failure{reason}; }
 
+namespace detail {
+
+// once と effect の共通部分。結果を記録の JSON から呼び出し側の型に戻す。
 template <class Function>
-auto once(const json &key, Function &&operation)
+auto call_recorded(const std::string &type, const json &key, Function &operation, bool reserve)
     -> std::decay_t<std::invoke_result_t<Function>> {
   using Result = std::decay_t<std::invoke_result_t<Function>>;
   if constexpr (std::is_void_v<Result>) {
-    detail::runtime().recorded("once", key, [&]() -> json { operation(); return nullptr; }, false);
+    runtime().recorded(type, key, [&]() -> json { operation(); return nullptr; }, reserve);
   } else {
-    json value = detail::runtime().recorded("once", key, [&]() -> json { return json(operation()); }, false);
-    return value.template get<Result>();
+    return runtime().recorded(type, key, [&]() -> json { return json(operation()); }, reserve)
+        .template get<Result>();
   }
 }
 
+}  // detail 名前空間
+
 template <class Function>
-auto effect(const json &key, Function &&operation)
-    -> std::decay_t<std::invoke_result_t<Function>> {
-  using Result = std::decay_t<std::invoke_result_t<Function>>;
-  if constexpr (std::is_void_v<Result>) {
-    detail::runtime().recorded("effect", key, [&]() -> json { operation(); return nullptr; }, true);
-  } else {
-    json value = detail::runtime().recorded("effect", key, [&]() -> json { return json(operation()); }, true);
-    return value.template get<Result>();
-  }
+auto once(const json &key, Function &&operation) -> std::decay_t<std::invoke_result_t<Function>> {
+  return detail::call_recorded("once", key, operation, false);
+}
+
+template <class Function>
+auto effect(const json &key, Function &&operation) -> std::decay_t<std::invoke_result_t<Function>> {
+  return detail::call_recorded("effect", key, operation, true);
 }
 
 inline std::string now() {
@@ -455,6 +431,7 @@ inline void write(const fs::path &path, const std::string &content) {
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("ファイルを開けません: " + path.string());
     stream.write(content.data(), static_cast<std::streamsize>(content.size()));
+    stream.close();
     if (!stream) throw std::runtime_error("ファイルを書けません: " + path.string());
   });
 }

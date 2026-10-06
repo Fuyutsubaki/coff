@@ -38,12 +38,19 @@ outdir=$3
 language_dir=$skill_dir/langs/$language
 [ -f "$source_file" ] || { echo "ソースを読めません: $source_file" >&2; exit 2; }
 
+# 対応言語は langs/<lang>/GUIDE.md の有無で決める（SKILL.md と同じ基準）。
 case "$language" in
-  ruby) workflow=$outdir/scripts/workflow.rb ;;
-  cpp) workflow=$outdir/scripts/workflow.cpp ;;
-  *) echo "対応していない言語です: $language（対応: ruby cpp）" >&2; exit 2 ;;
+  ''|.*|*/*) supported=false ;;
+  *) [ -f "$language_dir/GUIDE.md" ] && supported=true || supported=false ;;
 esac
-[ -f "$workflow" ] || { echo "workflow がありません: $workflow" >&2; exit 1; }
+if [ "$supported" = false ]; then
+  echo "対応していない言語です: $language（対応: $(cd "$skill_dir/langs" && echo *)）" >&2
+  exit 2
+fi
+# workflow の名前は GUIDE が定め、LLM が scripts/ に書く workflow.* はそれ 1 つだけである。
+set -- "$outdir"/scripts/workflow.*
+[ "$#" -eq 1 ] && [ -f "$1" ] || { echo "workflow がありません: $outdir/scripts/workflow.*" >&2; exit 1; }
+workflow=$1
 only_dullmify_output "$outdir" || exit 2
 
 # 構文エラーの出力は、修正に使えるようそのまま呼び出し元へ返す。
