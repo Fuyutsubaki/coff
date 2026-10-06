@@ -8,15 +8,19 @@ description: coff repo のビルド入口。`/coff-compile` のラッパーで�
 ## 手順
 
 1. 受け取った引数をそのまま渡して `/coff-compile`（`.claude/skills/coff-compile/SKILL.md`）を実行する。
-2. ミラー同期。引数に `--lint-only` があればこの手順は行わない。ソース frontmatter に `coff-dist: true` を持つ skill 型それぞれについて、配布ミラー `skills/<name>/SKILL.md` を正本 `.claude/skills/<name>/SKILL.md` の複製として同期する。
+2. ミラー同期。引数に `--lint-only` があればこの手順は行わない。ソース frontmatter に `coff-dist: true` を持つ skill 型（1 ファイルの `.coff/src/<name>.skill.md` とディレクトリの `.coff/src/<name>.skill/SKILL.md` の両方）それぞれについて、配布ミラー `skills/<name>/` を正本 `.claude/skills/<name>/` のディレクトリごとの複製として同期する。差があったときだけ写し直して報告する。正本のディレクトリがなければ、ミラーには触れない。
 
    ```bash
-   for src in .coff/src/*.skill.md; do
+   for src in .coff/src/*.skill.md .coff/src/*.skill/SKILL.md; do
+     [ -e "$src" ] || continue
      sed -n '2,/^---$/p' "$src" | grep -q '^coff-dist:[[:space:]]*true' || continue
-     name=$(basename "$src" .skill.md)
-     mkdir -p "skills/$name"
-     cmp -s ".claude/skills/$name/SKILL.md" "skills/$name/SKILL.md" \
-       || { cp ".claude/skills/$name/SKILL.md" "skills/$name/SKILL.md"; echo "mirrored: $name"; }
+     case "$src" in
+       *.skill/SKILL.md) name=$(basename "$(dirname "$src")" .skill) ;;
+       *)                name=$(basename "$src" .skill.md) ;;
+     esac
+     [ -d ".claude/skills/$name" ] || continue
+     diff -r ".claude/skills/$name" "skills/$name" >/dev/null 2>&1 && continue
+     mkdir -p skills && rm -rf "skills/$name" && cp -R ".claude/skills/$name" "skills/$name" && echo "mirrored: $name"
    done
    ```
 
