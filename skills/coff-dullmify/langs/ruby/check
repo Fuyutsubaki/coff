@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# workflow を、実行時と同じ Ruby で構文検査する。
+ruby -c "$1"

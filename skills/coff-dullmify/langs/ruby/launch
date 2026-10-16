@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# 共通の run から、照合済みの run ディレクトリを受けてランタイムを起動する。
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
+exec ruby "$script_dir/runtime.rb" "$1"
